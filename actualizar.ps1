@@ -73,15 +73,39 @@ gh release download "$tag" -R $OwnerRepo --pattern "*.zip" --dir $tmpDir
 $zipPath = (Get-ChildItem $tmpDir -Filter "*.zip" | Select-Object -First 1).FullName
 if (-not $zipPath) { Write-Error "No se encontro el asset zip descargado"; exit 2 }
 
-# Descomprimir a temp
+# Descomprimir a temp (no toca la instalacion viva)
 Expand-Archive -LiteralPath $zipPath -DestinationPath $tmpDir -Force
 
 # Preservar la base de datos / respaldos / uploads / logs del usuario (no viajan en el zip)
 $preservar = @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/static/uploads",
-               "informe_web/servidor.log", "informe_web/servidor.pid")
+               "informe_web\servidor.log", "informe_web\servidor.pid")
 
-# Respaldo de la instalacion actual (rollback)
+# 8.1) Detener el servidor ANTES de mover informe_web; si no, los .py/.pyc abiertos
+#      impiden el Move-Item ("proceso en uso"). El updater corre detached, sobrevive.
+$pidfile = Join-Path $Raiz "informe_web\servidor.pid"
+$matado = $false
+if (Test-Path $pidfile) {
+    $old = (Get-Content $pidfile -Raw).Trim()
+    if ($old -and $old -match '^\d+$') {
+        Write-Host "Deteniendo servidor (PID $old) ..."
+        Stop-Process -Id ([int]$old) -Force -ErrorAction SilentlyContinue
+        $matado = $true
+    }
+}
+if ($matado) {
+    # esperar a que los handles del proceso se liberen
+    $espera = 0
+    while ($espera -lt 15) {
+        try { $proc = Get-Process -Id ([int]$old) -ErrorAction Stop } catch { $proc = $null }
+        if (-not $proc) { break }
+        Start-Sleep -Seconds 1; $espera++
+    }
+}
+
+# 8.2) Respaldo de la instalacion actual (rollback)
 if (Test-Path $bakDir) { Remove-Item -Recurse -Force $bakDir }
+New-Item -ItemType Directory -Force -Path $bakDir | Out-Null   # Move-Item needs parent dir
+Start-Sleep -Seconds 2   # dejar que los handles del server detenido se liberen
 Move-Item -LiteralPath (Join-Path $Raiz "informe_web") -Destination (Join-Path $bakDir "informe_web")
 
 # Copiar la nueva informe_web
@@ -112,17 +136,11 @@ try {
 if ($ok) {
     Write-Host "Actualizacion OK ($tag). Limpiando backup."
     Remove-Item -Recurse -Force $bakDir
-    # Reiniciar el servidor silencioso con la nueva version
-    $pidfile = Join-Path $Raiz "informe_web\servidor.pid"
-    if (Test-Path $pidfile) {
-        $old = Get-Content $pidfile -Raw
-        Stop-Process -Id ([int]$old) -Force -ErrorAction SilentlyContinue
-    }
-    Start-Sleep -Seconds 1
+    # El servidor ya fue detenido antes del backup. Levantarlo con la nueva version.
     Start-Process -FilePath "C:\Python314\pythonw.exe" `
         -ArgumentList "servidor_silencioso.py" `
         -WorkingDirectory "$Raiz/informe_web"
-    Write-Host "Servidor reiniciado con la nueva version."
+    Write-Host "Servidor iniciado con la nueva version ($tag)."
 } else {
     Write-Warning "Fallo la verificacion: haciendo rollback a la version anterior."
     Remove-Item -Recurse -Force (Join-Path $Raiz "informe_web") -ErrorAction SilentlyContinue
