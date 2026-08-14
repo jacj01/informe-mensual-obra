@@ -1,14 +1,14 @@
 name: Build & Release
 
-# CI/CD: en cada push a master verifica sintaxis, empaqueta la app y crea
-# una GitHub Release con el zip para que los clientes se actualicen.
+# CI/CD: verifica sintaxis, empaqueta la app y crea una GitHub Release con el
+# zip para que los clientes se actualicen (auto-update).
 on:
   push:
     branches: [master]
   workflow_dispatch:
 
-env:
-  REPO: jacj01/informe-mensual-obra
+permissions:
+  contents: write
 
 jobs:
   build-and-release:
@@ -18,8 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
@@ -35,26 +34,27 @@ jobs:
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue informe_web/instance
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "informe_web/Respaldo BD"
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue informe_web/__pycache__
-          Remove-Item -Force -ErrorAction SilentlyContinue informe_web/servidor.log informe_web/servidor.pid
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue informe_web/static/uploads
+          Remove-Item -Force -ErrorAction SilentlyContinue informe_web/servidor.log informe_web/servidor.pid
 
       - name: Build package
         shell: pwsh
         run: |
-          $sha = (git log --pretty=format:%h -1).Trim()
+          $sha = (git log --pretty=format:"%h" -1).Trim()
           $ver = (python -c "import sys; sys.path.insert(0,'informe_web'); import version; print(version.__version__)").Trim()
+          echo "VERSION=$ver" >> $env:GITHUB_ENV
+          echo "SHA=$sha" >> $env:GITHUB_ENV
           $zip = "$env:GITHUB_WORKSPACE\informe-web-$ver-$sha.zip"
           Compress-Archive -Path informe_web, *.bat, *.vbs, Logo.png, .gitignore -DestinationPath $zip -Force
           echo "ARTIFACT=$zip" >> $env:GITHUB_ENV
-          echo "VERSION=$ver" >> $env:GITHUB_ENV
-          echo "SHA=$sha" >> $env:GITHUB_ENV
+          Write-Host "ARTIFACT:$zip VERSION:$ver SHA:$sha"
 
-      - name: Create / update release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ env.VERSION }}-${{ env.SHA }}
-          name: v${{ env.VERSION }} (${{ env.SHA }})
-          body: |
-             Versión ${{ env.VERSION }} (${{ env.SHA }})
-            - Empaquetado automáticamente desde GitHub Actions.
-          files: ${{ env.ARTIFACT }}
+      - name: Create release (build-only debug)
+        shell: pwsh
+        run: |
+          echo "tag_name: v${{ env.VERSION }}-${{ env.SHA }}"
+          echo "artifact: ${{ env.ARTIFACT }}"
+        env:
+          VERSION: ${{ env.VERSION }}
+          SHA: ${{ env.SHA }}
+          ARTIFACT: ${{ env.ARTIFACT }}
