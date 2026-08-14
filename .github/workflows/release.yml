@@ -5,6 +5,7 @@ name: Build & Release
 on:
   push:
     branches: [master]
+  workflow_dispatch:
 
 env:
   REPO: jacj01/informe-mensual-obra
