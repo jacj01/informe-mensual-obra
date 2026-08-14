@@ -690,6 +690,15 @@ def es_super_actual():
     return bool(u and u.rol == ROL_SUPER)
 
 
+def es_admin_actual():
+    """True si el usuario activo puede administrar (Administrador o Super)."""
+    u = usuario_actual()
+    if not u:
+        return False
+    return u.rol in ROLES_TOTALES
+
+
+
 # ----------------------------------------------------------------------------
 # Licencia de suscripción: archivo cifrado (SHA-256) que el Super Usuario
 # genera y entrega al cliente. El cliente lo sube para renovar automáticamente.
@@ -1183,6 +1192,60 @@ def registrar_rutas(app):
             "version": app.config.get("INFORME_VERSION", "1.0.0"),
             "commit": os.environ.get("INFORME_COMMIT", ""),
         })
+
+    @app.route("/api/actualizacion")
+    def api_actualizacion():
+        """Consulta la release mas reciente publicada en GitHub.
+        Solo Administradores y el Super Usuario pueden consultar.
+
+        El repo es privado, asi que la consulta usa 'gh' (token almacenado en el
+        keyring del equipo). Si 'gh' no esta autenticado instala un fallback sin
+        error grave. No descarga nada; devuelve metadata para que el cliente decida."""
+        if not es_admin_actual():
+            return jsonify({"error": "No autorizado"}), 403
+        repo = app.config.get("INFORME_REPO", "jacj01/informe-mensual-obra")
+        try:
+            import subprocess
+            cmd = ["gh", "-R", repo, "release", "view", "--json",
+                   "tagName,name,publishedAt,assets"]
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if out.returncode != 0:
+                raise RuntimeError((out.stderr or out.stdout).strip()[:200])
+            data = json.loads(out.stdout)
+            asset = next((a for a in data.get("assets", [])
+                          if a.get("name", "").endswith(".zip")), None)
+            return jsonify({
+                "disponible": True,
+                "tag": data.get("tagName", ""),
+                "nombre": data.get("name", ""),
+                "publicada": data.get("publishedAt", ""),
+                "asset": asset.get("name") if asset else None,
+                "url": asset.get("url") if asset else None,
+                "version_actual": app.config.get("INFORME_VERSION", "1.0.0"),
+            })
+        except Exception as e:
+            # Fallback informativo sin interrumpir la UI.
+            return jsonify({"disponible": False, "error": str(e),
+                            "version_actual": app.config.get("INFORME_VERSION", "1.0.0")}), 502
+
+    @app.route("/actualizar", methods=["POST"])
+    def aplicar_actualizacion():
+        """Dispara la actualizacion en el propio equipo (launcher que corre
+        actualizar.ps1). Solo Administradores y el Super Usuario."""
+        if not es_admin_actual():
+            return jsonify({"error": "No autorizado"}), 403
+        try:
+            import subprocess
+            root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            ps1 = os.path.join(root, "actualizar.ps1")
+            # Lanza el updater en segundo plano (no bloquea la peticion)
+            subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy",
+                              "Bypass", "-File", ps1, "-Instalar"],
+                             cwd=root,
+                             creationflags=0x08000000)
+            return jsonify({"ok": True, "msg": "Actualizacion iniciada; el servidor se reiniciara en breve."})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
 
     @app.route("/sitemap.xml")
     def sitemap():

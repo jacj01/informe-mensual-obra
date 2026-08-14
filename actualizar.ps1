@@ -30,45 +30,53 @@ function Version-Local {
     if ($txt -match '__version__\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"') { return $Matches[1] }
     return "0.0.0"
 }
-function Version-Tag($tag) {
+function Version-Tag([string]$tag) {
     if ($tag -match 'v?([0-9]+\.[0-9]+\.[0-9]+)') { return $Matches[1] }
     return "0.0.0"
 }
-function Invoke-Expr($s) { return (Invoke-Expression $s) 2>$null }
 
-# 7) Detectar ultima release publicada en GitHub
-$api  = "https://api.github.com/repos/$OwnerRepo/releases/latest"
-$resp = Invoke-RestMethod -Uri $api -Headers @{ "User-Agent"="Informe-Updater" } -ErrorAction Stop
-$tagRem = $resp.tag_name            # ej. v1.0.0-37c581c
-$verRem = Version-Tag $tagRem       # 1.0.0
+function gh-ok { $null = Get-Command gh -ErrorAction SilentlyContinue; return $?}
+
+# 7) Detectar ultima release publicada en GitHub (usa gh: repo privado requiere auth)
 $verLocal = Version-Local
+Write-Host "Local: v$verLocal"
 
-Write-Host "Local:  v$verLocal"
-Write-Host "GitHub: $tagRem   (v$verRem)"
+if (-not (gh-ok)) {
+    Write-Warning "gh (GitHub CLI) no esta disponible. Instala gh e inicia sesion (gh auth login)."
+    exit 1
+}
+
+# tag de la release mas reciente
+$tag = (gh release list -R $OwnerRepo --limit 1 --json tagName --jq ".[0].tagName").Trim()
+if (-not $tag) { Write-Host "No hay releases disponibles."; exit 0 }
+
+$verRem = Version-Tag $tag
+Write-Host "GitHub: $tag (v$verRem)"
 
 if ([version]$verLocal -ge [version]$verRem) {
-    "Ya esta actualizado."
+    "Ya esta actualizado (v$verLocal)."
     exit 0
 }
 
 if (-not $Instalar) {
-    Write-Host "Hay actualizacion disponible ($tagRem). Ejecuta con -Instalar para aplicarla."
+    Write-Host "Hay actualizacion disponible ($tag). Ejecuta con -Instalar para aplicarla."
     exit 0
 }
 
-Write-Host "Aplicando actualizacion a $tagRem ..."
+Write-Host "Aplicando actualizacion a $tag ..."
 
-# 8) Descargar paquete
-$asset = $resp.assets | Where-Object { $_.name -like "informe-web-*.zip" } | Select-Object -First 1
-if (-not $asset) { Write-Error "No se encontro el asset zip en la release"; exit 2 }
-$zipPath = Join-Path $env:TEMP $asset.name
-Write-Host "Descargando $($asset.name) ..."
-(Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -Headers @{ "User-Agent"="Informe-Updater" }).BaseResponse.Dispose()
+# 8) Descargar paquete (gh usa tu token del keyring: funciona en repo privado)
+New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+Write-Host "Descargando $tag ..."
+gh release download "$tag" -R $OwnerRepo --pattern "*.zip" --dir $tmpDir
+
+$zipPath = (Get-ChildItem $tmpDir -Filter "*.zip" | Select-Object -First 1).FullName
+if (-not $zipPath) { Write-Error "No se encontro el asset zip descargado"; exit 2 }
 
 # Descomprimir a temp
 Expand-Archive -LiteralPath $zipPath -DestinationPath $tmpDir -Force
 
-# Preservar la base de datos / uploads / logs del usuario (no viajan en el zip)
+# Preservar la base de datos / respaldos / uploads / logs del usuario (no viajan en el zip)
 $preservar = @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/static/uploads",
                "informe_web/servidor.log", "informe_web/servidor.pid")
 
@@ -102,7 +110,7 @@ try {
 } catch { $ok = $false }
 
 if ($ok) {
-    Write-Host "Actualizacion OK (v$verRem). Limpiando backup."
+    Write-Host "Actualizacion OK ($tag). Limpiando backup."
     Remove-Item -Recurse -Force $bakDir
     # Reiniciar el servidor silencioso con la nueva version
     $pidfile = Join-Path $Raiz "informe_web\servidor.pid"
