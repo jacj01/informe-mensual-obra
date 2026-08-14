@@ -50,6 +50,10 @@
   </script>
   {% if es_admin_actual() %}<script>
     // --- Gestor de actualizaciones (solo admin/super) ---
+    window._csrfToken = function () {
+      var m = document.querySelector('meta[name="csrf-token"]');
+      return m ? m.getAttribute('content') : '';
+    };
     window.buscarActualizacion = function () {
       var txt = document.getElementById('upTxt');
       var btn = document.getElementById('btnUpd');
@@ -73,17 +77,22 @@
     window.actualizarSistema = function () {
       var btn = document.getElementById('btnUpd');
       if (btn) { btn.disabled = true; btn.textContent = 'Instalando...'; }
-      fetch('/actualizar', { method: 'POST', credentials: 'same-origin' })
+      fetch('/actualizar', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': window._csrfToken(),
+                   'X-Requested-With': 'XMLHttpRequest' }
+      })
         .then(function (r) {
-          if (r.redirected || r.status === 403) throw new Error('No autorizado');
+          if (r.status === 403 || r.redirected) throw new Error('CSRF/Autorizacion fallida');
           return r.json().catch(function () { return {}; });
         })
         .then(function (d) {
-          mostrarToast('info', d.mensaje || 'Actualizaci\u00F3n aplicada. Reinicie la app.');
-          setTimeout(function () { location.reload(); }, 3000);
+          mostrarToast('info', d.mensaje || d.msg || 'Actualizaci\u00F3n aplicada. El servidor se reiniciar\u00E1.');
+          setTimeout(function () { location.reload(); }, 3500);
         })
         .catch(function (e) {
-          mostrarToast('error', 'Error al aplicar la actualizaci\u00F3n');
+          mostrarToast('error', 'Error al aplicar la actualizaci\u00F3n: ' + e.message);
           if (btn) { btn.disabled = false; btn.textContent = 'Instalar'; }
         });
     };

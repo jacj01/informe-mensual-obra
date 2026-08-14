@@ -128,5 +128,10 @@ if ($ok) {
     Remove-Item -Recurse -Force (Join-Path $Raiz "informe_web") -ErrorAction SilentlyContinue
     Move-Item -LiteralPath (Join-Path $bakDir "informe_web") -Destination (Join-Path $Raiz "informe_web")
     Write-Host "Rollback completado. Sistema sin cambios."
+    # Reactivar el server antiguo (ya que el updater lo mata al instalar)
+    Start-Process -FilePath "C:\Python314\pythonw.exe" `
+        -ArgumentList "servidor_silencioso.py" `
+        -WorkingDirectory "$Raiz/informe_web"
+    Write-Host "Servidor antiguo restaurado y reiniciado."
     exit 2
 }
