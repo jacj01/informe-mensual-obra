@@ -48,6 +48,47 @@
     {% endif %}
   }
   </script>
+  {% if es_admin_actual() %}<script>
+    // --- Gestor de actualizaciones (solo admin/super) ---
+    window.buscarActualizacion = function () {
+      var txt = document.getElementById('upTxt');
+      var btn = document.getElementById('btnUpd');
+      if (txt) txt.textContent = 'Buscando...';
+      fetch('/api/actualizacion', { credentials: 'same-origin' })
+        .then(function (r) {
+          if (r.status === 403 || r.redirected) throw new Error('No autorizado');
+          return r.json();
+        })
+        .then(function (d) {
+          if (txt) txt.textContent = d.disponible
+            ? ('Actualizaci\u00F3n disponible: ' + (d.tag || ''))
+            : 'Versi\u00F3n actualizada (' + (d.version_actual || '') + ')';
+          if (btn) btn.style.display = d.disponible ? 'inline-block' : 'none';
+        })
+        .catch(function (e) {
+          if (txt) txt.textContent = 'No se pudo consultar GitHub';
+          if (btn) btn.style.display = 'none';
+        });
+    };
+    window.actualizarSistema = function () {
+      var btn = document.getElementById('btnUpd');
+      if (btn) { btn.disabled = true; btn.textContent = 'Instalando...'; }
+      fetch('/actualizar', { method: 'POST', credentials: 'same-origin' })
+        .then(function (r) {
+          if (r.redirected || r.status === 403) throw new Error('No autorizado');
+          return r.json().catch(function () { return {}; });
+        })
+        .then(function (d) {
+          mostrarToast('info', d.mensaje || 'Actualizaci\u00F3n aplicada. Reinicie la app.');
+          setTimeout(function () { location.reload(); }, 3000);
+        })
+        .catch(function (e) {
+          mostrarToast('error', 'Error al aplicar la actualizaci\u00F3n');
+          if (btn) { btn.disabled = false; btn.textContent = 'Instalar'; }
+        });
+    };
+    document.addEventListener('DOMContentLoaded', window.buscarActualizacion);
+  </script>{% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=9">
 </head>
@@ -123,7 +164,17 @@
       <div class="credit">
         <div class="credit-line">Elaborado y Diseñado por INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA SOCIEDAD ANONIMA CERRADA</div>
         <div class="credit-contact">RUC: 20603860935<br>Cel: 918 358 910<br>Cel: 974 369 366<br>Correo: ingcpa.sac@gmail.com</div>
-        <div class="credit-version">Version 1.0</div>
+        <div class="credit-version">Versi&oacute;n {{ version_actual }}</div>
+        {% if es_admin_actual() %}
+        <div class="credit-update" id="upChk" style="margin-top:4px;">
+          <span id="upTxt">Buscar actualizaciones</span>
+          <button id="btnUpd" type="button"
+                  onclick="actualizarSistema();"
+                  style="display:none;margin-left:6px;padding:2px 8px;border:1px solid #888;border-radius:4px;cursor:pointer;">
+            Instalar
+          </button>
+        </div>
+        {% endif %}
       </div>
     </div>
   </aside>

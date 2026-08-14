@@ -465,7 +465,9 @@ def create_app():
         if not token:
             token = secrets.token_hex(16)
             session["_csrf"] = token
-        return {"csrf_token": token}
+        return {"csrf_token": token,
+                "version_actual": app.config.get("INFORME_VERSION", "1.0.0"),
+                "es_admin_actual": es_admin_actual}
 
     @app.after_request
     def cabeceras_seguridad(resp):
