@@ -1,0 +1,79 @@
+{% set es_edicion = g.id is not none %}
+<form method="post" class="form-panel" action="{{ url_for('orden_editar', orden_id=g.id) if g.id else url_for('orden_nuevo') }}">
+  <input type="hidden" name="modal" value="1">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="mes" value="{{ g.mes or p.mes_actual }}">
+  <input type="hidden" name="anio" value="{{ g.anio or p.anio }}">
+  {% if error %}
+  <div class="alert alert-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div>
+  {% endif %}
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-bag-check"></i> {{ 'Editar orden' if es_edicion else 'Registrar orden' }}</h3>
+    </div>
+    <div class="form-grid form-grid-orden">
+      <div class="field">
+        <label>SIAF</label>
+        <input type="number" name="siaf" value="{{ g.siaf }}">
+      </div>
+      <div class="field">
+        <label>Fecha</label>
+        <input type="date" name="fecha" value="{{ g.fecha.strftime('%Y-%m-%d') if g.fecha else '' }}" required>
+      </div>
+      <div class="field">
+        <label>Tipo</label>
+        <select name="tipo_doc" id="tipo-doc">
+          <option value="O/C" {{ 'selected' if g.tipo_doc == 'O/C' }}>O/C (Orden de compra)</option>
+          <option value="O/S" {{ 'selected' if g.tipo_doc == 'O/S' }}>O/S (Orden de servicio)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>N° Orden</label>
+        <input type="number" name="num_doc" value="{{ g.num_doc }}">
+      </div>
+      <div class="field full">
+        <label>Proveedor</label>
+        <input type="text" name="proveedor" value="{{ g.proveedor }}">
+      </div>
+      <div class="field comp">
+        <label>Componente</label>
+        <select name="componente">
+          {% for comp in COMPONENTES %}
+          <option value="{{ comp }}" {{ 'selected' if g.componente == comp }}>{{ comp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field comp">
+        <label>Clasificador a usar</label>
+        <select name="clasificador">
+          {% for code, det in clasificadores %}
+          <option value="{{ code }}" {{ 'selected' if g.clasificador == code }}>{{ det }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <i class="bi bi-info-circle"></i>
+    Después de registrar la orden podrá ingresar los materiales o servicios
+    de cada proveedor con el botón "{{ 'Ingresar Servicio' if g.tipo_doc == 'O/S' else 'Ingresar materiales' }}".
+  </div>
+  <div class="form-actions">
+    <button type="submit" id="btn-guardar-orden" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> {{ 'Ingresar Servicio' if g.tipo_doc == 'O/S' else 'Guardar' }}</button>
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</form>
+
+<script>
+  (function () {
+    var sel = document.getElementById('tipo-doc');
+    var btn = document.getElementById('btn-guardar-orden');
+    if (!sel || !btn) return;
+    function actualizarBoton() {
+      var es = sel.value === 'O/S';
+      btn.innerHTML = '<i class="bi bi-check2-circle"></i> ' + (es ? 'Ingresar Servicio' : 'Guardar');
+    }
+    sel.addEventListener('change', actualizarBoton);
+    actualizarBoton();
+  })();
+</script>

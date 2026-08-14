@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Suscripción{% endblock %}
+{% block heading %}Suscripción del aplicativo{% endblock %}
+{% block subheading %}Control de vigencia: planes mensual, trimestral y anual{% endblock %}
+
+{% block content %}
+<div class="hero-card">
+  <div>
+    <div class="hero-label">Licencia y Vigencia</div>
+    <div class="hero-title">Suscripción {{ s.plan if s else '—' }}</div>
+    <div class="hero-meta">
+      <span class="tag"><i class="bi bi-calendar-check"></i> Inicio: {{ s.fecha_inicio.strftime('%d/%m/%Y') if s and s.fecha_inicio else '—' }}</span>
+      <span class="tag"><i class="bi bi-calendar-x"></i> Vence: {{ s.fecha_fin.strftime('%d/%m/%Y') if s and s.fecha_fin else '—' }}</span>
+      {% if s and s.fecha_fin %}
+      <span class="tag"><i class="bi bi-hourglass-split"></i> {{ s.dias_restantes }} día(s) restantes</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h3><i class="bi bi-credit-card-2-front"></i> Estado actual</h3></div>
+  {% if not s %}
+  <p class="empty">Aún no hay una suscripción registrada.</p>
+  {% else %}
+  <div class="estado-row">
+    <span class="estado-pill {{ 'estado-ok' if s.vigente else ('estado-paused' if not s.activa else 'estado-bad') }}">
+      <i class="bi {{ 'bi-check-circle-fill' if s.vigente else ('bi-pause-circle-fill' if not s.activa else 'bi-x-circle-fill') }}"></i>
+      {% if not s.activa %}PAUSADA{% elif not s.vigente %}VENCIDA{% elif s.dias_restantes <= 15 %}POR VENCER{% else %}VIGENTE{% endif %}
+    </span>
+    {% if not s.activa %}
+    <span class="field-hint">El aplicativo está bloqueado para todos excepto el Super Usuario.</span>
+    {% elif not s.vigente %}
+    <span class="field-hint">La suscripción venció el {{ s.fecha_fin.strftime('%d/%m/%Y') }}. Renueve para desbloquear el aplicativo.</span>
+    {% else %}
+    <span class="field-hint">El aplicativo funciona con normalidad hasta el {{ s.fecha_fin.strftime('%d/%m/%Y') }}.</span>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head"><h3><i class="bi bi-calendar-plus"></i> Renovar o activar suscripción</h3></div>
+  <form method="post" action="{{ url_for('suscripcion_renovar') }}" class="form-panel">
+    <div class="form-grid">
+      <div class="field">
+        <label>Plan</label>
+        <select name="plan">
+          {% for nombre, meses in PLANES.items() %}
+          <option value="{{ nombre }}" {{ 'selected' if s and s.plan == nombre }}>{{ nombre }} ({{ meses }} mes{{ 'es' if meses != 1 }})</option>
+          {% endfor %}
+        </select>
+        <div class="field-hint">
+          Si la suscripción sigue vigente, la renovación se suma a la fecha de vencimiento actual.
+        </div>
+      </div>
+      <div class="field full">
+        <label>Nota (opcional)</label>
+        <textarea name="nota" rows="2" data-no-validar placeholder="Ej.: renovación por transferencia, ticket, etc."></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-gold btn-lg"><i class="bi bi-check2-circle"></i> Renovar suscripción</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head"><h3><i class="bi bi-file-earmark-arrow-down"></i> Generar archivo de licencia</h3></div>
+  <form method="post" action="{{ url_for('licencia_generar') }}" class="form-panel">
+    <div class="form-grid">
+      <div class="field">
+        <label>Plan contratado</label>
+        <select name="plan">
+          {% for nombre, meses in PLANES.items() %}
+          <option value="{{ nombre }}">{{ nombre }} ({{ meses }} mes{{ 'es' if meses != 1 }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Usuario (Administrador) para la licencia</label>
+        <select name="usuario_id" required>
+          {% for adm in admins %}
+          <option value="{{ adm.id }}">{{ adm.usuario }}{% if adm.nombres %} — {{ adm.nombres }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field full">
+        <div class="field-hint">
+          La licencia queda vinculada a ese usuario: solo su cuenta podrá activarla y
+          el archivo solo sirve <b>una vez</b>. Entrégueselo al cliente; él lo sube desde
+          la página de suscripción vencida y la vigencia se amplía automáticamente.
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-gold btn-lg"><i class="bi bi-download"></i> Generar y descargar licencia</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head"><h3><i class="bi bi-file-earmark-arrow-up"></i> Renovar con archivo de licencia</h3></div>
+  <form method="post" action="{{ url_for('licencia_subir') }}" enctype="multipart/form-data" class="form-panel">
+    <div class="form-grid">
+      <div class="field full">
+        <label>Archivo de licencia (.lic)</label>
+        <input type="file" name="licencia" accept=".lic,.json,application/json" required>
+        <div class="field-hint">
+          Si la suscripción sigue vigente, la nueva vigencia se suma a la fecha de vencimiento actual;
+          si ya venció, se inicia desde hoy.
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-arrow-repeat"></i> Aplicar licencia</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head"><h3><i class="bi bi-sliders"></i> Estado del aplicativo</h3></div>
+  {% if s and s.activa %}
+  <form method="post" action="{{ url_for('suscripcion_pausar') }}" class="inline"
+        data-confirm="¿Pausar la suscripción? Todo el aplicativo quedará bloqueado (excepto el Super Usuario)."
+        data-confirm-title="Pausar suscripción" data-confirm-btn="Pausar" data-confirm-color="btn-red">
+    <button type="submit" class="btn btn-red"><i class="bi bi-pause-circle"></i> Pausar suscripción</button>
+  </form>
+  {% elif s %}
+  <form method="post" action="{{ url_for('suscripcion_pausar') }}" class="inline">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-play-circle"></i> Reactivar suscripción</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head"><h3><i class="bi bi-clock-history"></i> Historial de movimientos</h3></div>
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Acción</th>
+          <th>Plan</th>
+          <th>Inicio</th>
+          <th>Vencimiento</th>
+          <th>Nota</th>
+          <th>Registrado por</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in historial %}
+        <tr>
+          <td>{{ h.fecha_registro.strftime('%d/%m/%Y %H:%M') if h.fecha_registro else '—' }}</td>
+          <td>{{ h.accion }}</td>
+          <td>{{ h.plan }}</td>
+          <td>{{ h.fecha_inicio.strftime('%d/%m/%Y') if h.fecha_inicio else '—' }}</td>
+          <td>{{ h.fecha_fin.strftime('%d/%m/%Y') if h.fecha_fin else '—' }}</td>
+          <td class="wrap">{{ h.nota or '—' }}</td>
+          <td>{{ h.usuario or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty">Aún no hay movimientos registrados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="note">
+  <i class="bi bi-info-circle"></i>
+  <div>
+    Solo el <b>Super Usuario</b> administra la suscripción. Cuando vence o se pausa,
+    el aplicativo bloquea el acceso de <b>todos</b> los usuarios excepto el Super Usuario,
+    que siempre puede ingresar para renovar. Antes de vencer (15 días) se muestra un aviso.
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Manifiesto de Gastos{% endblock %}
+{% block og_title %}Manifiesto de Gastos{% endblock %}
+{% block meta_description %}Manifiesto de gastos del informe financiero mensual de obra: registro de gastos y ejecución por clasificador en administración directa.{% endblock %}
+{% block heading %}Manifiesto de Gasto{% endblock %}
+{% block subheading %}Detalle de bienes y servicios del período{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head between">
+    <form method="get" class="filters">
+      <select name="mes" onchange="this.form.submit()">
+        {% for m in MESES %}
+        <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="anio" value="{{ anio }}" readonly title="Año configurado en la cabecera del proyecto">
+    </form>
+    <div>
+      <span class="badge badge-blue">Solo órdenes devengadas</span>
+      <a class="btn btn-primary btn-sm" target="_blank" href="{{ url_for('imprimir_manifiesto', mes=mes, anio=anio) }}" title="Imprimir Manifiesto de Gasto"><i class="bi bi-printer"></i> Imprimir</a>
+    </div>
+  </div>
+
+  {% for key, grupo in grupos.items() %}
+  <div class="grupo">
+    <div class="grupo-head">
+      <div>
+        <span class="grupo-titulo">{{ grupo.componente }} - {{ grupo.detalle }}</span>
+        <span class="badge badge-blue">{{ grupo.clasificador }}</span>
+      </div>
+      <div class="grupo-total">S/ {{ "{:,.2f}".format(grupo.total) }}</div>
+    </div>
+
+    {% for g in grupo.gastos %}
+    <div class="prov">
+      <div class="prov-head">
+        <div class="prov-info">
+          <span class="prov-num">{{ loop.index }}</span>
+          <div class="prov-datos">
+            <div class="prov-name">{{ g.proveedor }}</div>
+            <div class="prov-meta">
+              <span>{{ g.fecha.strftime("%d/%m/%Y") if g.fecha else '' }}</span>
+              <i class="bi bi-dot"></i>
+              <span>SIAF {{ g.siaf }}</span>
+              <i class="bi bi-dot"></i>
+              <span>{{ g.tipo_doc }} N° {{ g.num_doc }}</span>
+              {% if g.pecosa %}<span class="badge badge-orange">Pecosa {{ g.pecosa }}</span>{% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="prov-right">
+          <span class="prov-total">S/ {{ "{:,.2f}".format(g.importe) }}</span>
+        </div>
+      </div>
+      <div class="table-scroll">
+      <table class="table table-prov">
+        <thead>
+          <tr>
+            <th>#</th><th>Detalle del material</th><th>Und</th>
+            <th class="num">Cant</th><th class="num">P.U</th><th class="num">Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in g.detalles %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td class="wrap">{{ d.detalle }}</td>
+            <td>{{ d.und }}</td>
+            <td class="num">{{ d.cantidad }}</td>
+            <td class="num">{{ "{:,.2f}".format(d.precio_unitario) }}</td>
+            <td class="num strong">S/ {{ "{:,.2f}".format(d.importe) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="empty-sm">Sin materiales registrados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <i class="bi bi-receipt"></i>
+    <p>No hay órdenes devengadas para {{ MESES[mes-1] }} {{ anio }}.<br>
+    Registre las órdenes en <b>Ingreso de O/C o O/S</b> y active el check <b>DEVENGADO</b> para que aparezcan aquí.</p>
+  </div>
+  {% endfor %}
+
+  <div class="total-bar">
+    <div><i class="bi bi-calculator"></i> TOTAL DEL MES DE {{ MESES[mes-1] }} {{ anio }}</div>
+    <div class="total-val">S/ {{ "{:,.2f}".format(total) }}</div>
+  </div>
+</div>
+{% endblock %}

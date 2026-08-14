@@ -1,0 +1,211 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Tareo mensual de personal de obra en administración directa - {{ MESES[mes-1] }} {{ anio }}.">
+<title>TAREO MENSUAL - {{ MESES[mes-1] }} {{ anio }}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<style>
+  .panel-titulo { font-size: 9.5pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase;
+                  letter-spacing: .4px; margin: 5px 0 3px; }
+
+  table.tabla { table-layout: fixed; }
+  table.tabla th, table.tabla td { padding: 1.5px 1px; font-size: 6.3pt; }
+  table.tabla thead th { font-size: 5.9pt; padding: 3px 1px; }
+  .th-vert { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
+  .th-mes { font-size: 7pt; }
+  .th-dia { padding: 2px 1px !important; }
+  .th-dia .dl { display: block; font-size: 5.6pt; font-weight: 700; }
+  .th-dia .dn { display: block; font-size: 7.5pt; font-weight: 800; }
+  .th-dia.th-domingo, td.es-domingo { background: #FFE4E4 !important; color: #B91C1C; }
+  .th-dia.th-feriado, td.es-feriado { background: #FFEBC8 !important; color: #B45309; }
+  .sum { text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
+  td.dia-val { text-align: center; font-size: 6.6pt; font-weight: 800; }
+  .t-nombre { text-align: left; padding: 1.5px 3px !important; }
+  .fila-resumen td { background: #F8FAFC; font-weight: 700; border-top: 1.4px solid var(--borde); font-size: 6.6pt; }
+  .fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 6.6pt; }
+  .fila-total td.rs, .fila-resumen td.rs { text-align: center; font-variant-numeric: tabular-nums; }
+
+  .firmas { margin-top: 70px; }
+  .firma .nombres { min-height: 13px; font-size: 8pt; }
+  .firma .cargo { font-size: 7pt; }
+  .firma .reg { font-size: 6.5pt; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h2>Tareo y Planilla Mensual</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('tareo', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+
+{% macro tabla_tareo(lista, resumen, total_dias, etiqueta) %}
+<div class="panel-titulo">{{ etiqueta }} - {{ MESES[mes-1] }} {{ anio }}</div>
+<table class="tabla">
+  <colgroup>
+    <col style="width:5mm"><col style="width:36mm"><col style="width:14mm"><col style="width:14mm">
+    <col style="width:5mm"><col style="width:16mm"><col style="width:14mm">
+    {% for d in calendario %}<col style="width:4.5mm">{% endfor %}
+    <col style="width:7mm"><col style="width:7mm"><col style="width:7mm"><col style="width:7mm">
+  </colgroup>
+  <thead>
+    <tr>
+      <th rowspan="2">N°</th>
+      <th rowspan="2">Apellidos y Nombres</th>
+      <th rowspan="2">DNI</th>
+      <th rowspan="2">Fecha<br>Nacimiento</th>
+      <th rowspan="2">Sexo</th>
+      <th rowspan="2">Cargo</th>
+      <th rowspan="2">Fecha<br>Inicio<br>Laboral</th>
+      <th colspan="{{ calendario|length }}" class="th-mes">DÍAS DEL MES DE {{ MESES[mes-1] }} {{ anio }}</th>
+      <th rowspan="2" class="th-vert">Dias Trabajados</th>
+      <th rowspan="2" class="th-vert">Dias Domingos</th>
+      <th rowspan="2" class="th-vert">Dias Feriados</th>
+      <th rowspan="2" class="th-vert">Total Dias Trab.</th>
+    </tr>
+    <tr>
+      {% for d in calendario %}
+      <th class="th-dia {{ 'th-domingo' if d.es_domingo else '' }} {{ 'th-feriado' if d.es_feriado else '' }}">
+        <span class="dl">{{ d.letra }}</span><span class="dn">{{ d.dia }}</span>
+      </th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in lista %}
+    {% set inicio_dia = 1 %}
+    {% if t.fecha_inicio and t.fecha_inicio.year == anio and t.fecha_inicio.month == mes %}
+    {% set inicio_dia = t.fecha_inicio.day %}
+    {% endif %}
+    {% set ns = namespace(trab=0, dom=0, fer=0) %}
+    <tr>
+      <td class="ctr">{{ loop.index }}</td>
+      <td class="t-nombre">{{ t.nombre }}</td>
+      <td class="ctr">{{ t.dni }}</td>
+      <td class="ctr">{{ t.fecha_nacimiento.strftime('%d/%m/%Y') if t.fecha_nacimiento else '' }}</td>
+      <td class="ctr">{{ t.sexo }}</td>
+      <td class="ctr">{{ t.cargo }}</td>
+      <td class="ctr">{{ t.fecha_inicio.strftime('%d/%m/%Y') if t.fecha_inicio else '' }}</td>
+      {% for d in calendario %}
+      {% if d.dia >= inicio_dia and d.dia in t.dias_lista %}
+      {% if d.es_domingo %}{% set ns.dom = ns.dom + 1 %}<td class="dia-val es-domingo">D</td>
+      {% elif d.es_feriado %}{% set ns.fer = ns.fer + 1 %}<td class="dia-val es-feriado">F</td>
+      {% else %}{% set ns.trab = ns.trab + 1 %}<td class="dia-val">1</td>{% endif %}
+      {% else %}
+      <td class="ctr"></td>
+      {% endif %}
+      {% endfor %}
+      <td class="sum">{{ ns.trab }}</td>
+      <td class="sum">{{ ns.dom }}</td>
+      <td class="sum">{{ ns.fer }}</td>
+      <td class="sum">{{ ns.trab + ns.dom + ns.fer }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="{{ 7 + calendario|length + 4 }}" class="ctr">SIN REGISTROS PARA EL PERÍODO</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if resumen %}
+<div class="tabla-resumen">
+  <table class="tabla">
+    <colgroup>
+      <col style="width:5mm"><col style="width:36mm"><col style="width:14mm"><col style="width:14mm">
+      <col style="width:5mm"><col style="width:16mm"><col style="width:14mm">
+      {% for d in calendario %}<col style="width:4.5mm">{% endfor %}
+      <col style="width:7mm"><col style="width:7mm"><col style="width:7mm"><col style="width:7mm">
+    </colgroup>
+    <tbody>
+    {% for r in resumen %}
+    <tr class="fila-resumen">
+      <td colspan="7">{{ r.cargo }}</td>
+      {% for d in calendario %}
+      <td class="rs">{{ r.por_dia[d.dia - 1] if r.por_dia[d.dia - 1] else '' }}</td>
+      {% endfor %}
+      <td></td><td></td><td></td>
+      <td class="rs">{{ r.por_dia|sum }}</td>
+    </tr>
+    {% endfor %}
+    {% if resumen %}
+    <tr class="fila-total">
+      <td colspan="7">TOTAL GENERAL</td>
+      {% for d in calendario %}
+      <td class="rs">{{ total_dias[d.dia - 1] if total_dias[d.dia - 1] else '' }}</td>
+      {% endfor %}
+      <td></td><td></td><td></td>
+      <td class="rs">{{ total_dias|sum }}</td>
+    </tr>
+    {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endmacro %}
+
+<div class="hoja">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Tareo Mensual de Personal</div>
+      <div class="subtitulo">ADMINISTRACION DIRECTA - {{ MESES[mes-1] }} {{ anio }}</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">PERIODO: {{ MESES[mes-1] }} - {{ anio }}</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Código Único</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Correlativo Meta</span><span class="info-val">{{ p.meta or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Fuente Financ.</span><span class="info-val">{{ p.fuente or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Modalidad</span><span class="info-val">ADMINISTRACION DIRECTA</span></div>
+  </div>
+
+  <div class="responsables">
+    <div class="resp-item"><div class="resp-label">Residente de Obra</div><div class="resp-val">{{ p.residente or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Supervisor de Obra</div><div class="resp-val">{{ p.supervisor or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Adm. de obra</div><div class="resp-val">{{ p.administrador_obra or p.asistente or '' }}</div></div>
+  </div>
+
+  {% if obreros or resumen_obreros %}
+  {{ tabla_tareo(obreros, resumen_obreros, total_dias_obreros, 'Personal Obrero') }}
+  {% endif %}
+
+  {% if tecnicos or resumen_tecnicos %}
+  {{ tabla_tareo(tecnicos, resumen_tecnicos, total_dias_tecnicos, 'Personal Técnico') }}
+  {% endif %}
+
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.residente or '' }}</div>
+      <div class="cargo">Residente de Obra</div>
+      <div class="reg">{% if p.cip_residente %}CIP: {{ p.cip_residente }}{% endif %}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.supervisor or '' }}</div>
+      <div class="cargo">Supervisor de Obra</div>
+      <div class="reg">{% if p.cip_supervisor %}CIP: {{ p.cip_supervisor }}{% endif %}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.administrador_obra or p.asistente or '' }}</div>
+      <div class="cargo">V°B° Administración / Entidad</div>
+      <div class="reg"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

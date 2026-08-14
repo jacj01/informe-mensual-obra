@@ -1,0 +1,43 @@
+<div class="form-panel">
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-file-earmark-spreadsheet"></i> Generar Planilla de Pagos - {{ MESES[mes-1] }} {{ anio }}</h3>
+    </div>
+    <div class="planilla-seccion-activa">
+      <i class="bi {{ 'bi-person-wrench' if seccion == 'obrero' else 'bi-person-gear' }}"></i>
+      {% if seccion == 'obrero' %}Personal Obrero - Construcción Civil{% else %}Personal Técnico y Administrativo - D.L. 728{% endif %}
+    </div>
+    <div class="planilla-opciones">
+      <a class="planilla-opcion" href="{{ url_for('planilla_imprimir', mes=mes, anio=anio, seccion=seccion, opcion='sin') }}" target="_blank" rel="noopener">
+        <div class="opcion-icono"><i class="bi bi-cash"></i></div>
+        <div class="opcion-titulo">Sin Beneficios ni Descuentos de Ley</div>
+        <div class="opcion-desc">Genera la planilla con el monto bruto a ganar por cada trabajador: jornales, descanso dominical, feriados, BUC y movilidad. Sin beneficios legales ni descuentos.</div>
+        <span class="btn btn-primary"><i class="bi bi-printer"></i> Generar e imprimir</span>
+      </a>
+      <a class="planilla-opcion" href="{{ url_for('planilla_imprimir', mes=mes, anio=anio, seccion=seccion, opcion='con') }}" target="_blank" rel="noopener">
+        <div class="opcion-icono"><i class="bi bi-cash-stack"></i></div>
+        <div class="opcion-titulo">Con Beneficios y Descuentos de Ley</div>
+        <div class="opcion-desc">Genera la planilla completa con todos los beneficios de ley (vacaciones, CTS, gratificación, bonificación 30334) y los descuentos obligatorios (ONP/AFP y CONAFOVICER), con espacio para firma y huella de cada trabajador.</div>
+        <span class="btn btn-gold"><i class="bi bi-printer"></i> Generar e imprimir</span>
+      </a>
+    </div>
+  </div>
+  <div class="note">
+    <i class="bi bi-info-circle"></i>
+    <div>
+      La planilla se calcula con la tabla salarial oficial vigente de
+      <b>Construcción Civil</b> (CAPECO-FTCCP) para el año {{ anio }} y los
+      días marcados en el tareo de {{ MESES[mes-1] }} {{ anio }}. La tabla se
+      actualiza automáticamente cada año ({{ TABLA_CIVIL_POR_ANIO|length }} tabla(s) disponible(s)).
+    </div>
+  </div>
+  <div class="form-actions">
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</div>
+<script>
+  (function () {
+    var modal = document.getElementById('modal');
+    if (modal) modal.querySelector('.modal-box').classList.add('lg');
+  })();
+</script>

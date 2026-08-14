@@ -1,0 +1,58 @@
+<form method="post" class="form-panel" action="{{ url_for('licencia_subir') }}" enctype="multipart/form-data">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-file-earmark-arrow-up"></i> Ampliar licencia</h3>
+    </div>
+    <div class="form-grid">
+      {% if susc %}
+      <div class="field full">
+        <div class="lic-resumen">
+          <div class="lic-resumen-row">
+            <span>Plan actual</span><b>{{ susc.plan }}</b>
+          </div>
+          <div class="lic-resumen-row">
+            <span>Vigencia</span>
+            <b>{% if susc.fecha_inicio and susc.fecha_fin %}{{ susc.fecha_inicio.strftime('%d/%m/%Y') }} → {{ susc.fecha_fin.strftime('%d/%m/%Y') }}{% else %}—{% endif %}</b>
+          </div>
+          <div class="lic-resumen-row">
+            <span>Días restantes</span>
+            <b>{{ susc.dias_restantes }} día{{ 's' if susc.dias_restantes != 1 }}</b>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      <div class="field full">
+        <label>Archivo de licencia (.lic)</label>
+        <input type="file" name="licencia" id="lic-file" accept=".lic,.json,application/json" required>
+        <div class="field-hint" id="lic-file-info">
+          Seleccione el archivo de licencia que le fue entregado. La licencia es
+          personal para su usuario y de un solo uso. Si su suscripción sigue
+          vigente, se sumarán los días restantes más el periodo de la licencia
+          y se mostrará la nueva fecha de vencimiento.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-gold btn-lg"><i class="bi bi-arrow-repeat"></i> Aplicar licencia</button>
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</form>
+
+<script>
+  (function () {
+    var inp = document.getElementById('lic-file');
+    var info = document.getElementById('lic-file-info');
+    if (!inp || !info) return;
+    function escapar(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+    inp.addEventListener('change', function () {
+      if (inp.files && inp.files.length) {
+        info.innerHTML = '<i class="bi bi-check-circle-fill"></i> Archivo seleccionado: <b>' +
+          escapar(inp.files[0].name) + '</b>';
+      } else {
+        info.textContent = 'Seleccione el archivo de licencia que le fue entregado.';
+      }
+    });
+  })();
+</script>

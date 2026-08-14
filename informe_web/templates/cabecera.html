@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+{% block title %}Datos del Proyecto{% endblock %}
+{% block og_title %}Datos del Proyecto{% endblock %}
+{% block meta_description %}Datos generales del proyecto de obra en administración directa: entidad, ubicación, CUI y metadatos del informe financiero mensual.{% endblock %}
+{% block heading %}Datos del Proyecto{% endblock %}
+{% block subheading %}Datos generales que se muestran en todos los formatos{% endblock %}
+
+{% block content %}
+<form method="post" class="form-panel form-panel-cabecera" enctype="multipart/form-data" data-no-validar novalidate>
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-image"></i> Logo / Escudo de la Entidad</h3></div>
+    <div style="display:flex;align-items:center;gap:24px;padding:16px 20px">
+      <div style="flex:0 0 auto">
+        <div id="logo-preview" style="width:120px;height:120px;border:2px dashed var(--borde);border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fafbfc;overflow:hidden">
+          {% if p.logo_path %}
+          <img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo" style="max-width:110px;max-height:110px;object-fit:contain">
+          {% else %}
+          <span style="font-size:11px;color:var(--texto2);text-align:center;padding:8px">Sin logo<br>seleccionado</span>
+          {% endif %}
+        </div>
+      </div>
+      <div style="flex:1">
+        <p style="margin:0 0 8px;font-size:13px;color:var(--texto2)">Suba el escudo o logo de la entidad en formato PNG, JPG o SVG. Esta imagen se utilizará en todas las hojas de impresión.</p>
+        <input type="file" name="logo" id="logo-input" accept="image/png,image/jpeg,image/jpg,image/gif,image/svg+xml,image/webp" style="display:none" onchange="subirLogo(this)">
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('logo-input').click()"><i class="bi bi-upload"></i> Seleccionar imagen</button>
+        <span id="logo-status" style="margin-left:8px;font-size:12px;color:var(--verde);display:none"><i class="bi bi-check-circle"></i> Guardado</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-1-circle"></i> Datos del proyecto</h3></div>
+    <div class="form-grid form-grid-cabecera">
+      <div class="field full">
+        <label>Nombre del proyecto</label>
+        <textarea name="nombre" rows="2" required>{{ p.nombre }}</textarea>
+      </div>
+      <div class="field">
+        <label>Código único de inversión (CUI)</label>
+        <input type="text" name="cui" value="{{ p.cui }}">
+      </div>
+      <div class="field">
+        <label>Correlativo de meta</label>
+        <input type="text" name="meta" value="{{ p.meta }}">
+      </div>
+      <div class="field">
+        <label>Distrito</label>
+        <input type="text" name="distrito" value="{{ p.distrito }}">
+      </div>
+      <div class="field">
+        <label>Provincia</label>
+        <input type="text" name="provincia" value="{{ p.provincia }}">
+      </div>
+      <div class="field">
+        <label>Departamento</label>
+        <input type="text" name="departamento" value="{{ p.departamento }}">
+      </div>
+      <div class="field">
+        <label>Entidad ejecutora</label>
+        <input type="text" name="entidad" value="{{ p.entidad }}">
+      </div>
+      <div class="field span2">
+        <label>Unidad ejecutora</label>
+        <input type="text" name="unidad_ejecutora" value="{{ p.unidad_ejecutora }}">
+      </div>
+      <div class="field span2">
+        <label>Rubro</label>
+        <select name="rubro">
+          {% if p.rubro and p.rubro not in rubros %}
+          <option value="{{ p.rubro }}" selected>{{ p.rubro }}</option>
+          {% endif %}
+          {% for r in rubros %}
+          <option value="{{ r }}" {{ 'selected' if r == p.rubro }}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field span2">
+        <label>Fuente de financiamiento</label>
+        <select name="fuente">
+          {% if p.fuente and p.fuente not in fuentes %}
+          <option value="{{ p.fuente }}" selected>{{ p.fuente }}</option>
+          {% endif %}
+          {% for f in fuentes %}
+          <option value="{{ f }}" {{ 'selected' if f == p.fuente }}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Aprobación</label>
+        <input type="text" name="aprobacion" value="{{ p.aprobacion }}" placeholder="Ej.: RESOLUCION DE ALCALDIA N° 92-A-2023">
+      </div>
+      <div class="field">
+        <label>Fecha de resolución</label>
+        <input type="date" name="fecha_aprobacion" value="{{ p.fecha_aprobacion.strftime('%Y-%m-%d') if p.fecha_aprobacion else '' }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-2-circle"></i> Presupuesto (S/.)</h3></div>
+    <div class="form-grid form-grid-cabecera">
+      <div class="field">
+        <label>Presupuesto total</label>
+        <input type="text" inputmode="decimal" class="monto" name="presupuesto_total" value="{{ p.presupuesto_total }}" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Costo directo</label>
+        <input type="text" inputmode="decimal" class="monto" name="costo_directo" value="{{ p.costo_directo }}" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Gastos generales</label>
+        <input type="text" inputmode="decimal" class="monto" name="gastos_generales" value="{{ p.gastos_generales }}" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Gastos de supervisión</label>
+        <input type="text" inputmode="decimal" class="monto" name="gastos_supervision" value="{{ p.gastos_supervision }}" autocomplete="off">
+      </div>
+      <div class="field span2">
+        <label>Elaboración de expediente</label>
+        <input type="text" inputmode="decimal" class="monto" name="elaboracion_expediente" value="{{ p.elaboracion_expediente }}" autocomplete="off">
+      </div>
+      <div class="field span2">
+        <label>Liquidación de obra</label>
+        <input type="text" inputmode="decimal" class="monto" name="liquidacion_obra" value="{{ p.liquidacion_obra }}" autocomplete="off">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-3-circle"></i> Equipo de gestión</h3></div>
+    <div class="form-grid form-grid-cabecera">
+      <div class="field">
+        <label>Residente de obra</label>
+        <input type="text" name="residente" value="{{ p.residente }}" data-no-validar>
+      </div>
+      <div class="field">
+        <label>N° CIP Residente</label>
+        <input type="text" name="cip_residente" value="{{ p.cip_residente or '' }}" placeholder="Ej: 12345" data-no-validar>
+      </div>
+      <div class="field">
+        <label>Supervisor de obra</label>
+        <input type="text" name="supervisor" value="{{ p.supervisor }}" data-no-validar>
+      </div>
+      <div class="field">
+        <label>N° CIP Supervisor</label>
+        <input type="text" name="cip_supervisor" value="{{ p.cip_supervisor or '' }}" placeholder="Ej: 67890" data-no-validar>
+      </div>
+      <div class="field">
+        <label>Administrador de Obra</label>
+        <input type="text" name="asistente" value="{{ p.asistente }}" data-no-validar>
+      </div>
+      <div class="field">
+        <label>N° de Colegiatura</label>
+        <input type="text" name="colegiatura_admin" value="{{ p.colegiatura_admin or '' }}" placeholder="Ej: 12345" data-no-validar>
+      </div>
+      <div class="field">
+        <label>Asistente Técnico</label>
+        <input type="text" name="asistente_tecnico" value="{{ p.asistente_tecnico or '' }}" data-no-validar>
+      </div>
+      <div class="field">
+        <label>N° de DNI o CIP</label>
+        <input type="text" name="dni_cip_asistente" value="{{ p.dni_cip_asistente or '' }}" placeholder="Ej: 12345678" data-no-validar>
+      </div>
+      <div class="field span2">
+        <label>Responsable de almacén</label>
+        <input type="text" name="responsable_almacen" value="{{ p.responsable_almacen }}" data-no-validar>
+      </div>
+      <div class="field span2">
+        <label>N° de DNI</label>
+        <input type="text" name="dni_responsable_almacen" value="{{ p.dni_responsable_almacen or '' }}" placeholder="Ej: 12345678" data-no-validar>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-4-circle"></i> Período del informe</h3></div>
+    <div class="form-grid form-grid-cabecera">
+      <div class="field span2">
+        <label>Año</label>
+        <input type="number" name="anio" value="{{ p.anio }}">
+      </div>
+      <div class="field span2">
+        <label>Mes de trabajo (por defecto)</label>
+        <select name="mes_actual">
+          {% for m in MESES %}
+          <option value="{{ loop.index }}" {{ 'selected' if loop.index == p.mes_actual }}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-5-circle"></i> Cronograma y adicional de obra</h3></div>
+    <div class="form-grid form-grid-cabecera">
+      <div class="field">
+        <label>Fecha de inicio de obra</label>
+        <input type="date" name="fecha_inicio" id="fecha_inicio"
+               value="{{ p.fecha_inicio.strftime('%Y-%m-%d') if p.fecha_inicio else '' }}">
+      </div>
+      <div class="field">
+        <label>Fecha de fin de obra</label>
+        <input type="date" name="fecha_fin" id="fecha_fin"
+               value="{{ p.fecha_fin.strftime('%Y-%m-%d') if p.fecha_fin else '' }}">
+      </div>
+      <div class="field">
+        <label>Días de ejecución</label>
+        <input type="number" name="dias_ejecucion" id="dias_ejecucion" min="0"
+               value="{{ p.dias_ejecucion }}">
+      </div>
+      <div class="field check">
+        <label class="check-line">
+          <input type="checkbox" name="adicional_obra" id="adicional_obra"
+                 {{ 'checked' if p.adicional_obra }}>
+          Adicional de obra
+        </label>
+        <div class="field-hint">Se habilitan los campos de ampliación.</div>
+      </div>
+    </div>
+    <div class="form-grid form-grid-cabecera" id="adicional-fields">
+      <div class="field">
+        <label>Días de ampliación</label>
+        <input type="number" name="dias_ampliacion" id="dias_ampliacion" min="0"
+               value="{{ p.dias_ampliacion }}" disabled>
+      </div>
+      <div class="field">
+        <label>Nuevo final de obra</label>
+        <input type="date" name="nuevo_final_obra" id="nuevo_final_obra"
+               value="{{ p.nuevo_final_obra.strftime('%Y-%m-%d') if p.nuevo_final_obra else '' }}" disabled>
+      </div>
+      <div class="field span2">
+        <label>Monto de ampliación presupuestal (S/.)</label>
+        <input type="text" inputmode="decimal" class="monto" name="monto_ampliacion" id="monto_ampliacion" min="0"
+               value="{{ p.monto_ampliacion }}" disabled>
+      </div>
+      <div class="field full">
+        <label>N° de resolución de aprobación del adicional</label>
+        <input type="text" name="n_resolucion_adicional" id="n_resolucion_adicional"
+               value="{{ p.n_resolucion_adicional }}" disabled>
+      </div>
+      <div class="field full">
+        <label class="check-line">
+          <input type="checkbox" name="ampliacion_presupuestal" id="ampliacion_presupuestal"
+                 {{ 'checked' if p.ampliacion_presupuestal }} disabled>
+          ¿El adicional incluye ampliación presupuestal? (el monto se suma al PIM {{ p.anio }})
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-6-circle"></i> Clasificadores de gasto</h3></div>
+    <div class="form-grid form-grid-cabecera">
+      <div class="field">
+        <label>Clasificador para PERSONAL</label>
+        <input type="text" name="clasificador_personal" value="{{ p.clasificador_personal or '2.6.2.3.99.3' }}">
+      </div>
+      <div class="field">
+        <label>Clasificador para BIENES</label>
+        <input type="text" name="clasificador_bienes" value="{{ p.clasificador_bienes or '2.6.2.3.99.4' }}">
+      </div>
+      <div class="field">
+        <label>Clasificador para SERVICIOS</label>
+        <input type="text" name="clasificador_servicios" value="{{ p.clasificador_servicios or '2.6.2.3.99.5' }}">
+      </div>
+      <div class="field">
+        <label>Clasificador para ELABORACIÓN DE EXPEDIENTE TÉCNICO</label>
+        <input type="text" name="clasificador_expediente" value="{{ p.clasificador_expediente or '2.6.8.1.3.1' }}">
+      </div>
+      <div class="field full">
+        <div class="field-hint">Estos códigos se usan en el <b>Ingreso de O/C o O/S</b> y en los
+        formatos financieros para identificar PERSONAL, BIENES, SERVICIOS y ELABORACIÓN DE EXPEDIENTE TÉCNICO.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg" formnovalidate><i class="bi bi-check2-circle"></i> Guardar cabecera</button>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function subirLogo(input) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var preview = document.getElementById('logo-preview');
+    var status = document.getElementById('logo-status');
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      preview.innerHTML = '<img src="' + e.target.result + '" alt="Preview" style="max-width:110px;max-height:110px;object-fit:contain">';
+    };
+    reader.readAsDataURL(file);
+    var fd = new FormData();
+    fd.append('logo', file);
+    fd.append('_csrf', csrfValor);
+    fetch('{{ url_for("subir_logo") }}', {
+      method: 'POST',
+      headers: {'X-Requested-With': 'XMLHttpRequest'},
+      body: fd
+    }).then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) {
+        status.innerHTML = '<i class="bi bi-check-circle"></i> Guardado';
+        status.style.color = 'var(--verde)';
+      } else {
+        status.innerHTML = '<i class="bi bi-x-circle"></i> Error';
+        status.style.color = 'var(--rojo)';
+      }
+      status.style.display = 'inline';
+      setTimeout(function(){ status.style.display = 'none'; }, 3000);
+    }).catch(function(){
+      status.innerHTML = '<i class="bi bi-x-circle"></i> Error de red';
+      status.style.color = 'var(--rojo)';
+      status.style.display = 'inline';
+      setTimeout(function(){ status.style.display = 'none'; }, 3000);
+    });
+  }
+
+  function setDisabled(cond, campos) {
+    campos.forEach(function (id) {
+      document.getElementById(id).disabled = !cond;
+    });
+  }
+
+  function actualizarAdicional() {
+    var activo = document.getElementById('adicional_obra').checked;
+    setDisabled(activo, ['dias_ampliacion', 'nuevo_final_obra',
+                         'n_resolucion_adicional', 'ampliacion_presupuestal']);
+    document.getElementById('monto_ampliacion').disabled =
+      !(activo && document.getElementById('ampliacion_presupuestal').checked);
+  }
+
+  function parseFecha(v) {
+    if (!v) return null;
+    var p = v.split('-');
+    return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  }
+
+  function fmtFecha(d) {
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var dd = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + dd;
+  }
+
+  function difDias(inicio, fin) {
+    if (!inicio || !fin) return 0;
+    return Math.round((fin - inicio) / 86400000);
+  }
+
+  function actualizarNuevoFinal() {
+    var inicio = parseFecha(document.getElementById('fecha_inicio').value);
+    var dias = parseInt(document.getElementById('dias_ejecucion').value, 10) || 0;
+    var da = parseInt(document.getElementById('dias_ampliacion').value, 10) || 0;
+    var nf = document.getElementById('nuevo_final_obra');
+    if (inicio && (dias || da)) {
+      var d = new Date(inicio);
+      d.setDate(d.getDate() + dias + da);
+      nf.value = fmtFecha(d);
+    }
+  }
+
+  function desdeFechaFin() {
+    var inicio = parseFecha(document.getElementById('fecha_inicio').value);
+    var fin = parseFecha(document.getElementById('fecha_fin').value);
+    if (inicio && fin) {
+      document.getElementById('dias_ejecucion').value = Math.max(0, difDias(inicio, fin));
+    }
+  }
+
+  function desdeDiasEjecucion() {
+    var inicio = parseFecha(document.getElementById('fecha_inicio').value);
+    var dias = parseInt(document.getElementById('dias_ejecucion').value, 10);
+    var fin = document.getElementById('fecha_fin');
+    if (inicio && !isNaN(dias)) {
+      var d = new Date(inicio);
+      d.setDate(d.getDate() + dias);
+      fin.value = fmtFecha(d);
+    }
+  }
+
+  function recalcularPorInicio() {
+    if (document.getElementById('fecha_fin').value) {
+      desdeFechaFin();
+    } else if (document.getElementById('dias_ejecucion').value) {
+      desdeDiasEjecucion();
+    }
+    actualizarNuevoFinal();
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    actualizarAdicional();
+    var inicio = document.getElementById('fecha_inicio');
+    var fin = document.getElementById('fecha_fin');
+    var dias = document.getElementById('dias_ejecucion');
+    var ampliacion = document.getElementById('dias_ampliacion');
+    inicio.addEventListener('change', recalcularPorInicio);
+    inicio.addEventListener('input', recalcularPorInicio);
+    fin.addEventListener('change', function () { desdeFechaFin(); actualizarNuevoFinal(); });
+    fin.addEventListener('input', function () { desdeFechaFin(); actualizarNuevoFinal(); });
+    dias.addEventListener('change', function () { desdeDiasEjecucion(); actualizarNuevoFinal(); });
+    dias.addEventListener('input', function () { desdeDiasEjecucion(); actualizarNuevoFinal(); });
+    ampliacion.addEventListener('change', actualizarNuevoFinal);
+    ampliacion.addEventListener('input', actualizarNuevoFinal);
+    document.getElementById('adicional_obra').addEventListener('change', actualizarAdicional);
+    document.getElementById('ampliacion_presupuestal').addEventListener('change', actualizarAdicional);
+  });
+</script>
+{% endblock %}

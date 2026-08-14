@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Almacén de Obra{% endblock %}
+{% block og_title %}Almacén de Obra{% endblock %}
+{% block meta_description %}Control de entradas y salidas del almacén de obra: valorizado, saldos por insumo y kardex del informe financiero mensual.{% endblock %}
+{% block heading %}Movimiento de Almacén{% endblock %}
+{% block subheading %}Formatos FE-07 (movimiento diario) y FE-08 (valorizado){% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head between">
+    <form method="get" class="filters">
+      <select name="mes" onchange="this.form.submit()">
+        {% for m in MESES %}
+        <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="anio" value="{{ anio }}" readonly title="Año configurado en la cabecera del proyecto">
+    </form>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="text" id="searchMaterial" placeholder="Buscar material..."
+               style="padding:6px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;width:220px"
+               oninput="filtrarMateriales()">
+        <a class="btn btn-primary" id="btnNuevoMaterial" href="{{ url_for('almacen_nuevo', mes=mes, anio=anio, tipo='E') }}" onclick="return abrirModal(this.href)"><i class="bi bi-plus-lg"></i> Nuevo material</a>
+      </div>
+      <a class="btn btn-primary" id="btnImprimirFE07" href="{{ url_for('imprimir_fe07', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="f07">FE-07 Movimiento diario</button>
+  <button class="tab" data-tab="f08">FE-08 Almacén valorizado</button>
+</div>
+
+<div class="tab-panel active" id="tab-f07">
+  <div class="card resumen-card">
+    <div class="resumen-title">
+      <span><i class="bi bi-graph-up"></i> RESUMEN DE MOVIMIENTOS - {{ MESES[mes-1] }} {{ anio }}</span>
+    </div>
+    <div class="resumen-grid">
+      <div class="resumen-item">
+        <span class="resumen-ico blue"><i class="bi bi-boxes"></i></span>
+        <div class="resumen-val">{{ diario.insumos }}</div>
+        <div class="resumen-lbl">Insumos</div>
+      </div>
+      <div class="resumen-item">
+        <span class="resumen-ico green"><i class="bi bi-box-arrow-in-down"></i></span>
+        <div class="resumen-val">{{ diario.total_entradas|cant }}</div>
+        <div class="resumen-lbl">Total entradas</div>
+      </div>
+      <div class="resumen-item">
+        <span class="resumen-ico red"><i class="bi bi-box-arrow-up"></i></span>
+        <div class="resumen-val">{{ diario.total_salidas|cant }}</div>
+        <div class="resumen-lbl">Total salidas</div>
+      </div>
+      <div class="resumen-item">
+        <span class="resumen-ico gold"><i class="bi bi-arrow-repeat"></i></span>
+        <div class="resumen-val">{{ diario.movimientos }}</div>
+        <div class="resumen-lbl">Movimientos</div>
+      </div>
+    </div>
+  </div>
+
+  {% for item in diario["items"] %}
+  <div class="card alm-card">
+    <div class="card-head between">
+      <h3><i class="bi bi-box-seam"></i> {{ item.descripcion }}</h3>
+      <div class="alm-acciones">
+        <a class="btn btn-print btn-sm" href="{{ url_for('imprimir_fe07', mes=mes, anio=anio, material=item.descripcion) }}" target="_blank" title="Imprimir cuadro de este material"><i class="bi bi-printer"></i> Imprimir</a>
+        <a class="btn btn-green btn-sm" href="{{ url_for('almacen_nuevo', mes=mes, anio=anio, descripcion=item.descripcion, und=item.und, tipo='E') }}" onclick="return abrirModal(this.href)"><i class="bi bi-box-arrow-in-down"></i> Entrada</a>
+        <a class="btn btn-red btn-sm" href="{{ url_for('almacen_nuevo', mes=mes, anio=anio, descripcion=item.descripcion, und=item.und, tipo='S') }}" onclick="return abrirModal(this.href)"><i class="bi bi-box-arrow-up"></i> Salida</a>
+      </div>
+    </div>
+    <div class="alm-meta">
+      <span><b>Unidad:</b> {{ item.und }}</span>
+      <span><b>Movs:</b> {{ item.movs }}</span>
+      <span class="ent"><b>Entradas:</b> {{ item.cant_in|cant }}</span>
+      <span class="sal"><b>Salidas:</b> {{ item.cant_out|cant }}</span>
+      <span><b>Saldo:</b> {{ item.saldo|cant }}</span>
+    </div>
+    <div class="table-scroll">
+      <table class="table table-compact alm-tabla">
+        <thead>
+          <tr>
+            <th rowspan="2">ITEM</th>
+            <th rowspan="2">Fecha</th>
+            <th rowspan="2">UND</th>
+            <th rowspan="2" class="num">Saldo<br>anterior</th>
+            <th colspan="5">ENTRADA / PROVEEDOR</th>
+            <th colspan="4">SALIDA</th>
+            <th rowspan="2" class="num">Saldo</th>
+            <th rowspan="2" class="alm-acc">Acciones</th>
+          </tr>
+          <tr>
+            <th class="num">Cantidad</th><th>N° OC</th><th>Pecosa/Guia</th><th>Razón social del proveedor</th><th>Quien recepciona</th>
+            <th>Fecha</th><th class="num">Cantidad</th><th>Actividad o partida</th><th>Quien recibe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(item=0) %}
+          {% for r in item.rows %}
+          {% if r.mov.tipo == 'E' %}{% set ns.item = ns.item + 1 %}{% endif %}
+          <tr>
+            <td class="num">{{ ns.item if r.mov.tipo == 'E' else '' }}</td>
+            <td class="num">{{ r.mov.fecha.strftime("%d/%m/%Y") if r.mov.tipo == 'E' and r.mov.fecha else '' }}</td>
+            <td>{{ item.und }}</td>
+            <td class="num">{{ r.saldo_anterior|cant }}</td>
+            {% if r.mov.tipo == 'E' %}
+            <td class="num ent">{{ r.mov.cantidad|cant }}</td>
+            <td>{{ r.mov.numero_doc }}</td>
+            <td>{{ r.mov.pecosa_guia }}</td>
+            <td class="wrap">{{ r.mov.proveedor }}</td>
+            <td class="wrap">{{ r.mov.responsable }}</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            {% else %}
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td class="num">{{ r.mov.fecha.strftime("%d/%m/%Y") if r.mov.fecha else '' }}</td>
+            <td class="num sal">{{ r.mov.cantidad|cant }}</td>
+            <td class="wrap">{{ r.mov.actividad }}</td>
+            <td class="wrap">{{ r.mov.responsable }}</td>
+            {% endif %}
+            <td class="num strong">{{ r.saldo|cant }}</td>
+            <td class="row-actions alm-acc">
+              <a class="icon-btn" href="{{ url_for('almacen_editar', mov_id=r.mov.id) }}" onclick="return abrirModal(this.href)" title="Editar" aria-label="Editar movimiento"><i class="bi bi-pencil"></i></a>
+              <form method="post" action="{{ url_for('almacen_eliminar', mov_id=r.mov.id) }}" class="inline"
+                    data-confirm="¿Eliminar movimiento?" data-confirm-title="Eliminar movimiento" data-confirm-btn="Eliminar">
+                <button class="icon-btn danger" title="Eliminar" aria-label="Eliminar movimiento"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="15" class="empty">Sin movimientos para este insumo.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <p class="empty">No hay movimientos de almacén para {{ MESES[mes-1] }} {{ anio }}.</p>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="tab-panel" id="tab-f08">
+  <div class="card">
+    <div class="card-head between"><h3><i class="bi bi-cash-stack"></i> MOVIMIENTO DE ALMACÉN VALORIZADO - {{ MESES[mes-1] }} {{ anio }}</h3>
+      <a class="btn btn-primary" href="{{ url_for('imprimir_fe08', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
+    </div>
+    <div class="table-scroll">
+      <table class="table table-compact">
+        <thead>
+          <tr>
+            <th>Item</th><th>Descripción</th><th>Und</th><th>O/C</th>
+            <th class="num">Cant. ingreso</th><th class="num">P.U</th>
+            <th class="num">Valor ingreso</th><th class="num">Cant. egreso</th>
+            <th class="num">Valor egreso</th><th class="num">Saldo</th>
+            <th class="num">Valor saldo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in valorizado %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td class="wrap strong">{{ item.descripcion }}</td>
+            <td>{{ item.und }}</td>
+            <td>{{ item.oc }}</td>
+            <td class="num">{{ item.cant_in }}</td>
+            <td class="num">{{ "{:,.2f}".format(item.pu) }}</td>
+            <td class="num">{{ "{:,.2f}".format(item.valor_in) }}</td>
+            <td class="num">{{ item.cant_out }}</td>
+            <td class="num">{{ "{:,.2f}".format(item.valor_out) }}</td>
+            <td class="num strong">{{ item.saldo }}</td>
+            <td class="num strong">{{ "{:,.2f}".format(item.valor_saldo) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11" class="empty">Sin movimientos de almacén para el período.</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" class="right strong">TOTAL</td>
+            <td class="num strong">{{ valor_total.cant_in }}</td>
+            <td class="num"></td>
+            <td class="num strong">{{ "{:,.2f}".format(valor_total.valor_in) }}</td>
+            <td class="num strong">{{ valor_total.cant_out }}</td>
+            <td class="num strong">{{ "{:,.2f}".format(valor_total.valor_out) }}</td>
+            <td class="num strong">{{ valor_total.saldo }}</td>
+            <td class="num strong">{{ "{:,.2f}".format(valor_total.valor_saldo) }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      var nuevo = document.getElementById('btnNuevoMaterial');
+      if (nuevo) nuevo.style.display = btn.dataset.tab === 'f08' ? 'none' : '';
+      var imprimir = document.getElementById('btnImprimirFE07');
+      if (imprimir) imprimir.style.display = btn.dataset.tab === 'f08' ? 'none' : '';
+    });
+  });
+  function filtrarMateriales() {
+    var q = document.getElementById('searchMaterial').value.toLowerCase();
+    document.querySelectorAll('.alm-card').forEach(function(el) {
+      var txt = el.textContent.toLowerCase();
+      el.style.display = txt.indexOf(q) > -1 ? '' : 'none';
+    });
+  }
+</script>
+{% endblock %}

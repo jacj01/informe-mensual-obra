@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Ingreso de O/C o O/S{% endblock %}
+{% block og_title %}Ingreso de O/C o O/S{% endblock %}
+{% block meta_description %}Registro de órdenes de compra y servicios (O/C y O/S) con sus materiales, SIAF y estado devengado del informe financiero mensual de obra.{% endblock %}
+{% block heading %}Ingreso de O/C o O/S{% endblock %}
+{% block subheading %}Registro de órdenes de compra y servicio con sus materiales{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <h3><i class="bi bi-bag-plus"></i> Registrar orden (proveedor)</h3>
+    <form method="get" class="filters">
+      <select name="mes" onchange="this.form.submit()">
+        {% for m in MESES %}
+        <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="anio" value="{{ anio }}" readonly title="Año configurado en la cabecera del proyecto">
+    </form>
+  </div>
+
+  {% set es_super_vista = susc and susc.es_super %}
+  {% set mes_abierto = es_super_vista or (anio, mes) == (p.anio, p.mes_actual) %}
+  {% if mes_abierto %}
+  <form method="post" action="{{ url_for('orden_nuevo') }}" class="form-panel">
+    <input type="hidden" name="mes" value="{{ mes }}">
+    <input type="hidden" name="anio" value="{{ anio }}">
+    <div class="form-grid form-grid-orden">
+      <div class="field">
+        <label>SIAF</label>
+        <input type="number" name="siaf">
+      </div>
+      <div class="field">
+        <label>Fecha</label>
+        <input type="date" name="fecha" value="{{ '%04d-%02d-01' % (p.anio, p.mes_actual) }}" required>
+      </div>
+      <div class="field">
+        <label>Tipo</label>
+        <select name="tipo_doc" id="tipo-doc-quick">
+          <option value="O/C" selected>O/C</option>
+          <option value="O/S">O/S</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>N° Orden</label>
+        <input type="number" name="num_doc">
+      </div>
+      <div class="field full">
+        <label>Proveedor</label>
+        <input type="text" name="proveedor">
+      </div>
+      <div class="field comp">
+        <label>Componente</label>
+        <select name="componente">
+          {% for comp in COMPONENTES %}
+          <option value="{{ comp }}" {{ 'selected' if comp == 'Costo Directo' }}>{{ comp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field comp">
+        <label>Clasificador a usar</label>
+        <select name="clasificador">
+          {% for code, det in clasificadores %}
+          <option value="{{ code }}" {{ 'selected' if loop.first }}>{{ det }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" id="btn-registrar-orden" class="btn btn-primary btn-lg"><i class="bi bi-plus-lg"></i> Registrar orden</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="alert alert-warning">
+    <i class="bi bi-calendar-x"></i>
+    No se permite registrar órdenes en {{ MESES[mes-1] }} {{ anio }} porque es un mes cerrado.
+    El mes de trabajo actual es {{ MESES[p.mes_actual-1] }} {{ p.anio }}.
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head between">
+    <h3><i class="bi bi-list-check"></i> Órdenes registradas - {{ MESES[mes-1] }} {{ anio }}</h3>
+    <div style="display:flex;align-items:center;gap:10px">
+      <input type="text" id="searchOC" placeholder="Buscar por O/C..." 
+             style="padding:6px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;width:200px"
+             oninput="filtrarOrdenes()">
+      <span class="badge badge-blue">{{ lista|length }} órdenes</span>
+    </div>
+  </div>
+
+  {% for g in lista %}
+  {% set es_super = susc and susc.es_super %}
+  {% set bloqueada = not es_super and (g.anio, g.mes) != (p.anio, p.mes_actual) %}
+  {% set dev_bloqueada = not es_super and (g.anio, g.mes) != (p.anio, p.mes_actual) %}
+  {% set dev_activa = not es_super and g.devengado %}
+  <div class="prov" data-orden="{{ g.tipo_doc }} {{ g.num_doc }}">
+    <div class="prov-head">
+      <div class="prov-info">
+        <span class="prov-num">{{ loop.index }}</span>
+        <div class="prov-datos">
+          <div class="prov-name-row">
+            <div class="prov-name">{{ g.proveedor }}</div>
+            {% if bloqueada %}<span class="badge badge-orange" title="Mes cerrado: no se puede modificar">MES CERRADO</span>{% endif %}
+            <form method="post" action="{{ url_for('orden_devengar', orden_id=g.id) }}" class="dev-form">
+              <label class="dev-label {{ 'on' if g.devengado }}">
+                <input type="checkbox" name="devengado" {{ 'checked' if g.devengado }}
+                       {{ 'disabled' if dev_bloqueada }} onchange="this.form.submit()">
+                DEVENGADO
+              </label>
+            </form>
+          </div>
+          <div class="prov-meta">
+            <span>{{ g.tipo_doc }} N° {{ g.num_doc }}</span>
+            {% if g.mes != mes %}
+            <i class="bi bi-dot"></i>
+            <span class="badge badge-orange">PENDIENTE {{ MESES[g.mes-1] }}</span>
+            {% endif %}
+            <i class="bi bi-dot"></i>
+            <span>SIAF {{ g.siaf }}</span>
+            <i class="bi bi-dot"></i>
+            <span>{{ g.fecha.strftime("%d/%m/%Y") if g.fecha else '' }}</span>
+            <i class="bi bi-dot"></i>
+            <span class="badge badge-blue">{{ g.clasificador }} - {{ cls_nombres.get(g.clasificador, g.clasificador) }}</span>
+            <i class="bi bi-dot"></i>
+            <span class="badge badge-green">{{ g.componente }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="prov-right">
+        <span class="prov-total">S/ {{ "{:,.2f}".format(g.importe) }}</span>
+        {% if not bloqueada and not dev_activa %}
+        <a class="btn btn-green btn-sm" href="{{ url_for('orden_material_nuevo', orden_id=g.id) }}" onclick="return abrirModal(this.href)" title="{{ 'Ingresar servicio' if g.tipo_doc == 'O/S' else 'Ingresar materiales' }}"><i class="bi bi-plus-lg"></i> {{ 'Ingresar Servicio' if g.tipo_doc == 'O/S' else 'Ingresar materiales' }}</a>
+        {% endif %}
+        <div class="row-actions">
+          {% if not bloqueada and not dev_activa %}
+          <a class="icon-btn" href="{{ url_for('orden_editar', orden_id=g.id) }}" onclick="return abrirModal(this.href)" title="Editar orden" aria-label="Editar orden"><i class="bi bi-pencil"></i></a>
+          {% endif %}
+          <form method="post" action="{{ url_for('orden_eliminar', orden_id=g.id) }}" class="inline"
+                {% if bloqueada or dev_activa %}data-bloqueo="{{ bloqueos_orden.get(g.id, 'Esta orden está devengada o pertenece a un mes cerrado. No se puede eliminar.') }}"{% elif g.id in bloqueos_orden %}data-bloqueo="{{ bloqueos_orden[g.id] }}"{% else %}data-confirm="¿Eliminar esta orden y sus materiales?" data-confirm-title="Eliminar orden" data-confirm-btn="Eliminar"{% endif %}>
+            <button class="icon-btn danger" title="Eliminar" aria-label="Eliminar orden"><i class="bi bi-trash"></i></button>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="table-scroll">
+    <table class="table table-prov">
+      <thead>
+        <tr>
+          <th>#</th><th>Detalle</th><th>Und Med</th>
+          <th class="num">Cant</th><th class="num">P.U</th><th class="num">Total</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in g.detalles %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td class="wrap">{{ d.detalle }}</td>
+          <td>{{ d.und }}</td>
+          <td class="num">{{ d.cantidad }}</td>
+          <td class="num">{{ "{:,.2f}".format(d.precio_unitario) }}</td>
+          <td class="num strong">S/ {{ "{:,.2f}".format(d.importe) }}</td>
+          <td class="row-actions">
+            {% if not bloqueada and not dev_activa %}
+            <a class="icon-btn" href="{{ url_for('orden_material_editar', detalle_id=d.id) }}" onclick="return abrirModal(this.href)" title="Editar material" aria-label="Editar material"><i class="bi bi-pencil"></i></a>
+            {% endif %}
+            <form method="post" action="{{ url_for('orden_material_eliminar', detalle_id=d.id) }}" class="inline"
+                  {% if bloqueada or dev_activa %}data-bloqueo="{{ bloqueos_material.get(d.id, 'La orden está devengada o pertenece a un mes cerrado. No se puede eliminar el material.') }}"{% elif d.id in bloqueos_material %}data-bloqueo="{{ bloqueos_material[d.id] }}"{% else %}data-confirm="¿Eliminar este material?" data-confirm-title="Eliminar material" data-confirm-btn="Eliminar"{% endif %}>
+              <button class="icon-btn danger" title="Eliminar" aria-label="Eliminar material"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty-sm">{{ 'Sin servicios. Use el botón "Ingresar Servicio".' if g.tipo_doc == 'O/S' else 'Sin materiales. Use el botón "Ingresar materiales".' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <i class="bi bi-bag-check"></i>
+    <p>No hay órdenes registradas para {{ MESES[mes-1] }} {{ anio }}.</p>
+  </div>
+  {% endfor %}
+
+  <div class="total-bar">
+    <div><i class="bi bi-calculator"></i> TOTAL DE ÓRDENES {{ MESES[mes-1] }} {{ anio }}</div>
+    <div class="total-val">S/ {{ "{:,.2f}".format(total) }}</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var sel = document.getElementById('tipo-doc-quick');
+  var btn = document.getElementById('btn-registrar-orden');
+  if (!sel || !btn) return;
+  function actualizarBoton() {
+    btn.innerHTML = '<i class="bi bi-plus-lg"></i> ' + (sel.value === 'O/S' ? 'Ingresar Servicio' : 'Registrar orden');
+  }
+  sel.addEventListener('change', actualizarBoton);
+  actualizarBoton();
+})();
+
+function filtrarOrdenes() {
+  var q = document.getElementById('searchOC').value.toLowerCase();
+  document.querySelectorAll('.prov').forEach(function(el) {
+    var oc = (el.getAttribute('data-orden') || '').toLowerCase();
+    el.style.display = oc.indexOf(q) > -1 ? '' : 'none';
+  });
+}
+
+// Órdenes o materiales bloqueados (mes pasado, devengado o con ingresos en almacén):
+// se avisa y no se envía el borrado
+document.addEventListener('submit', function (e) {
+  var f = e.target;
+  if (f && f.tagName === 'FORM' && f.dataset.bloqueo) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (window.mostrarToast) mostrarToast('error', f.dataset.bloqueo);
+  }
+}, true);
+</script>
+{% endblock %}

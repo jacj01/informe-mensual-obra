@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Gestión de Usuarios{% endblock %}
+{% block heading %}Gestión de Usuarios{% endblock %}
+{% block subheading %}Cree, edite o corrija los usuarios que pueden ingresar al aplicativo{% endblock %}
+
+{% block content %}
+<div class="hero-card">
+  <div>
+    <div class="hero-label">Seguridad y Accesos</div>
+    <div class="hero-title">Usuarios del aplicativo</div>
+    <div class="hero-meta">
+      <span class="tag"><i class="bi bi-people"></i> {{ total }} usuarios</span>
+      <span class="tag"><i class="bi bi-shield-lock"></i> {{ admins }} administradores</span>
+      <span class="tag"><i class="bi bi-check-circle"></i> {{ activos }} activos</span>
+    </div>
+  </div>
+  <div class="hero-actions">
+    <button type="button" class="btn btn-gold btn-lg" onclick="return abrirModal('{{ url_for('usuario_nuevo') }}')">
+      <i class="bi bi-person-plus"></i> Nuevo Usuario
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h3><i class="bi bi-person-gear"></i> Lista de usuarios</h3>
+  </div>
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Usuario</th>
+          <th>Nombres</th>
+          <th>Rol</th>
+          <th>Accesos autorizados</th>
+          <th>Estado</th>
+          <th class="right">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td class="strong">
+            <i class="bi bi-person-circle"></i> {{ u.usuario }}
+            {% if usuario and u.id == usuario.id %}<span class="badge badge-blue">usted</span>{% endif %}
+          </td>
+          <td class="wrap">{{ 'Cuenta Principal' if u.rol == 'Super Usuario' else u.nombres }}</td>
+          <td>
+            <span class="badge {{ 'badge-blue' if u.rol in ('Administrador', 'Super Usuario') else 'badge-orange' }}">
+              <i class="bi {{ 'bi-shield-lock' if u.rol in ('Administrador', 'Super Usuario') else 'bi-person' }}"></i> {{ 'Administrador' if u.rol == 'Super Usuario' else u.rol }}
+            </span>
+          </td>
+          <td class="wrap">
+            {% if u.rol in ('Administrador', 'Super Usuario') %}
+              <span class="badge badge-blue">Todos</span>
+            {% elif u.permiso_lista %}
+              {% for c in u.permiso_lista %}
+                {% if c in labels %}<span class="badge badge-green">{{ labels[c] }}</span>{% endif %}
+              {% endfor %}
+            {% else %}
+              <span class="badge badge-orange">Ninguno</span>
+            {% endif %}
+          </td>
+          <td><span class="dev-label {{ 'on' if u.activo }}">{{ 'ACTIVO' if u.activo else 'INACTIVO' }}</span></td>
+          <td class="right">
+            {% if es_super or u.rol != 'Administrador' or (usuario and u.id == usuario.id) %}
+            <button class="icon-btn" title="Editar / corregir" aria-label="Editar usuario"
+                    onclick="return abrirModal('{{ url_for('usuario_editar', uid=u.id) }}')">
+              <i class="bi bi-pencil"></i>
+            </button>
+            {% endif %}
+            {% if not (usuario and u.id == usuario.id) and (es_super or u.rol != 'Administrador') %}
+            <form method="post" action="{{ url_for('usuario_eliminar', uid=u.id) }}" class="inline"
+                  data-confirm="¿Eliminar al usuario {{ u.usuario }}?" data-confirm-title="Eliminar usuario" data-confirm-btn="Eliminar">
+              <button class="icon-btn danger" title="Eliminar" aria-label="Eliminar usuario"><i class="bi bi-trash"></i></button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty">Aún no hay usuarios registrados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="note">
+  <i class="bi bi-info-circle"></i>
+  <div>
+    El rol <b>Administrador</b> tiene acceso total a todas las secciones.
+    La cuenta principal del sistema administra las demás cuentas de
+    Administrador; el Administrador solo puede crear usuarios con rol <b>Usuario</b>.
+    No se puede eliminar ni desactivar la cuenta con la que usted está ingresando.
+  </div>
+</div>
+{% endblock %}

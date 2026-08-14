@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Acceso al sistema de informe financiero mensual de obra en administración directa - Municipalidad Distrital de Toraya.">
+  <link rel="canonical" href="{{ request.base_url }}">
+  <meta property="og:title" content="Informe Mensual de Obra - Iniciar Sesión">
+  <meta property="og:description" content="Inicia sesión en el sistema de informe financiero mensual de obra en administración directa.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ request.url }}">
+  <meta property="og:site_name" content="Informe Mensual de Obra">
+  <meta property="og:image" content="{{ url_for('static', filename='img/Logo.png', _external=True, v=4) }}">
+  <meta property="og:locale" content="es_PE">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Informe Mensual de Obra - Iniciar Sesión">
+  <meta name="twitter:description" content="Inicia sesión en el sistema de informe financiero mensual de obra en administración directa.">
+  <meta name="theme-color" content="#1b3a6b">
+  <link rel="icon" href="{{ url_for('static', filename='img/Logo.png', v=4) }}">
+  <title>Iniciar Sesión | Informe Mensual de Obra</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=9">
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <form method="post" class="login-card">
+      <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <div class="login-logo">
+        <img src="{{ url_for('static', filename='img/Logo.png', v=4) }}" alt="Logo">
+      </div>
+      <div class="login-title">Informe Mensual de Obra</div>
+      <div class="login-sub">Ingreso de usuarios al aplicativo</div>
+      {% if error %}
+        <div class="alert alert-error login-error">{{ error }}</div>
+      {% endif %}
+      <div class="field">
+        <label for="inp-usuario"><i class="bi bi-person"></i> Usuario</label>
+        <input type="text" id="inp-usuario" name="usuario" required autofocus autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="inp-clave"><i class="bi bi-key"></i> Contraseña</label>
+        <input type="password" id="inp-clave" name="clave" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg login-btn">
+        <i class="bi bi-box-arrow-in-right"></i> Ingresar
+      </button>
+    </form>
+    <div class="login-foot">Informe Mensual de Obra · Administración Directa</div>
+  </div>
+</body>
+</html>

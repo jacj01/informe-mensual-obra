@@ -1,0 +1,66 @@
+{% set es_edicion = d.id is not none %}
+<form method="post" class="form-panel" action="{{ url_for('orden_material_editar', detalle_id=d.id) if d.id else url_for('orden_material_nuevo', orden_id=g.id) }}">
+  <input type="hidden" name="modal" value="1">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-bag-check"></i> Orden</h3></div>
+    <table class="table table-compact">
+      <tbody>
+        <tr><td class="strong">Proveedor</td><td>{{ g.proveedor }}</td></tr>
+        <tr><td class="strong">Orden</td><td>{{ g.tipo_doc }} N° {{ g.num_doc }}</td></tr>
+        <tr><td class="strong">Fecha</td><td>{{ g.fecha.strftime("%d/%m/%Y") if g.fecha else '' }}</td></tr>
+        <tr><td class="strong">SIAF</td><td>{{ g.siaf }}</td></tr>
+        <tr><td class="strong">Clasificador</td><td>{{ g.clasificador }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-basket"></i> {{ 'Editar material' if es_edicion else 'Ingresar material / servicio' }}</h3>
+    </div>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Detalle</label>
+        <textarea name="detalle" rows="2" required>{{ d.detalle }}</textarea>
+      </div>
+      <div class="field">
+        <label>Und Med</label>
+        <input type="text" name="und" id="und"
+               value="{{ 'SERV' if g.tipo_doc == 'O/S' else d.und }}"
+               {{ 'readonly' if g.tipo_doc == 'O/S' }}
+               {{ 'title="Para ordenes de servicio la unidad es SERV y no se puede cambiar."' if g.tipo_doc == 'O/S' }}>
+      </div>
+      <div class="field">
+        <label>Cantidad</label>
+        <input type="number" step="0.01" name="cantidad" id="cantidad" value="{{ d.cantidad }}" min="0">
+      </div>
+      <div class="field">
+        <label>P.U (S/)</label>
+        <input type="text" inputmode="decimal" class="monto" name="precio_unitario" id="precio" value="{{ d.precio_unitario }}" min="0" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Total (S/)</label>
+        <input type="text" id="importe" readonly value="{{ "S/ {:,.2f}".format(d.importe) }}">
+      </div>
+    </div>
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar</button>
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</form>
+
+<script>
+  (function () {
+    const cant = document.getElementById('cantidad');
+    const precio = document.getElementById('precio');
+    const importe = document.getElementById('importe');
+    function calc() {
+      const v = (parseFloat(String(cant.value).replace(/,/g, '')) || 0) *
+                (parseFloat(String(precio.value).replace(/,/g, '')) || 0);
+      importe.value = 'S/ ' + v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    cant.addEventListener('input', calc);
+    precio.addEventListener('input', calc);
+  })();
+</script>

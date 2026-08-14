@@ -1,0 +1,3269 @@
+﻿"""Aplicativo web: Informe Financiero Mensual - Administracion Directa."""
+import base64
+import gzip
+import hashlib
+import hmac
+import json
+import logging
+import shutil
+import struct
+import os
+import secrets
+import sqlite3
+import threading
+import time
+from datetime import date, datetime, timedelta
+from functools import wraps
+
+from flask import (Flask, render_template, request, redirect, url_for,
+                   flash, jsonify, session, abort, Response)
+from sqlalchemy import event, text
+from sqlalchemy.engine import Engine
+
+
+@event.listens_for(Engine, "connect")
+def _activar_foreign_keys(dbapi_conn, _record):
+    """SQLite no activa las claves foráneas por conexión: hay que hacerlo
+    explícitamente para que el borrado en cascada respete la integridad."""
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA foreign_keys=ON")
+    cur.close()
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from models import (db, Proyecto, Presupuesto, Gasto, GastoDetalle,
+                    AlmacenMovimiento, ActividadEjecutada, Trabajador, Usuario,
+                    CLASIFICADORES, COMPONENTES, Suscripcion,
+                    SuscripcionHistorial, LicenciaUtilizada, PLANES_SUSCRIPCION,
+                    sumar_meses)
+from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
+                     suscripcion_vigente, suscripcion_usuario, gastos_mes,
+                     total_gastos_mes, kpis,
+                     ejecucion_por_mes, ejecucion_por_componente, fe06_rows,
+                     fe06_resumen, f05_datos, almacen_items, almacen_diario,
+                     saldo_insumo, almacen_valorizado,
+                     meses_con_ejecucion, meses_visibles, ampliacion_presupuestal,
+                     mes_inicio_manifiesto, clasificadores_proyecto,
+                     calendario_mes, resumen_tareo, panel_cuadro1, panel_datos,
+                     actividades_mes)
+from planilla import (tabla_civil, calcular_obrero, calcular_tecnico,
+                      TABLA_CIVIL_POR_ANIO)
+from seed import seed
+import databases as _bd
+from databases import (tenant_path, tenant_engine, ensure_tenant,
+                       tenant_session, dispose_tenant, init_databases, bind_session,
+                       master_url, master_path, tablas_negocio, tablas_tenant,
+                       tablas_maestras)
+
+CARGOS_OBRERO = ["OPERARIO", "OFICIAL", "PEON", "GUARDIAN"]
+CARGOS_TECNICO = ["RESIDENTE", "SUPERVISOR", "ADMINISTRADOR",
+                  "ASISTENTE TECNICO", "ALMACENERO"]
+
+
+def migrar_schema():
+    """Agrega columnas nuevas a tablas existentes y migra los detalles de gasto."""
+    with db.engine.connect() as conn:
+        # Modo WAL: permite lecturas concurrentes con escritura (mejor para red local).
+        conn.execute(text("PRAGMA journal_mode=WAL"))
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(proyecto)"))]
+        if not cols:
+            # Maestra nueva o base sin tablas de negocio: no hay nada que migrar.
+            return
+        if "incluir_anios_anteriores" not in cols:
+            conn.execute(text(
+                "ALTER TABLE proyecto ADD COLUMN incluir_anios_anteriores BOOLEAN DEFAULT 1"))
+            conn.commit()
+        conn.execute(text(
+            "UPDATE proyecto SET incluir_anios_anteriores = 1 "
+            "WHERE incluir_anios_anteriores IS NULL"))
+        conn.commit()
+
+        for col in ["almacenero", "responsable_almacen", "administrador_obra"]:
+            if col not in cols:
+                conn.execute(text(
+                    f"ALTER TABLE proyecto ADD COLUMN {col} VARCHAR(300) DEFAULT ''"))
+
+        nuevos = {
+            "fecha_inicio": "DATE",
+            "fecha_fin": "DATE",
+            "nuevo_final_obra": "DATE",
+            "fecha_aprobacion": "DATE",
+            "dias_ejecucion": "INTEGER DEFAULT 0",
+            "dias_ampliacion": "INTEGER DEFAULT 0",
+            "n_resolucion_adicional": "VARCHAR(200) DEFAULT ''",
+            "monto_ampliacion": "FLOAT DEFAULT 0",
+            "adicional_obra": "BOOLEAN DEFAULT 0",
+            "ampliacion_presupuestal": "BOOLEAN DEFAULT 0",
+        }
+        for col, tipo in nuevos.items():
+            if col not in cols:
+                conn.execute(text(
+                    f"ALTER TABLE proyecto ADD COLUMN {col} {tipo}"))
+        conn.commit()
+
+        for col in ["clasificador_personal", "clasificador_bienes",
+                    "clasificador_servicios", "clasificador_expediente"]:
+            if col not in cols:
+                conn.execute(text(
+                    f"ALTER TABLE proyecto ADD COLUMN {col} VARCHAR(20) DEFAULT ''"))
+        if "logo_path" not in cols:
+            conn.execute(text(
+                "ALTER TABLE proyecto ADD COLUMN logo_path VARCHAR(500) DEFAULT ''"))
+        for cip_col in ["cip_supervisor", "cip_residente"]:
+            if cip_col not in cols:
+                conn.execute(text(
+                    f"ALTER TABLE proyecto ADD COLUMN {cip_col} VARCHAR(50) DEFAULT ''"))
+        for nuevo_col, tipo in {
+            "colegiatura_admin": "VARCHAR(50) DEFAULT ''",
+            "dni_responsable_almacen": "VARCHAR(50) DEFAULT ''",
+            "asistente_tecnico": "VARCHAR(300) DEFAULT ''",
+            "dni_cip_asistente": "VARCHAR(50) DEFAULT ''",
+        }.items():
+            if nuevo_col not in cols:
+                conn.execute(text(
+                    f"ALTER TABLE proyecto ADD COLUMN {nuevo_col} {tipo}"))
+        conn.execute(text(
+            "UPDATE proyecto SET clasificador_personal = '2.6.2.3.99.3' "
+            "WHERE clasificador_personal IS NULL OR clasificador_personal = ''"))
+        conn.execute(text(
+            "UPDATE proyecto SET clasificador_bienes = '2.6.2.3.99.4' "
+            "WHERE clasificador_bienes IS NULL OR clasificador_bienes = ''"))
+        conn.execute(text(
+            "UPDATE proyecto SET clasificador_servicios = '2.6.2.3.99.5' "
+            "WHERE clasificador_servicios IS NULL OR clasificador_servicios = ''"))
+        conn.execute(text(
+            "UPDATE proyecto SET clasificador_expediente = '2.6.8.1.3.1' "
+            "WHERE clasificador_expediente IS NULL OR clasificador_expediente = ''"))
+        conn.commit()
+
+        # Migracion: devengado en gastos. Los registros existentes se consideran
+        # ya devengados para no perder el contenido del informe actual.
+        gcols = [r[1] for r in conn.execute(text("PRAGMA table_info(gasto)"))]
+        if "devengado" not in gcols:
+            conn.execute(text(
+                "ALTER TABLE gasto ADD COLUMN devengado BOOLEAN DEFAULT 0"))
+            conn.execute(text("UPDATE gasto SET devengado = 1"))
+            conn.commit()
+
+        # Migracion: devengado por trabajador. El estado de devengado de la
+        # planilla lo marca el gasto PLLA del panel (ver mas abajo).
+        tcols = [r[1] for r in conn.execute(text("PRAGMA table_info(trabajador)"))]
+        if "devengado" not in tcols:
+            conn.execute(text(
+                "ALTER TABLE trabajador ADD COLUMN devengado BOOLEAN DEFAULT 0"))
+            conn.commit()
+        # Campo "Sueldo mensual" se reincorpora para la planilla de pagos del
+        # personal tecnico/administrativo (D.L. 728).
+        if "sueldo_mensual" not in tcols:
+            conn.execute(text(
+                "ALTER TABLE trabajador ADD COLUMN sueldo_mensual REAL DEFAULT 0.0"))
+            conn.commit()
+            tcols = [r[1] for r in conn.execute(text("PRAGMA table_info(trabajador)"))]
+        if "aporte" not in tcols:
+            conn.execute(text(
+                "ALTER TABLE trabajador ADD COLUMN aporte VARCHAR(10) DEFAULT 'AFP'"))
+            conn.execute(text("UPDATE trabajador SET aporte = 'AFP' WHERE aporte IS NULL"))
+            conn.commit()
+        # El estado de devengado de la planilla lo marca el gasto PLLA del panel:
+        # se limpian los flags heredados del flujo anterior (casilla DEVENGADO).
+        if "devengado" in tcols:
+            conn.execute(text("UPDATE trabajador SET devengado = 0"))
+            conn.commit()
+        conn.execute(text(
+            "UPDATE proyecto SET almacenero = asistente "
+            "WHERE (almacenero IS NULL OR almacenero = '') AND asistente IS NOT NULL"))
+        conn.execute(text(
+            "UPDATE proyecto SET responsable_almacen = asistente "
+            "WHERE (responsable_almacen IS NULL OR responsable_almacen = '') "
+            "AND asistente IS NOT NULL"))
+        conn.execute(text(
+            "UPDATE proyecto SET administrador_obra = asistente "
+            "WHERE (administrador_obra IS NULL OR administrador_obra = '') "
+            "AND asistente IS NOT NULL"))
+        conn.commit()
+
+        # Migracion: cada gasto antiguo (con detalle en la misma fila) pasa a
+        # tener un GastoDetalle para no perder la informacion registrada.
+        gcols = [r[1] for r in conn.execute(text("PRAGMA table_info(gasto)"))]
+        if "detalle" in gcols:
+            filas = conn.execute(text(
+                "SELECT id, detalle, und, cantidad, precio_unitario FROM gasto "
+                "WHERE detalle IS NOT NULL AND detalle != ''")).fetchall()
+            for gid, detalle, und, cantidad, pu in filas:
+                ex = conn.execute(text(
+                    "SELECT COUNT(*) FROM gasto_detalle WHERE gasto_id = :i"),
+                    {"i": gid}).scalar()
+                if ex == 0:
+                    conn.execute(text(
+                        "INSERT INTO gasto_detalle "
+                        "(gasto_id, detalle, und, cantidad, precio_unitario, orden) "
+                        "VALUES (:i, :d, :u, :c, :p, 1)"),
+                        {"i": gid, "d": detalle or "", "u": und or "UND",
+                         "c": cantidad or 1, "p": pu or 0})
+                conn.commit()
+
+        # Tabla de usuarios del aplicativo + usuario administrador inicial.
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS usuario ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "usuario VARCHAR(80) NOT NULL UNIQUE,"
+            "clave VARCHAR(255) NOT NULL,"
+            "nombres VARCHAR(200) DEFAULT '',"
+            "rol VARCHAR(30) DEFAULT 'Usuario',"
+            "activo BOOLEAN DEFAULT 1)"))
+        conn.commit()
+        count = conn.execute(text(
+            "SELECT COUNT(*) FROM usuario")).scalar()
+        if count == 0:
+            conn.execute(text(
+                "INSERT INTO usuario (usuario, clave, nombres, rol, activo) "
+                "VALUES ('admin', :clave, 'Administrador', 'Administrador', 1)"),
+                {"clave": generate_password_hash("admin")})
+            conn.commit()
+
+        # Permisos por usuario (claves de secciones autorizadas, formato JSON).
+        ucols = [r[1] for r in conn.execute(text("PRAGMA table_info(usuario)"))]
+        if "permisos" not in ucols:
+            conn.execute(text(
+                "ALTER TABLE usuario ADD COLUMN permisos VARCHAR(500) DEFAULT '[]'"))
+            conn.commit()
+
+        # Tabla de tareo o planilla (personal obrero y tecnico).
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS trabajador ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "tipo VARCHAR(10) DEFAULT 'OBRERO',"
+            "nombre VARCHAR(300) DEFAULT '',"
+            "dni VARCHAR(8) DEFAULT '',"
+            "fecha_nacimiento DATE,"
+            "cargo VARCHAR(200) DEFAULT '',"
+            "sexo VARCHAR(1) DEFAULT 'M',"
+            "fecha_inicio DATE,"
+            "dias VARCHAR(100) DEFAULT '',"
+            "mes INTEGER DEFAULT 6,"
+            "anio INTEGER DEFAULT 2026)"))
+        conn.commit()
+        tcols = [r[1] for r in conn.execute(text("PRAGMA table_info(trabajador)"))]
+        if "dias" not in tcols:
+            conn.execute(text(
+                "ALTER TABLE trabajador ADD COLUMN dias VARCHAR(100) DEFAULT ''"))
+            conn.commit()
+        # Migracion: dias trabajados numericos -> dias CSV. Se asume que el
+        # registro fue de un mes en curso y los dias se marcan por secuencia.
+        if "dias_trabajados" in tcols and "dias" in tcols:
+            filas = conn.execute(text(
+                "SELECT id, dias_trabajados FROM trabajador "
+                "WHERE dias_trabajados > 0 AND (dias IS NULL OR dias = '')")).fetchall()
+            for tid, n in filas:
+                if n and n > 0:
+                    conn.execute(text(
+                        "UPDATE trabajador SET dias = :dias WHERE id = :id"),
+                        {"dias": ",".join(str(d) for d in range(1, int(n) + 1)),
+                         "id": tid})
+            conn.commit()
+
+        # Numero de pecosa o guia de remision en los movimientos de almacen.
+        acols = [r[1] for r in conn.execute(text("PRAGMA table_info(almacen_movimiento)"))]
+        if "pecosa_guia" not in acols:
+            conn.execute(text(
+                "ALTER TABLE almacen_movimiento ADD COLUMN pecosa_guia VARCHAR(50) DEFAULT ''"))
+            conn.commit()
+
+        # Configuracion presupuestal: filas PERSONAL para Gastos Generales y
+        # Gestion de Supervisión (se agregan si aun no existen).
+        pcols = [r[1] for r in conn.execute(text("PRAGMA table_info(presupuesto)"))]
+        if pcols:
+            personal = conn.execute(text(
+                "SELECT clasificador_personal FROM proyecto LIMIT 1")).scalar()
+            cod_personal = personal or "2.6.2.3.99.3"
+            for comp in ["Gastos Generales", "Gestion de Supervisión"]:
+                ex = conn.execute(text(
+                    "SELECT COUNT(*) FROM presupuesto "
+                    "WHERE componente = :c AND detalle = 'PERSONAL'"),
+                    {"c": comp}).scalar()
+                if ex == 0:
+                    conn.execute(text(
+                        "INSERT INTO presupuesto "
+                        "(componente, clasificador, detalle, et, ejec2023, "
+                        "ejec2024, ejec2025, pim2026) "
+                        "VALUES (:c, :cl, 'PERSONAL', 0, 0, 0, 0, 0)"),
+                        {"c": comp, "cl": cod_personal})
+            conn.commit()
+
+
+def migrar_suscripcion():
+    """Crea las tablas de suscripción y la cuenta inicial del Super Usuario."""
+    with db.engine.connect() as conn:
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS suscripcion ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "plan VARCHAR(20) DEFAULT 'Mensual',"
+            "fecha_inicio DATE,"
+            "fecha_fin DATE,"
+            "activa BOOLEAN DEFAULT 1)"))
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS suscripcion_historial ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "plan VARCHAR(20) DEFAULT '',"
+            "fecha_inicio DATE,"
+            "fecha_fin DATE,"
+            "usuario VARCHAR(120) DEFAULT '',"
+            "nota VARCHAR(500) DEFAULT '',"
+            "accion VARCHAR(30) DEFAULT 'Renovación',"
+            "fecha_registro DATETIME)"))
+        conn.commit()
+        # Suscripción inicial activa (1 mes) para que el aplicativo siga
+        # funcionando desde el primer arranque.
+        n = conn.execute(text("SELECT COUNT(*) FROM suscripcion")).scalar()
+        if n == 0:
+            hoy = date.today()
+            conn.execute(text(
+                "INSERT INTO suscripcion (plan, fecha_inicio, fecha_fin, activa) "
+                "VALUES ('Mensual', :i, :f, 1)"),
+                {"i": hoy, "f": sumar_meses(hoy, 1)})
+            conn.commit()
+        # Cuenta inicial del Super Usuario (controla la suscripción).
+        scount = conn.execute(text(
+            "SELECT COUNT(*) FROM usuario WHERE rol = 'Super Usuario'")).scalar()
+        existe_nombre = conn.execute(text(
+            "SELECT COUNT(*) FROM usuario WHERE usuario = 'super'")).scalar()
+        if scount == 0 and existe_nombre == 0:
+            conn.execute(text(
+                "INSERT INTO usuario (usuario, clave, nombres, rol, activo, permisos) "
+                "VALUES ('super', :clave, 'Cuenta Principal', 'Super Usuario', 1, :permisos)"),
+                {"clave": generate_password_hash("super"),
+                 "permisos": json.dumps([c for c, _ in PERMISOS_SECCIONES])})
+            conn.commit()
+        # El nombre mostrado de la cuenta principal no debe revelar el rol.
+        conn.execute(text(
+            "UPDATE usuario SET nombres = 'Cuenta Principal' "
+            "WHERE rol = 'Super Usuario' AND usuario = 'super' "
+            "AND nombres IN ('Super Usuario', 'Cuenta Principal')"))
+        conn.commit()
+        # Licencia propia por Administrador: si susc_activa es NULL el
+        # Administrador hereda la licencia global; False = sin licencia.
+        ucols = [r[1] for r in conn.execute(text("PRAGMA table_info(usuario)"))]
+        if "susc_activa" not in ucols:
+            conn.execute(text("ALTER TABLE usuario ADD COLUMN susc_plan VARCHAR(20)"))
+            conn.execute(text("ALTER TABLE usuario ADD COLUMN susc_inicio DATE"))
+            conn.execute(text("ALTER TABLE usuario ADD COLUMN susc_fin DATE"))
+            conn.execute(text("ALTER TABLE usuario ADD COLUMN susc_activa BOOLEAN"))
+            conn.commit()
+
+
+def _migrar_a_multidb():
+    """Convierte una base única antigua al nuevo esquema (una sola vez).
+
+    Si la base maestra todavía contiene datos de negocio (proyecto), los
+    traslada a la base del primer Administrador y mueve allí los operadores,
+    dejando la maestra solo con cuentas y suscripción. Es idempotente: al no
+    quedar datos de negocio en la maestra no vuelve a ejecutarse.
+    """
+    origen = master_path()
+    if not os.path.exists(origen):
+        return
+    src = sqlite3.connect(origen)
+    try:
+        try:
+            n = src.execute("SELECT COUNT(*) FROM proyecto").fetchone()[0]
+        except sqlite3.OperationalError:
+            return
+        if not n:
+            return
+        fila = src.execute(
+            "SELECT id FROM usuario WHERE rol = 'Administrador' "
+            "ORDER BY id LIMIT 1").fetchone()
+        if not fila:
+            return
+        admin_id = fila[0]
+        destino = tenant_path(admin_id)
+        ensure_tenant(admin_id)
+        existentes = {r[0] for r in src.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'")}
+        src.execute("ATTACH DATABASE ? AS tenant", (destino,))
+        for tabla in tablas_negocio():
+            if tabla not in existentes:
+                continue
+            # Si el tenant ya tiene datos (migración previa), no duplicar.
+            if src.execute(
+                    f"SELECT COUNT(*) FROM tenant.{tabla}").fetchone()[0]:
+                continue
+            cols = ", ".join(c.name for c in db.metadata.tables[tabla].columns)
+            src.execute(
+                f"INSERT INTO tenant.{tabla} ({cols}) SELECT {cols} "
+                f"FROM main.{tabla}")
+        ucols = ", ".join(c.name for c in db.metadata.tables["usuario"].columns)
+        src.execute(
+            f"INSERT INTO tenant.usuario ({ucols}) SELECT {ucols} "
+            f"FROM main.usuario WHERE rol = 'Usuario' "
+            f"AND usuario NOT IN (SELECT usuario FROM tenant.usuario)")
+        src.execute("DELETE FROM main.usuario WHERE rol = 'Usuario'")
+        for tabla in tablas_negocio():
+            src.execute(f"DROP TABLE IF EXISTS main.{tabla}")
+        src.commit()
+    finally:
+        src.close()
+
+
+def _asegurar_tenants():
+    """Crea las bases (vacías) de todos los Administradores que falten."""
+    for adm in _bd.master_session.query(Usuario).filter(
+            Usuario.rol == "Administrador").all():
+        ensure_tenant(adm.id)
+
+
+def _seed_inicial():
+    """Siembra los datos de ejemplo en la base del primer Administrador.
+
+    Solo se ejecuta si su base aún no tiene proyecto (instalación nueva);
+    tras una migración de datos existentes se omite automáticamente.
+    """
+    adm = (_bd.master_session.query(Usuario)
+           .filter(Usuario.rol == "Administrador").order_by(Usuario.id).first())
+    if not adm:
+        return
+    eng = ensure_tenant(adm.id)
+    bind_session(eng)
+    try:
+        seed()
+    finally:
+        bind_session(_bd.master_engine)
+
+
+def create_app():
+    base = os.path.abspath(os.path.dirname(__file__))
+    instance = os.path.join(base, "instance")
+    os.makedirs(instance, exist_ok=True)
+
+    app = Flask(__name__)
+    app.config["SECRET_KEY"] = os.environ.get(
+        "SECRET_KEY", "informe-financiero-toraya-2026")
+    # Ruta de la base de datos (INFORME_DB permite usar otra DB, p.ej. en pruebas).
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+        "INFORME_DB") or "sqlite:///" + os.path.join(instance, "informe.db")
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # Mitigacion CSRF a nivel de cookie: las peticiones cross-site no incluyen la cookie.
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    # Flask 3.1 usa por defecto SEND_FILE_MAX_AGE_DEFAULT=None, lo que sirve los
+    # estaticos con "Cache-Control: no-cache" y fuerza re-descarga en cada pagina.
+    # Cache de 30 dias: css/js usan versionado (?v=N) y el logo tambien, asi que
+    # el navegador solo vuelve a bajar lo que realmente cambia.
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 2592000
+    app.jinja_env.finalize = lambda v: "" if v is None else v
+
+    @app.context_processor
+    def _csrf_contexto():
+        """Genera y expone el token CSRF por sesión (defensa en profundidad)."""
+        token = session.get("_csrf")
+        if not token:
+            token = secrets.token_hex(16)
+            session["_csrf"] = token
+        return {"csrf_token": token}
+
+    @app.after_request
+    def cabeceras_seguridad(resp):
+        """Headers de seguridad en todas las respuestas."""
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        resp.headers.setdefault("Referrer-Policy", "same-origin")
+        resp.headers.setdefault("Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "font-src 'self' data:; connect-src 'self'")
+        return resp
+
+    _GZIP_TIPOS = {"text/html", "text/css", "text/plain", "application/javascript",
+                   "text/javascript", "application/json", "application/xml",
+                   "application/x-javascript", "image/svg+xml"}
+
+    @app.after_request
+    def _comprimir_respuesta(resp):
+        """Comprime con gzip las respuestas de texto cuando el navegador lo
+        acepta, para reducir los bytes transferidos en cada navegación.
+        Los binarios (png, woff2...) no se tocan."""
+        if resp.status_code in (204, 304):
+            return resp
+        if resp.mimetype not in _GZIP_TIPOS:
+            return resp
+        if "gzip" not in request.headers.get("Accept-Encoding", ""):
+            return resp
+        try:
+            if request.path.startswith("/static/"):
+                base = os.path.realpath(app.static_folder)
+                ruta = os.path.realpath(
+                    os.path.join(base, request.path[len("/static/"):].lstrip("/")))
+                if not ruta.startswith(base) or not os.path.isfile(ruta):
+                    return resp
+                with open(ruta, "rb") as fh:
+                    data = fh.read()
+            else:
+                data = resp.get_data()
+        except Exception:
+            return resp
+        if not data or len(data) < 600:
+            return resp
+        try:
+            comp = gzip.compress(data, 6)
+        except Exception:
+            return resp
+        if len(comp) >= len(data):
+            return resp
+        resp.set_data(comp)
+        resp.headers["Content-Encoding"] = "gzip"
+        resp.headers["Vary"] = "Accept-Encoding"
+        resp.headers["Content-Length"] = str(len(comp))
+        return resp
+
+    @app.before_request
+    def validar_origen():
+        """Defensa adicional contra CSRF: rechaza POST de origen externo
+        cuando el navegador envía Origin/Referer que no coincide con el host."""
+        if request.method == "POST":
+            host = request.host
+            origen = request.headers.get("Origin") or request.headers.get("Referer")
+            if origen:
+                from urllib.parse import urlsplit
+                try:
+                    ohost = urlsplit(origen).netloc
+                except ValueError:
+                    ohost = ""
+                if ohost and ohost != host:
+                    return ("Origen no autorizado.", 403)
+
+    @app.before_request
+    def validar_csrf():
+        """Valida el token CSRF por sesión en toda petición POST."""
+        if request.method != "POST":
+            return
+        token = session.get("_csrf")
+        if not token:
+            return ("Token CSRF no generado. Recargue la página.", 403)
+        enviado = request.form.get("_csrf", "") or \
+            request.headers.get("X-CSRF-Token", "")
+        if not enviado or not secrets.compare_digest(enviado, token):
+            return ("Token CSRF no válido. Recargue la página e intente de nuevo.", 403)
+
+    db.init_app(app)
+    with app.app_context():
+        init_databases()
+        # La maestra solo guarda cuentas y suscripción; las tablas de negocio
+        # viven en la base de cada Administrador (se crean vía ensure_tenant).
+        db.metadata.create_all(bind=db.engine, tables=tablas_maestras())
+        migrar_schema()
+        migrar_suscripcion()
+        _migrar_a_multidb()
+        _asegurar_tenants()
+        _seed_inicial()
+        bind_session(_bd.master_engine)
+        # El respaldo diario corre en un hilo de fondo: si las bases son grandes
+        # o el disco es lento (p.ej. carpetas sincronizadas), copiarlas en el
+        # arranque retrasa la primera carga. El servidor queda listo de inmediato.
+        threading.Thread(target=_respaldo_diario_automatico,
+                         daemon=True, name="respaldo-diario").start()
+
+    @app.before_request
+    def _enlazar_base_por_peticion():
+        """Apunta la sesión ORM a la base del administrador de la sesión
+        (o a la base maestra cuando no hay base asignada).
+
+        Los archivos estáticos no necesitan base de datos: se saltean para que
+        Flask no acceda a la cookie de sesión (evita Vary: Cookie y permite que
+        el navegador los cachee por 30 días)."""
+        if request.endpoint == "static":
+            return None
+        tid = session.get("tenant")
+        bind_session(tenant_engine(tid) if tid else _bd.master_engine)
+
+    registrar_rutas(app)
+    return app
+
+
+def parse_fecha(val):
+    if not val:
+        return None
+    try:
+        return datetime.strptime(val, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def fecha_defecto(p):
+    """Fecha por defecto segun el mes/anio configurado en Datos del Proyecto."""
+    try:
+        return date(p.anio, p.mes_actual, 1)
+    except (TypeError, ValueError):
+        return date.today()
+
+
+def param_int(name, default, lo=None, hi=None):
+    """Lee un parametro de la query string como entero con fallback seguro."""
+    raw = request.args.get(name)
+    if raw in (None, ""):
+        return default
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if lo is not None and val < lo:
+        return default
+    if hi is not None and val > hi:
+        return default
+    return val
+
+
+def usuario_actual():
+    """Devuelve el Usuario de la sesión activa o None.
+
+    La cuenta de un Administrador vive en la base maestra, mientras que la de
+    un operador vive en la base de su Administrador (la que está enlazada en
+    esta petición).
+    """
+    uid = session.get("usuario_id")
+    if not uid:
+        return None
+    if session.get("usuario_rol") == "Administrador":
+        return _bd.master_session.get(Usuario, uid)
+    return db.session.get(Usuario, uid)
+
+
+def _dueno_suscripcion(u):
+    """Cuenta cuya licencia rige al usuario actual.
+
+    Un operador (rol Usuario) hereda la licencia de su Administrador; el
+    Administrador y la cuenta principal usan la suya.
+    """
+    if u is None or getattr(u, "rol", None) != "Usuario":
+        return u
+    tid = session.get("tenant")
+    if tid:
+        return _bd.master_session.get(Usuario, tid)
+    return u
+
+
+def _buscar_operador(admin_id, nombre):
+    """Busca un operador (rol Usuario) en la base del Administrador indicado."""
+    ensure_tenant(admin_id)
+    S = tenant_session(admin_id)
+    try:
+        return S.query(Usuario).filter(Usuario.usuario == nombre).first()
+    finally:
+        S.close()
+
+
+def _es_cuenta_propia(u):
+    """True si u es la cuenta con la que el usuario ingresó.
+
+    Compara id y rol porque las bases de los administradores y la maestra
+    pueden coincidir en números de id (cada base tiene su propio contador).
+    """
+    return bool(u and u.id == session.get("usuario_id")
+                and u.rol == session.get("usuario_rol"))
+
+
+PERMISOS_SECCIONES = [
+    ("cabecera", "Cabecera del Proyecto"),
+    ("ordenes", "Ingreso de O/C o O/S"),
+    ("gastos", "Manifiesto de Gastos"),
+    ("formatos", "Formatos Financiero"),
+    ("almacen", "Almacén de Obra"),
+    ("tareo", "Tareo y Planilla"),
+    ("configuracion", "Configuración Presupuestal"),
+    ("respaldo", "Respaldo de Datos"),
+]
+
+# Rol de máxima prioridad: controla la suscripción y puede modificar todo,
+# incluidos los administradores, sin las restricciones habituales.
+ROL_SUPER = "Super Usuario"
+ROLES_TOTALES = ("Administrador", ROL_SUPER)
+
+
+def es_super_actual():
+    """True si el usuario de la sesión activa es el Super Usuario."""
+    u = usuario_actual()
+    return bool(u and u.rol == ROL_SUPER)
+
+
+# ----------------------------------------------------------------------------
+# Licencia de suscripción: archivo cifrado (SHA-256) que el Super Usuario
+# genera y entrega al cliente. El cliente lo sube para renovar automáticamente.
+# El contenido no es legible en un editor de texto y cualquier modificación
+# invalida la integridad (HMAC-SHA256), por lo que la licencia no puede
+# alterarse sin conocer la clave del emisor.
+# ----------------------------------------------------------------------------
+LICENCIA_SECRETO = "informe-mensual-obra::licencia::v1::2026"
+LICENCIA_EMISOR = "Informe Mensual de Obra"
+_MAGICO_LICENCIA = b"IML1:"
+
+
+def _clave_licencia():
+    """Clave de cifrado derivada de la semilla mediante SHA-256 (32 bytes)."""
+    return hashlib.sha256(LICENCIA_SECRETO.encode("utf-8")).digest()
+
+
+def _keystream(clave, nonce, largo):
+    """Keystream pseudoaleatorio SHA-256 en modo CTR (bloques de 32 bytes)."""
+    out = bytearray()
+    contador = 0
+    while len(out) < largo:
+        out.extend(hashlib.sha256(
+            clave + nonce + struct.pack(">I", contador)).digest())
+        contador += 1
+    return bytes(out[:largo])
+
+
+def cifrar_licencia(contenido):
+    """Cifra bytes con XOR(keystream SHA-256) y sella con HMAC-SHA256.
+    Devuelve bytes con prefijo 'IML1:' (contenido no legible)."""
+    clave = _clave_licencia()
+    nonce = secrets.token_bytes(16)
+    ks = _keystream(clave, nonce, len(contenido))
+    cifrado = bytes(a ^ b for a, b in zip(contenido, ks))
+    tag = hmac.new(clave, nonce + cifrado, hashlib.sha256).digest()
+    return _MAGICO_LICENCIA + base64.urlsafe_b64encode(nonce + cifrado + tag)
+
+
+def descifrar_licencia(blob):
+    """Devuelve el dict de la licencia o None si el archivo es inválido,
+    está alterado o no fue generado por el emisor (integridad HMAC)."""
+    try:
+        if not isinstance(blob, (bytes, bytearray)) or not blob.startswith(_MAGICO_LICENCIA):
+            return None
+        datos = base64.urlsafe_b64decode(blob[len(_MAGICO_LICENCIA):])
+        nonce = datos[:16]
+        tag = datos[-32:]
+        cifrado = datos[16:-32]
+        clave = _clave_licencia()
+        esperado = hmac.new(clave, nonce + cifrado, hashlib.sha256).digest()
+        if not hmac.compare_digest(esperado, tag):
+            return None
+        ks = _keystream(clave, nonce, len(cifrado))
+        plano = bytes(a ^ b for a, b in zip(cifrado, ks))
+        d = json.loads(plano.decode("utf-8"))
+        return d if isinstance(d, dict) else None
+    except Exception:
+        return None
+
+
+def _licencia_valida(d):
+    """True si el dict descifrado tiene datos de plan/meses correctos."""
+    if not isinstance(d, dict):
+        return False
+    plan = d.get("plan")
+    if plan not in PLANES_SUSCRIPCION:
+        return False
+    # Toda licencia debe indicar a qué usuario está vinculada y su serie.
+    if not d.get("usuario") or not d.get("serie"):
+        return False
+    try:
+        meses = int(d.get("meses", PLANES_SUSCRIPCION[plan]))
+    except (TypeError, ValueError):
+        return False
+    return 1 <= meses <= 60
+
+
+def generar_licencia(plan, usuario="", usuario_id=None, nombres=""):
+    """Devuelve el contenido cifrado (str) de un archivo de licencia.
+
+    La licencia queda vinculada al usuario indicado: solo la cuenta de ese
+    usuario podrá activarla y solo una vez.
+    """
+    if plan not in PLANES_SUSCRIPCION:
+        plan = "Mensual"
+    d = {
+        "version": 1,
+        "emisor": LICENCIA_EMISOR,
+        "plan": plan,
+        "meses": PLANES_SUSCRIPCION[plan],
+        "emitida": date.today().isoformat(),
+        "serie": secrets.token_hex(4).upper(),
+        "usuario_id": int(usuario_id) if usuario_id else None,
+        "usuario": (usuario or "").strip(),
+        "nombres": (nombres or "").strip(),
+    }
+    return cifrar_licencia(
+        json.dumps(d, ensure_ascii=False).encode("utf-8")).decode("ascii")
+
+
+def aplicar_licencia(d):
+    """Aplica una licencia validada a la suscripción del Administrador titular.
+
+    La licencia activa la suscripción propia del Administrador que la aplica
+    (encadenando su vigencia); la cuenta principal renovaría la suscripción
+    global. Devuelve un dict con plan/fechas o None si los datos son inválidos,
+    si la licencia ya fue utilizada o si la aplica un usuario distinto al
+    titular.
+    """
+    if not _licencia_valida(d):
+        return None
+    plan = d.get("plan", "Mensual")
+    if plan not in PLANES_SUSCRIPCION:
+        return None
+    meses = int(d.get("meses", PLANES_SUSCRIPCION[plan]))
+    serie = (d.get("serie") or "").strip()
+    actor = usuario_actual()
+    # La licencia solo puede activarla la cuenta del usuario titular.
+    if (not actor or not actor.usuario
+            or actor.usuario.strip() != (d.get("usuario") or "").strip()):
+        return None
+    ms = _bd.master_session
+    # Uso único: la serie de la licencia no puede haberse activado antes.
+    if serie and ms.query(LicenciaUtilizada).filter_by(serie=serie).first():
+        return None
+    hoy = date.today()
+    es_admin = actor.rol == "Administrador"
+    # Si la vigencia actual sigue activa se encadena desde su fin; si venció o
+    # no hay licencia, se inicia desde hoy.
+    if es_admin:
+        base = actor.susc_fin if (actor.susc_activa and actor.susc_fin
+                                  and actor.susc_fin >= hoy) else hoy
+    else:
+        s = get_suscripcion()
+        base = s.fecha_fin if (s and s.fecha_fin and s.fecha_fin >= hoy) else hoy
+    fin = sumar_meses(base, meses)
+    if es_admin:
+        actor.susc_plan = plan
+        actor.susc_inicio = base
+        actor.susc_fin = fin
+        actor.susc_activa = True
+    else:
+        s = get_suscripcion()
+        if s is None:
+            s = Suscripcion(plan="Mensual")
+            ms.add(s)
+        s.plan = plan
+        s.fecha_inicio = base
+        s.fecha_fin = fin
+        s.activa = True
+    ms.add(SuscripcionHistorial(
+        plan=plan, fecha_inicio=base, fecha_fin=fin,
+        usuario=(actor.nombres or actor.usuario) if actor else "",
+        nota=f"Renovación por licencia (serie {serie})",
+        accion="Renovación"))
+    ms.add(LicenciaUtilizada(
+        serie=serie or "SIN-SERIE",
+        usuario=(actor.usuario or "").strip(),
+        plan=plan))
+    ms.commit()
+    return {"plan": plan, "fecha_inicio": base, "fecha_fin": fin}
+
+# Endpoints a los que solo accede el Administrador.
+_ENDPOINTS_ADMIN = ("usuarios", "usuario_nuevo", "usuario_editar", "usuario_eliminar")
+
+# Endpoints de control de la suscripción: solo el Super Usuario.
+_ENDPOINTS_SUPER = ("suscripcion", "suscripcion_renovar", "suscripcion_pausar")
+
+
+def permiso_requerido(ep):
+    """Clave de permiso necesaria para un endpoint (None = acceso libre)."""
+    if ep in ("dashboard", "api_resumen", "login", "logout", "static",
+              "suscripcion_vencida", "licencia_subir", "licencia_form"):
+        return None
+    if ep in _ENDPOINTS_SUPER:
+        return "__super__"
+    if ep in _ENDPOINTS_ADMIN:
+        return "__admin__"
+    if ep.startswith("orden"):
+        return "ordenes"
+    if ep.startswith("gasto"):
+        return "gastos"
+    if ep.startswith("almacen"):
+        return "almacen"
+    if ep.startswith("tareo"):
+        return "tareo"
+    if ep in ("planilla_opciones", "planilla_imprimir"):
+        return "tareo"
+    if ep == "cabecera":
+        return "cabecera"
+    if ep == "formatos":
+        return "formatos"
+    if ep == "imprimir_manifiesto":
+        return "formatos"
+    if ep in ("imprimir_fe05", "imprimir_fe06", "imprimir_panel"):
+        return "formatos"
+    if ep in ("imprimir_fe07", "imprimir_fe08"):
+        return "almacen"
+    if ep == "configuracion":
+        return "configuracion"
+    if ep == "respaldo":
+        return "respaldo"
+    return None
+
+
+def home_usuario(u):
+    """Página inicial tras ingresar: admin -> Dashboard, super -> usuarios,
+    usuario -> su primera sección autorizada."""
+    if not u:
+        return url_for("dashboard")
+    if u.rol == ROL_SUPER:
+        return url_for("usuarios")
+    if u.rol == "Administrador":
+        return url_for("dashboard")
+    for clave, _ in PERMISOS_SECCIONES:
+        if clave in u.permiso_lista:
+            return url_for(clave)
+    return url_for("dashboard")
+
+
+def _permisos_guardados(rol, form):
+    """Claves de permiso a guardar: el Administrador y el Super Usuario siempre tienen todas."""
+    validas = {clave for clave, _ in PERMISOS_SECCIONES}
+    if rol in ROLES_TOTALES:
+        return list(validas)
+    return [c for c in form.getlist("permisos") if c in validas]
+
+
+def leer_lista(archivo):
+    """Lee un archivo de texto y devuelve sus líneas no vacías."""
+    if not os.path.exists(archivo):
+        return []
+    with open(archivo, encoding="utf-8") as f:
+        return [linea.strip() for linea in f if linea.strip()]
+
+
+# ----------------------------------------------------------------------------
+# Respaldo y recuperacion de la base de datos
+# ----------------------------------------------------------------------------
+BASE_PROYECTO = os.path.dirname(os.path.abspath(__file__))
+# INFORME_RESPALDO_DIR permite aislar los respaldos (p.ej. en pruebas).
+RESPALDO_DIR = (os.environ.get("INFORME_RESPALDO_DIR")
+                or os.path.join(BASE_PROYECTO, "Respaldo BD"))
+
+
+def ruta_db():
+    """Ruta SQLite en uso durante esta petición.
+
+    Si el usuario autenticado tiene base propia (Administrador u operador)
+    devuelve la ruta de esa base; en caso contrario la base maestra. Fuera de
+    una petición devuelve siempre la base maestra.
+    """
+    try:
+        tid = session.get("tenant")
+    except (RuntimeError, AttributeError):
+        tid = None
+    if tid:
+        return tenant_path(tid)
+    uri = os.environ.get("INFORME_DB")
+    if uri and uri.startswith("sqlite:///"):
+        return uri[len("sqlite:///"):]
+    return os.path.join(BASE_PROYECTO, "instance", "informe.db")
+
+
+def crear_respaldo(nombre=None, db_path=None):
+    """Copia la base indicada (o la base en uso) a la carpeta de respaldos.
+
+    db_path permite respaldar explícitamente la base de un Administrador
+    (p.ej. al restablecer o eliminar su proyecto).
+    """
+    os.makedirs(RESPALDO_DIR, exist_ok=True)
+    if nombre is None:
+        nombre = f"informe_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    dest = os.path.join(RESPALDO_DIR, nombre)
+    src = sqlite3.connect(db_path or ruta_db())
+    dst = sqlite3.connect(dest)
+    try:
+        with dst:
+            src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    problemas = verificar_integridad(dest)
+    if problemas:
+        logging.getLogger("respaldo").warning(
+            "Respaldo con problemas de integridad (%s): %s", dest, problemas)
+    else:
+        logging.getLogger("respaldo").info("Respaldo verificado e íntegro: %s", dest)
+    return dest
+
+
+def verificar_integridad(db_path):
+    """Ejecuta PRAGMA integrity_check sobre una base SQLite.
+
+    Devuelve la lista de errores (vacía si la base está íntegra).
+    """
+    try:
+        con = sqlite3.connect(db_path)
+        try:
+            filas = con.execute("PRAGMA integrity_check").fetchall()
+            return [f[0] for f in filas if f[0] != "ok"]
+        finally:
+            con.close()
+    except sqlite3.Error as e:
+        return [str(e)]
+
+
+def _respaldo_diario_automatico():
+    """Crea (una vez al día) un respaldo automático de la base maestra y de
+    cada base de Administrador, verificando la integridad de cada copia.
+
+    Se ejecuta al arrancar el servidor; si ya existe el respaldo del día se
+    omite para no duplicar archivos en cada reinicio.
+    """
+    os.makedirs(RESPALDO_DIR, exist_ok=True)
+    hoy = datetime.now().strftime("%Y%m%d")
+    bases = [("maestra", master_path())]
+    try:
+        admins = _bd.master_session.query(Usuario).filter(
+            Usuario.rol == "Administrador",
+            Usuario.activo == True).all()
+    except Exception:
+        admins = []
+    for adm in admins:
+        ruta = tenant_path(adm.id)
+        if os.path.exists(ruta):
+            bases.append((f"admin_{adm.id}", ruta))
+    log = logging.getLogger("respaldo")
+    for etiqueta, ruta in bases:
+        nombre = f"auto_{hoy}_{etiqueta}.db"
+        if os.path.exists(os.path.join(RESPALDO_DIR, nombre)):
+            continue
+        try:
+            crear_respaldo(nombre, db_path=ruta)
+            log.info("Respaldo automático diario creado: %s", nombre)
+        except Exception as e:
+            log.exception("Respaldo automático fallido (%s): %s", etiqueta, e)
+
+
+def _hay_datos_proyecto(admin_id=None):
+    """True si existe cualquier dato del proyecto (en la base en uso o en la
+    base del Administrador indicado)."""
+    modelos = (Proyecto, Presupuesto, Gasto, GastoDetalle,
+               AlmacenMovimiento, Trabajador)
+    if admin_id:
+        S = tenant_session(admin_id)
+        try:
+            return any(S.query(m).first() for m in modelos)
+        finally:
+            S.close()
+    return any(m.query.first() for m in modelos)
+
+
+def _limpiar_datos_proyecto(admin_id=None):
+    """Limpia todos los datos del proyecto para iniciar uno nuevo en cero.
+
+    Si admin_id está presente, limpia la base de ese Administrador (lo usa el
+    Super Usuario al restablecer el proyecto de un administrador); si no,
+    limpia la base en uso durante la petición.
+
+    Antes de borrar crea un respaldo automatico de la base afectada. Devuelve
+    la ruta del respaldo generado. No toca usuarios, ni la suscripcion/licencia.
+    """
+    respaldo = crear_respaldo(
+        f"inicio_nuevo_proyecto_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
+        db_path=tenant_path(admin_id) if admin_id else None)
+    if admin_id:
+        S = tenant_session(admin_id)
+        try:
+            S.query(GastoDetalle).delete(synchronize_session=False)
+            S.query(Gasto).delete(synchronize_session=False)
+            S.query(Presupuesto).delete(synchronize_session=False)
+            S.query(AlmacenMovimiento).delete(synchronize_session=False)
+            S.query(Trabajador).delete(synchronize_session=False)
+            p = S.query(Proyecto).first()
+            if p is None:
+                p = Proyecto()
+                S.add(p)
+            _reiniciar_proyecto(p)
+            S.commit()
+        finally:
+            S.close()
+    else:
+        GastoDetalle.query.delete(synchronize_session=False)
+        Gasto.query.delete(synchronize_session=False)
+        Presupuesto.query.delete(synchronize_session=False)
+        AlmacenMovimiento.query.delete(synchronize_session=False)
+        Trabajador.query.delete(synchronize_session=False)
+        p = Proyecto.query.first()
+        if p is None:
+            p = Proyecto()
+            db.session.add(p)
+        _reiniciar_proyecto(p)
+        db.session.commit()
+    return respaldo
+
+
+def _reiniciar_proyecto(p):
+    """Deja el registro Proyecto en su estado por defecto (datos en cero)."""
+    for col in Proyecto.__table__.columns:
+        if col.name == "id":
+            continue
+        default = getattr(col.default, "arg", None) if col.default is not None else None
+        if callable(default):
+            default = None
+        setattr(p, col.name, default)
+    p.anio = date.today().year
+    p.mes_actual = date.today().month
+
+
+def listar_respaldos():
+    """Devuelve la lista de archivos de respaldo ordenados del mas reciente al mas antiguo."""
+    os.makedirs(RESPALDO_DIR, exist_ok=True)
+    out = []
+    for f in sorted(os.listdir(RESPALDO_DIR), reverse=True):
+        ruta = os.path.join(RESPALDO_DIR, f)
+        if os.path.isfile(ruta):
+            out.append({"nombre": f, "ruta": ruta,
+                        "tamano": os.path.getsize(ruta),
+                        "mod": datetime.fromtimestamp(os.path.getmtime(ruta))})
+    return out
+
+
+def restaurar_respaldo(nombre):
+    """Reemplaza la base de datos en uso (maestra o del administrador) por el
+    contenido de un respaldo. Antes de restaurar se genera automaticamente una
+    copia de seguridad del estado actual para no perder datos."""
+    os.makedirs(RESPALDO_DIR, exist_ok=True)
+    if not nombre or nombre != os.path.basename(nombre):
+        raise ValueError("Nombre de respaldo no válido.")
+    src = os.path.join(RESPALDO_DIR, nombre)
+    if not os.path.isfile(src):
+        raise FileNotFoundError("El respaldo no existe.")
+    con = sqlite3.connect(src)
+    try:
+        con.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()
+    finally:
+        con.close()
+    tid = session.get("tenant")
+    target = ruta_db()
+    pre = crear_respaldo(
+        f"pre_restauracion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
+    db.session.remove()
+    if tid:
+        dispose_tenant(tid)
+    else:
+        db.engine.dispose()
+    src_con = sqlite3.connect(src)
+    dst_con = sqlite3.connect(target)
+    try:
+        with dst_con:
+            src_con.backup(dst_con)
+    finally:
+        dst_con.close()
+        src_con.close()
+    if tid:
+        eng = tenant_engine(tid)
+        db.metadata.create_all(bind=eng, tables=tablas_tenant())
+        bind_session(eng)
+    else:
+        db.metadata.create_all(bind=db.engine, tables=tablas_maestras())
+        migrar_schema()
+        migrar_suscripcion()
+        _migrar_a_multidb()
+        bind_session(_bd.master_engine)
+    return pre
+
+
+def registrar_rutas(app):
+    """Registra todas las rutas del aplicativo."""
+    @app.route("/robots.txt")
+    def robots():
+        base = request.url_root.rstrip("/")
+        txt = ("User-agent: *\n"
+               "Allow: /\n"
+               "Disallow: /login\n"
+               "Disallow: /usuarios\n"
+               "Disallow: /suscripcion\n"
+               "Disallow: /respaldo\n"
+               "Disallow: /licencia\n"
+               "Disallow: /api/\n"
+               "Disallow: /*_imprimir\n"
+               f"Sitemap: {base}/sitemap.xml\n")
+        return txt, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+    @app.route("/sitemap.xml")
+    def sitemap():
+        base = request.url_root.rstrip("/")
+        urls = ["", "/ordenes", "/gastos", "/almacen", "/tareo", "/formatos",
+                "/configuracion", "/cabecera"]
+        today = date.today().isoformat()
+        items = "".join(
+            f"  <url>\n"
+            f"    <loc>{base}{u}</loc>\n"
+            f"    <lastmod>{today}</lastmod>\n"
+            f"    <changefreq>monthly</changefreq>\n"
+            f"    <priority>{'1.0' if u == '' else '0.8'}</priority>\n"
+            f"  </url>\n"
+            for u in urls
+        )
+        xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+               '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+               f"{items}</urlset>\n")
+        return Response(xml, mimetype="application/xml")
+
+    @app.context_processor
+    def inyectar_activo():
+        ep = request.endpoint or ""
+        if ep == "dashboard":
+            active = "dashboard"
+        elif ep == "cabecera":
+            active = "cabecera"
+        elif ep in ("ordenes", "orden_nuevo", "orden_editar", "orden_devengar",
+                    "orden_material_nuevo", "orden_material_editar",
+                    "orden_material_eliminar", "orden_eliminar"):
+            active = "ordenes"
+        elif ep in ("gastos", "gasto_nuevo", "gasto_editar",
+                    "gasto_detalle_nuevo", "gasto_detalle_editar",
+                    "gasto_detalle_eliminar", "gasto_eliminar"):
+            active = "gastos"
+        elif ep in ("formatos", "formatos_actividades"):
+            active = "formatos"
+        elif ep in ("almacen", "almacen_nuevo", "almacen_editar",
+                    "almacen_eliminar", "almacen_oc", "almacen_agregar_oc"):
+            active = "almacen"
+        elif ep in ("tareo", "tareo_guardar", "tareo_imprimir",
+                    "trabajador_nuevo",
+                    "trabajador_editar", "trabajador_eliminar"):
+            active = "tareo"
+        elif ep == "configuracion":
+            active = "configuracion"
+        elif ep in ("usuarios", "usuario_nuevo", "usuario_editar", "usuario_eliminar"):
+            active = "usuarios"
+        elif ep in ("suscripcion", "suscripcion_renovar", "suscripcion_pausar"):
+            active = "suscripcion"
+        elif ep == "respaldo":
+            active = "respaldo"
+        else:
+            active = ""
+        u = usuario_actual()
+        if not u:
+            pset = set()
+        elif u.rol == ROL_SUPER:
+            # El Super Usuario solo ve gestión de usuarios, suscripción y respaldo.
+            pset = {"respaldo"}
+        elif u.rol in ROLES_TOTALES:
+            pset = {clave for clave, _ in PERMISOS_SECCIONES}
+        else:
+            pset = set(u.permiso_lista)
+        # Estado de la suscripción para el banner de aviso / vencimiento.
+        susc = suscripcion_usuario(_dueno_suscripcion(u)) if u else None
+        return {"active": active, "usuario": u, "permisos_usuario": pset,
+                "susc": susc}
+
+    @app.template_filter("moneda")
+    def moneda(n):
+        return f"S/ {n:,.2f}"
+
+    @app.template_filter("fecha_larga")
+    def fecha_larga(d):
+        if not d:
+            return ""
+        meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+                 "julio", "agosto", "septiembre", "octubre", "noviembre",
+                 "diciembre"]
+        try:
+            return f"{d.day} de {meses[d.month - 1]} del {d.year}"
+        except (AttributeError, IndexError, TypeError):
+            return ""
+
+    @app.template_filter("cant")
+    def cant(n):
+        if n is None:
+            return ""
+        n = float(n)
+        if n == int(n):
+            return f"{int(n):,}"
+        return f"{n:,.2f}"
+
+    def lista_clasificadores(p):
+        """Opciones (codigo, nombre) para el select de clasificador."""
+        out = []
+        for code, label in clasificadores_proyecto().items():
+            out.append((code, label))
+        out.append(("LIQUIDACION", CLASIFICADORES.get("LIQUIDACION", "LIQUIDACION")))
+        return out
+
+    def clasificadores_oc(p):
+        """Opciones para O/C y O/S: solo Bienes, Servicios y Expediente Tecnico."""
+        base = clasificadores_proyecto()
+        codigos = [p.clasificador_bienes or "2.6.2.3.99.4",
+                   p.clasificador_servicios or "2.6.2.3.99.5",
+                   p.clasificador_expediente or "2.6.8.1.3.1"]
+        return [(c, base.get(c, c)) for c in codigos]
+
+    def cls_nombre(p, code):
+        """Nombre legible de un clasificador (usa los configurados en la cabecera)."""
+        if not code:
+            return ""
+        base = clasificadores_proyecto()
+        if code in base:
+            return base[code]
+        return CLASIFICADORES.get(code, code)
+
+    @app.before_request
+    def verificar_login():
+        ep = request.endpoint or ""
+        if ep in ("login", "logout", "static", "robots", "sitemap"):
+            return None
+        # Cierre de sesión por inactividad (respaldo al temporizador del navegador).
+        ahora = time.time()
+        ultimo = session.get("_ultimo_acceso")
+        if session.get("usuario_id"):
+            if ultimo is not None and ahora - ultimo > 15 * 60:
+                session.clear()
+                flash("Su sesión se cerró por inactividad (15 minutos).", "info")
+                if request.headers.get("X-Modal"):
+                    return ("Debe iniciar sesión.<script>setTimeout(function(){location.reload()},800)</script>",
+                            401)
+                return redirect(url_for("login"))
+            session["_ultimo_acceso"] = ahora
+        if not session.get("usuario_id"):
+            if request.headers.get("X-Modal"):
+                return ("Debe iniciar sesión.<script>setTimeout(function(){location.reload()},800)</script>",
+                        401)
+            return redirect(url_for("login", next=request.path))
+        u = usuario_actual()
+        if not u:
+            session.clear()
+            if request.headers.get("X-Modal"):
+                return ("Debe iniciar sesión.<script>setTimeout(function(){location.reload()},800)</script>",
+                        401)
+            return redirect(url_for("login", next=request.path))
+        es_super = u.rol == ROL_SUPER
+        if ep in ("suscripcion_vencida", "licencia_subir", "licencia_form",
+                  "licencia_generar"):
+            return None
+        # Bloqueo por suscripción vencida o pausada: todos excepto el Super Usuario.
+        if not es_super and not suscripcion_vigente(_dueno_suscripcion(u)):
+            if request.headers.get("X-Modal"):
+                return ("Suscripción vencida.<script>setTimeout(function(){location.href='" +
+                        url_for("suscripcion_vencida") + "'},800)</script>", 401)
+            return redirect(url_for("suscripcion_vencida"))
+        # El Super Usuario gestiona cuentas y licencia; no tiene datos de
+        # proyecto propios (esos viven en la base de cada Administrador).
+        if es_super:
+            if ep == "dashboard":
+                return redirect(url_for("usuarios"))
+            if ep not in ("usuarios", "usuario_nuevo", "usuario_editar",
+                          "usuario_eliminar", "respaldo", "suscripcion",
+                          "suscripcion_renovar", "suscripcion_pausar"):
+                flash("La cuenta principal gestiona cuentas y licencia; "
+                      "esta sección corresponde a los datos de un proyecto.",
+                      "error")
+                return redirect(url_for("usuarios"))
+            return None
+        req = permiso_requerido(ep)
+        if req is None:
+            return None
+        if u.rol == "Administrador":
+            if req == "__super__":
+                flash("No tiene permisos para gestionar la suscripción.", "error")
+                return redirect(home_usuario(u))
+            return None
+        if req in ("__admin__", "__super__"):
+            flash("No tiene permisos para acceder a esta sección.", "error")
+            return redirect(home_usuario(u))
+        if req not in u.permiso_lista:
+            if request.headers.get("X-Modal"):
+                return ("No tiene acceso a esta sección.<script>setTimeout(function(){location.reload()},800)</script>",
+                        401)
+            flash("No tiene acceso autorizado a esta sección.", "error")
+            return redirect(home_usuario(u))
+        return None
+
+    def admin_requerido(f):
+        @wraps(f)
+        def envuelto(*args, **kwargs):
+            if not session.get("usuario_id"):
+                return redirect(url_for("login", next=request.path))
+            u = usuario_actual()
+            if not u or u.rol not in ROLES_TOTALES:
+                flash("No tiene permisos para acceder a la gestión de usuarios.", "error")
+                return redirect(url_for("dashboard"))
+            return f(*args, **kwargs)
+        return envuelto
+
+    def super_requerido(f):
+        @wraps(f)
+        def envuelto(*args, **kwargs):
+            if not session.get("usuario_id"):
+                return redirect(url_for("login", next=request.path))
+            u = usuario_actual()
+            if not u or u.rol != ROL_SUPER:
+                flash("No tiene permisos para acceder a esta opción.", "error")
+                return redirect(url_for("dashboard"))
+            return f(*args, **kwargs)
+        return envuelto
+
+    # ------------------------- ACCESO (LOGIN) --------------------------
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if session.get("usuario_id"):
+            return redirect(home_usuario(usuario_actual()))
+        error = None
+        if request.method == "POST":
+            nombre = request.form.get("usuario", "").strip()
+            clave = request.form.get("clave", "")
+            usr = None
+            tid = None
+            # Las cuentas de Super Usuario y Administrador viven en la maestra.
+            maestro = (_bd.master_session.query(Usuario)
+                       .filter(Usuario.usuario == nombre).first())
+            if maestro and maestro.activo \
+                    and check_password_hash(maestro.clave, clave):
+                usr = maestro
+                # El Administrador entra con su propia base de proyecto.
+                if usr.rol == "Administrador":
+                    tid = usr.id
+            else:
+                # Los operadores (rol Usuario) viven en la base de su
+                # Administrador: se busca en cada una de ellas.
+                for adm in (_bd.master_session.query(Usuario)
+                            .filter(Usuario.rol == "Administrador").all()):
+                    op = _buscar_operador(adm.id, nombre)
+                    if op and op.activo \
+                            and check_password_hash(op.clave, clave):
+                        usr, tid = op, adm.id
+                        break
+            if usr:
+                if tid:
+                    ensure_tenant(tid)
+                    session["tenant"] = tid
+                session["usuario_id"] = usr.id
+                session["usuario_nombre"] = usr.nombres or usr.usuario
+                session["usuario_rol"] = usr.rol
+                return redirect(home_usuario(usr))
+            error = "Usuario o contraseña incorrectos."
+        return render_template("login.html", error=error)
+
+    @app.route("/logout")
+    def logout():
+        session.clear()
+        flash("Sesión cerrada correctamente.", "success")
+        return redirect(url_for("login"))
+
+    # ------------------------- GESTION DE USUARIOS ----------------------
+    @app.route("/usuarios")
+    @admin_requerido
+    def usuarios():
+        orden = {ROL_SUPER: 0, "Administrador": 1}
+        actor = usuario_actual()
+        es_super = bool(actor and actor.rol == ROL_SUPER)
+        lista = sorted(Usuario.query.all(),
+                       key=lambda u: (orden.get(u.rol, 2), u.usuario.lower()))
+        if not es_super:
+            lista = [u for u in lista if u.rol != ROL_SUPER]
+        return render_template("usuarios.html", usuarios=lista,
+                               labels=dict(PERMISOS_SECCIONES),
+                               total=len(lista),
+                               admins=sum(1 for u in lista if u.rol == "Administrador"),
+                               activos=sum(1 for u in lista if u.activo),
+                               es_super=es_super)
+
+    @app.route("/usuarios/nuevo", methods=["GET", "POST"])
+    @admin_requerido
+    def usuario_nuevo():
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        actor = usuario_actual()
+        es_super = bool(actor and actor.rol == ROL_SUPER)
+        error = None
+        if request.method == "POST":
+            nombre = request.form.get("usuario", "").strip()
+            clave = request.form.get("clave", "")
+            rol = request.form.get("rol", "Usuario")
+            if not nombre:
+                error = "Debe indicar el nombre de usuario."
+            elif not clave:
+                error = "Debe indicar una contraseña."
+            elif len(clave) < 6:
+                error = "La contraseña debe tener al menos 6 caracteres."
+            elif rol == ROL_SUPER and not es_super:
+                error = "No tiene permisos para crear cuentas con ese rol."
+            elif rol == "Administrador" and not es_super:
+                error = "No tiene permisos para crear usuarios Administradores."
+            elif Usuario.query.filter(Usuario.usuario == nombre).first():
+                error = f"El usuario '{nombre}' ya existe."
+            else:
+                opt_licencia = request.form.get("licencia", "nueva")
+                nu = Usuario(
+                    usuario=nombre,
+                    clave=generate_password_hash(clave),
+                    nombres=request.form.get("nombres", "").strip(),
+                    rol=rol,
+                    activo=bool(request.form.get("activo")),
+                    permisos=json.dumps(_permisos_guardados(rol, request.form)))
+                # Un Administrador nuevo inicia sin licencia (debe comprarla),
+                # salvo que el super elija mantener la licencia actual.
+                if es_super and rol == "Administrador" and opt_licencia != "mantener":
+                    nu.susc_activa = False
+                db.session.add(nu)
+                db.session.flush()
+                nuevo_id = nu.id
+                db.session.commit()
+                if es_super and rol == "Administrador":
+                    # Cada Administrador tiene su propia base, que nace vacía.
+                    ensure_tenant(nuevo_id)
+                    if opt_licencia == "mantener":
+                        flash(f"Usuario '{nombre}' creado como Administrador. "
+                              f"Mantiene la licencia actual y su proyecto "
+                              f"comienza en cero.", "success")
+                    else:
+                        flash(f"Usuario '{nombre}' creado como Administrador. "
+                              f"Su proyecto comienza en cero y no afecta a los "
+                              f"demás administradores. Debe adquirir su "
+                              f"licencia para ingresar.", "success")
+                else:
+                    flash(f"Usuario '{nombre}' creado.", "success")
+                return redirect(url_for("usuarios"))
+        u = Usuario()
+        status = 400 if (es_modal and error) else 200
+        return render_template("_usuario_form.html", u=u, es_edicion=False,
+                               permisos_opciones=PERMISOS_SECCIONES, error=error,
+                               es_super=es_super), status
+
+    @app.route("/usuarios/editar/<int:uid>", methods=["GET", "POST"])
+    @admin_requerido
+    def usuario_editar(uid):
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        actor = usuario_actual()
+        es_super = bool(actor and actor.rol == ROL_SUPER)
+        u = db.session.get(Usuario, uid)
+        if not u:
+            abort(404)
+        # La cuenta principal solo la administra su propio responsable.
+        if u.rol == ROL_SUPER and not es_super:
+            flash("No tiene permisos para modificar esa cuenta.", "error")
+            return redirect(url_for("usuarios"))
+        # El Administrador no modifica cuentas de otro Administrador (excepto la
+        # propia cuenta: el administrador puede corregir sus datos/contraseña).
+        if u.rol == "Administrador" and not es_super \
+                and not _es_cuenta_propia(u):
+            flash("No tiene permisos para modificar cuentas de Administrador.",
+                  "error")
+            return redirect(url_for("usuarios"))
+        error = None
+        if request.method == "POST":
+            nombre = request.form.get("usuario", "").strip()
+            nuevo_rol = request.form.get("rol", "Usuario")
+            # La cuenta principal conserva siempre su rol (no se ofrece en el
+            # formulario de rol).
+            if u.rol == ROL_SUPER and _es_cuenta_propia(u):
+                nuevo_rol = ROL_SUPER
+            if not nombre:
+                error = "Debe indicar el nombre de usuario."
+            elif nuevo_rol == ROL_SUPER and not es_super:
+                error = "No tiene permisos para asignar ese rol."
+            elif (nuevo_rol == "Administrador" and not es_super
+                    and u.rol != "Administrador"):
+                error = "No tiene permisos para asignar ese rol."
+            elif (_es_cuenta_propia(u) and u.rol == "Administrador"
+                    and nuevo_rol != "Administrador" and not es_super):
+                error = "No puede quitarse el rol de Administrador a sí mismo."
+            else:
+                otro = Usuario.query.filter(Usuario.usuario == nombre,
+                                            Usuario.id != uid).first()
+                if otro:
+                    error = f"El usuario '{nombre}' ya existe."
+                elif (_es_cuenta_propia(u)
+                        and not bool(request.form.get("activo"))):
+                    error = "No puede desactivar su propio usuario."
+                elif (request.form.get("clave", "")
+                        and len(request.form.get("clave", "")) < 6):
+                    error = "La contraseña debe tener al menos 6 caracteres."
+                elif (_es_cuenta_propia(u) and u.rol == ROL_SUPER
+                        and nuevo_rol != ROL_SUPER):
+                    error = "No puede quitarse su propio rol."
+                else:
+                    u.usuario = nombre
+                    u.nombres = request.form.get("nombres", "").strip()
+                    u.rol = nuevo_rol
+                    u.activo = bool(request.form.get("activo"))
+                    u.permisos = json.dumps(
+                        _permisos_guardados(u.rol, request.form))
+                    clave = request.form.get("clave", "")
+                    if clave:
+                        u.clave = generate_password_hash(clave)
+                    db.session.commit()
+                    if es_super and nuevo_rol == "Administrador":
+                        ensure_tenant(u.id)
+                    if _es_cuenta_propia(u):
+                        session["usuario_nombre"] = u.nombres or u.usuario
+                        session["usuario_rol"] = u.rol
+                    if (es_super and u.rol == "Administrador"
+                            and request.form.get("limpiar_datos") == "1"):
+                        try:
+                            respaldo = _limpiar_datos_proyecto(u.id)
+                            flash(f"Usuario actualizado. Proyecto del administrador "
+                                  f"reiniciado en cero. Respaldo automático en "
+                                  f"'Respaldo BD/{os.path.basename(respaldo)}'.",
+                                  "success")
+                        except Exception as e:
+                            flash(f"Usuario actualizado, pero no se pudo reiniciar "
+                                  f"el proyecto: {e}", "error")
+                    else:
+                        flash("Usuario actualizado.", "success")
+                    return redirect(url_for("usuarios"))
+        status = 400 if (es_modal and error) else 200
+        return render_template("_usuario_form.html", u=u, es_edicion=True,
+                               permisos_opciones=PERMISOS_SECCIONES, error=error,
+                               es_super=es_super,
+                               hay_datos=bool(es_super and u.rol == "Administrador"
+                                              and _hay_datos_proyecto(uid))), status
+
+    @app.route("/usuarios/eliminar/<int:uid>", methods=["POST"])
+    @admin_requerido
+    def usuario_eliminar(uid):
+        actor = usuario_actual()
+        es_super = bool(actor and actor.rol == ROL_SUPER)
+        u = db.session.get(Usuario, uid)
+        if not u:
+            flash("Usuario no encontrado.", "error")
+        elif _es_cuenta_propia(u):
+            flash("No puede eliminar su propio usuario.", "error")
+        elif u.rol == ROL_SUPER and not es_super:
+            flash("No tiene permisos para eliminar esa cuenta.", "error")
+        elif u.rol == "Administrador" and not es_super:
+            flash("No tiene permisos para eliminar esa cuenta.", "error")
+        else:
+            admins = Usuario.query.filter(Usuario.rol == "Administrador",
+                                          Usuario.activo == True).count()
+            # La protección del "último administrador" aplica solo al Administrador:
+            # la cuenta principal puede eliminar administradores sin restricciones.
+            if (not es_super and u.rol == "Administrador" and u.activo
+                    and admins <= 1):
+                flash("No puede eliminar el último administrador activo.", "error")
+            else:
+                borrado_bd = False
+                if es_super and u.rol == "Administrador":
+                    # Libera el motor y elimina la base propia del Administrador
+                    # (con respaldo previo) para no dejar datos huerfanos.
+                    dispose_tenant(u.id)
+                    ruta_ten = tenant_path(u.id)
+                    if os.path.exists(ruta_ten):
+                        crear_respaldo(
+                            f"admin_{u.usuario}_"
+                            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
+                            db_path=ruta_ten)
+                        borrado_bd = True
+                    shutil.rmtree(os.path.dirname(ruta_ten), ignore_errors=True)
+                db.session.delete(u)
+                db.session.commit()
+                flash(f"Usuario '{u.usuario}' eliminado."
+                      + (" Su base de datos fue respaldada y eliminada."
+                         if borrado_bd else ""), "success")
+        return redirect(url_for("usuarios"))
+
+    # ------------------------- SUSCRIPCION -----------------------------
+    @app.route("/suscripcion")
+    @super_requerido
+    def suscripcion():
+        s = get_suscripcion()
+        historial = (SuscripcionHistorial.query
+                     .order_by(SuscripcionHistorial.fecha_registro.desc())
+                     .limit(50).all())
+        admins = (_bd.master_session.query(Usuario)
+                  .filter(Usuario.rol == "Administrador", Usuario.activo.is_(True))
+                  .order_by(Usuario.usuario).all())
+        return render_template("suscripcion.html", s=s, historial=historial,
+                               PLANES=PLANES_SUSCRIPCION, admins=admins)
+
+    @app.route("/suscripcion/renovar", methods=["POST"])
+    @super_requerido
+    def suscripcion_renovar():
+        s = get_suscripcion()
+        if not s:
+            s = Suscripcion(plan="Mensual")
+            db.session.add(s)
+        plan = request.form.get("plan", "Mensual")
+        if plan not in PLANES_SUSCRIPCION:
+            plan = "Mensual"
+        nota = request.form.get("nota", "").strip()
+        hoy = date.today()
+        # Si la suscripción sigue vigente, la renovación se encadena desde su
+        # fecha de fin actual; si venció, se inicia desde hoy.
+        base = s.fecha_fin if (s.fecha_fin and s.fecha_fin >= hoy) else hoy
+        fin = sumar_meses(base, PLANES_SUSCRIPCION[plan])
+        s.plan = plan
+        s.fecha_inicio = base
+        s.fecha_fin = fin
+        s.activa = True
+        actor = usuario_actual()
+        db.session.add(SuscripcionHistorial(
+            plan=plan, fecha_inicio=base, fecha_fin=fin,
+            usuario=(actor.nombres or actor.usuario) if actor else "",
+            nota=nota, accion="Renovación"))
+        db.session.commit()
+        flash(f"Suscripción {plan} vigente hasta el {fin.strftime('%d/%m/%Y')}.",
+              "success")
+        return redirect(url_for("suscripcion"))
+
+    @app.route("/suscripcion/pausar", methods=["POST"])
+    @super_requerido
+    def suscripcion_pausar():
+        s = get_suscripcion()
+        if s:
+            s.activa = not s.activa
+            actor = usuario_actual()
+            db.session.add(SuscripcionHistorial(
+                plan=s.plan, fecha_inicio=s.fecha_inicio, fecha_fin=s.fecha_fin,
+                usuario=(actor.nombres or actor.usuario) if actor else "",
+                nota="", accion="Pausada" if not s.activa else "Reactivada"))
+            db.session.commit()
+            flash("Suscripción pausada: el aplicativo quedó bloqueado." if not s.activa
+                  else "Suscripción reactivada.", "success")
+        return redirect(url_for("suscripcion"))
+
+    @app.route("/suscripcion/vencida")
+    def suscripcion_vencida():
+        u = usuario_actual()
+        dueno = _dueno_suscripcion(u)
+        s = suscripcion_usuario(dueno)
+        return render_template("suscripcion_vencida.html", s=s,
+                               es_super=bool(u and u.rol == ROL_SUPER),
+                               admin_usuario=(dueno.usuario if dueno else ""),
+                               admin_nombres=(dueno.nombres if dueno else ""))
+
+    @app.route("/licencia/generar", methods=["POST"])
+    @super_requerido
+    def licencia_generar():
+        """Genera y descarga un archivo de licencia para el plan y el usuario
+        (Administrador) indicado. La licencia queda vinculada a ese usuario."""
+        plan = request.form.get("plan", "Mensual")
+        if plan not in PLANES_SUSCRIPCION:
+            plan = "Mensual"
+        uid = request.form.get("usuario_id", type=int)
+        titular = (_bd.master_session.get(Usuario, uid)
+                   if uid else None)
+        if not titular or titular.rol != "Administrador":
+            flash("Seleccione el usuario Administrador para la licencia.", "error")
+            return redirect(url_for("suscripcion"))
+        contenido = generar_licencia(plan, usuario=titular.usuario,
+                                     usuario_id=titular.id,
+                                     nombres=titular.nombres)
+        nombre = (f"licencia_{titular.usuario}_{plan.lower()}_"
+                  f"{date.today().strftime('%Y%m%d')}.lic")
+        return Response(
+            contenido, mimetype="application/octet-stream",
+            headers={"Content-Disposition":
+                     f"attachment; filename={nombre}"})
+
+    @app.route("/licencia/subir", methods=["POST"])
+    def licencia_subir():
+        """El cliente sube el archivo de licencia para renovar la suscripción."""
+        f = request.files.get("licencia")
+        if f is None or not f.filename:
+            flash("Seleccione el archivo de licencia (.lic o .json).", "error")
+            return redirect(url_for("suscripcion_vencida"))
+        s = aplicar_licencia(descifrar_licencia(f.read()))
+        if s is None:
+            flash("El archivo de licencia no es válido, ya fue utilizado o no "
+                  "corresponde a la cuenta de su usuario.", "error")
+            return redirect(url_for("suscripcion_vencida"))
+        plan = s["plan"]
+        hoy = date.today()
+        if s["fecha_inicio"] and s["fecha_inicio"] > hoy:
+            dias_rest = (s["fecha_inicio"] - hoy).days
+            flash(f"Suscripción ampliada por licencia ({plan}): se sumaron "
+                  f"{dias_rest} días restantes más el período de la licencia. "
+                  f"Nueva vigencia hasta el {s['fecha_fin'].strftime('%d/%m/%Y')}.",
+                  "success")
+        else:
+            flash(f"Suscripción renovada por licencia ({plan}): nueva vigencia "
+                  f"hasta el {s['fecha_fin'].strftime('%d/%m/%Y')}.", "success")
+        return redirect(url_for("dashboard"))
+
+    @app.route("/licencia/form")
+    def licencia_form():
+        """Formulario de subida de licencia (usado en el modal 'Ampliar licencia')."""
+        return render_template("_licencia_form.html")
+
+    @app.route("/")
+    def dashboard():
+        u = usuario_actual()
+        if u and u.rol == ROL_SUPER:
+            return redirect(url_for("usuarios"))
+        p = get_proyecto()
+        k = kpis()
+        por_mes = ejecucion_por_mes(p.anio)
+        por_comp = ejecucion_por_componente(p.anio)
+        recientes = (Gasto.query.order_by(Gasto.id.desc()).limit(8).all())
+        return render_template(
+            "dashboard.html", p=p, k=k, MESES=MESES, por_mes=por_mes,
+            por_comp=por_comp, recientes=recientes,
+            fe06_resumen=fe06_resumen(fe06_rows()))
+
+    # ------------------------- CABECERA -------------------------------
+    @app.route("/cabecera", methods=["GET", "POST"])
+    def cabecera():
+        p = get_proyecto()
+        if request.method == "POST":
+            for campo in ["nombre", "cui", "meta", "distrito", "provincia", "departamento",
+                          "entidad", "unidad_ejecutora", "aprobacion", "rubro", "fuente",
+                          "residente", "supervisor", "asistente",
+                           "responsable_almacen",
+                           "n_resolucion_adicional", "cip_supervisor", "cip_residente",
+                           "colegiatura_admin", "dni_responsable_almacen",
+                           "asistente_tecnico", "dni_cip_asistente"]:
+                setattr(p, campo, request.form.get(campo, "").strip().upper())
+            for campo in ["presupuesto_total", "costo_directo", "gastos_generales",
+                          "gastos_supervision", "elaboracion_expediente", "liquidacion_obra",
+                          "monto_ampliacion"]:
+                try:
+                    setattr(p, campo, float(request.form.get(campo, 0) or 0))
+                except ValueError:
+                    pass
+            for campo in ["fecha_inicio", "fecha_fin", "nuevo_final_obra",
+                          "fecha_aprobacion"]:
+                setattr(p, campo, parse_fecha(request.form.get(campo)))
+            clas_prev = {
+                "PERSONAL": p.clasificador_personal,
+                "BIENES": p.clasificador_bienes,
+                "SERVICIOS": p.clasificador_servicios,
+                "ELABORACION DE EXPEDIENTE TECNICO": p.clasificador_expediente,
+            }
+            for campo in ["clasificador_personal", "clasificador_bienes",
+                          "clasificador_servicios", "clasificador_expediente"]:
+                setattr(p, campo, request.form.get(campo, "").strip().upper())
+            p.clasificador_personal = p.clasificador_personal or "2.6.2.3.99.3"
+            p.clasificador_bienes = p.clasificador_bienes or "2.6.2.3.99.4"
+            p.clasificador_servicios = p.clasificador_servicios or "2.6.2.3.99.5"
+            p.clasificador_expediente = p.clasificador_expediente or "2.6.8.1.3.1"
+            clas_nuevo = {
+                "PERSONAL": p.clasificador_personal,
+                "BIENES": p.clasificador_bienes,
+                "SERVICIOS": p.clasificador_servicios,
+                "ELABORACION DE EXPEDIENTE TECNICO": p.clasificador_expediente,
+            }
+            for detalle, nuevo in clas_nuevo.items():
+                previo = clas_prev.get(detalle)
+                if previo and nuevo and previo != nuevo:
+                    for cfg in Presupuesto.query.filter_by(detalle=detalle).all():
+                        cfg.clasificador = nuevo
+                    for g in Gasto.query.filter(Gasto.clasificador == previo).all():
+                        g.clasificador = nuevo
+            for campo in ["dias_ejecucion", "dias_ampliacion"]:
+                try:
+                    setattr(p, campo, int(request.form.get(campo, 0) or 0))
+                except ValueError:
+                    pass
+            p.adicional_obra = "adicional_obra" in request.form
+            p.ampliacion_presupuestal = "ampliacion_presupuestal" in request.form
+            if p.adicional_obra:
+                p.fecha_fin = p.nuevo_final_obra or p.fecha_fin
+            else:
+                p.dias_ampliacion = 0
+                p.nuevo_final_obra = None
+                p.n_resolucion_adicional = ""
+                p.ampliacion_presupuestal = False
+                p.monto_ampliacion = 0
+            try:
+                p.anio = int(request.form.get("anio", p.anio))
+            except ValueError:
+                pass
+            try:
+                p.mes_actual = int(request.form.get("mes_actual", p.mes_actual))
+            except ValueError:
+                pass
+            if p.fecha_inicio and not p.adicional_obra:
+                if p.fecha_fin:
+                    p.dias_ejecucion = max(0, (p.fecha_fin - p.fecha_inicio).days)
+                elif p.dias_ejecucion:
+                    p.fecha_fin = p.fecha_inicio + timedelta(days=p.dias_ejecucion)
+            db.session.commit()
+            flash("Datos de cabecera guardados correctamente.", "success")
+            return redirect(url_for("cabecera"))
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        rubros = leer_lista(os.path.join(base, "Rubro.txt"))
+        fuentes = leer_lista(os.path.join(base, "Recursos.txt"))
+        return render_template("cabecera.html", p=p, MESES=MESES,
+                               rubros=rubros, fuentes=fuentes)
+
+    @app.route("/cabecera/subir-logo", methods=["POST"])
+    def subir_logo():
+        p = get_proyecto()
+        archivo = request.files.get("logo")
+        if archivo and archivo.filename:
+            ext = os.path.splitext(archivo.filename)[1].lower()
+            if ext in (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"):
+                destino = os.path.join(app.static_folder, "uploads", f"logo{ext}")
+                archivo.save(destino)
+                p.logo_path = f"uploads/logo{ext}"
+                db.session.commit()
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"ok": True, "logo_url": url_for("static", filename=p.logo_path)})
+                flash("Logo actualizado correctamente.", "success")
+            else:
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"ok": False, "error": "Formato no permitido"}), 400
+                flash("Formato de imagen no permitido.", "error")
+        else:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"ok": False, "error": "Seleccione un archivo"}), 400
+            flash("Seleccione un archivo de imagen.", "error")
+        return redirect(url_for("cabecera"))
+
+    # ------------------------- GASTOS --------------------------------
+    @app.route("/gastos")
+    def gastos():
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        lista = gastos_mes(mes, anio, devengado=True)
+        grupos = {}
+        for g in lista:
+            key = (g.componente, g.clasificador)
+            grupos.setdefault(key, {"componente": g.componente, "clasificador": g.clasificador,
+                                    "detalle": cls_nombre(p, g.clasificador),
+                                    "gastos": [], "total": 0.0})
+            grupos[key]["gastos"].append(g)
+            grupos[key]["total"] += g.importe
+        for key in grupos:
+            grupos[key]["total"] = round(grupos[key]["total"], 2)
+        total = total_gastos_mes(mes, anio, devengado=True)
+        return render_template("gastos.html", p=p, lista=lista, grupos=grupos,
+                               total=total, mes=mes, anio=anio, MESES=MESES,
+                               CLASIFICADORES=CLASIFICADORES)
+
+    @app.route("/gastos/nuevo", methods=["GET", "POST"])
+    def gasto_nuevo():
+        return gasto_form(None)
+
+    @app.route("/gastos/editar/<int:gasto_id>", methods=["GET", "POST"])
+    def gasto_editar(gasto_id):
+        return gasto_form(gasto_id)
+
+    @app.route("/gastos/eliminar/<int:gasto_id>", methods=["POST"])
+    def gasto_eliminar(gasto_id):
+        g = db.session.get(Gasto, gasto_id)
+        if g:
+            mes, anio = g.mes, g.anio
+            db.session.delete(g)
+            db.session.commit()
+            flash("Gasto eliminado.", "info")
+            return redirect(url_for("gastos", mes=mes, anio=anio))
+        return redirect(url_for("gastos"))
+
+    def gasto_form(gasto_id):
+        p = get_proyecto()
+        g = db.session.get(Gasto, gasto_id) if gasto_id else Gasto(
+            fecha=fecha_defecto(p),
+            mes=p.mes_actual, anio=p.anio,
+            componente="Costo Directo", clasificador="2.6.2.3.99.4")
+        if gasto_id and g is None:
+            abort(404)
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        error = None
+        if request.method == "POST":
+            g.fecha = parse_fecha(request.form.get("fecha")) or g.fecha
+            try:
+                g.siaf = int(request.form.get("siaf", 0) or 0)
+            except ValueError:
+                pass
+            g.tipo_doc = request.form.get("tipo_doc", "O/C").upper()
+            try:
+                g.num_doc = int(request.form.get("num_doc", 0) or 0)
+            except ValueError:
+                pass
+            g.proveedor = request.form.get("proveedor", "").upper()
+            g.clasificador = request.form.get("clasificador", "2.6.2.3.99.4")
+            g.componente = request.form.get("componente", "Costo Directo")
+            g.pecosa = request.form.get("pecosa", "").upper()
+            g.mes = p.mes_actual
+            g.anio = p.anio
+            try:
+                g.orden = int(request.form.get("orden", 1))
+            except ValueError:
+                pass
+            if not gasto_id:
+                duplicada = (Gasto.query
+                             .filter(Gasto.tipo_doc == g.tipo_doc,
+                                     Gasto.num_doc == g.num_doc,
+                                     Gasto.siaf == g.siaf,
+                                     Gasto.anio == g.anio)
+                             .order_by(Gasto.id)
+                             .first())
+                if duplicada:
+                    error = (f"La orden ya existe: {g.tipo_doc} N° {g.num_doc} con "
+                             f"SIAF {g.siaf} ya está registrada para "
+                             f"{MESES[duplicada.mes - 1]} {duplicada.anio}. "
+                             f"Elimine o edite esa orden si desea modificarla; "
+                             f"no puede volver a registrarse en otro mes.")
+            if error is None:
+                db.session.add(g)
+                db.session.commit()
+                flash("Gasto guardado correctamente.", "success")
+                if gasto_id or request.form.get("modal"):
+                    return redirect(url_for("gastos", mes=g.mes, anio=g.anio))
+                return redirect(url_for("gasto_detalle_nuevo", gasto_id=g.id))
+        tmpl = "_gasto_form.html" if es_modal else "gasto_form.html"
+        return render_template(tmpl, g=g, p=p, MESES=MESES, error=error,
+                               CLASIFICADORES=CLASIFICADORES, COMPONENTES=COMPONENTES,
+                               clasificadores=lista_clasificadores(p))
+
+    # ------------------------- DETALLES DE GASTO ----------------------
+    def gasto_detalle_form(gasto_id, detalle_id):
+        p = get_proyecto()
+        g = db.session.get(Gasto, gasto_id)
+        if g is None:
+            return redirect(url_for("gastos"))
+        d = (db.session.get(GastoDetalle, detalle_id) if detalle_id
+             else GastoDetalle(und="UND", cantidad=1))
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        if request.method == "POST":
+            d.gasto_id = g.id
+            d.detalle = request.form.get("detalle", "").upper()
+            d.und = request.form.get("und", "UND").upper()
+            try:
+                d.cantidad = float(request.form.get("cantidad", 1) or 1)
+                d.precio_unitario = float(request.form.get("precio_unitario", 0) or 0)
+            except ValueError:
+                pass
+            if not detalle_id:
+                d.orden = len(g.detalles) + 1
+                g.detalles.append(d)
+            db.session.commit()
+            flash("Material/servicio agregado correctamente.", "success")
+            return redirect(url_for("gastos", mes=g.mes, anio=g.anio))
+        tmpl = "_gasto_detalle_form.html" if es_modal else "gasto_detalle_form.html"
+        return render_template(tmpl, g=g, d=d, p=p, MESES=MESES)
+
+    @app.route("/gastos/<int:gasto_id>/detalle/nuevo", methods=["GET", "POST"])
+    def gasto_detalle_nuevo(gasto_id):
+        return gasto_detalle_form(gasto_id, None)
+
+    @app.route("/gastos/detalle/editar/<int:detalle_id>", methods=["GET", "POST"])
+    def gasto_detalle_editar(detalle_id):
+        d = db.session.get(GastoDetalle, detalle_id)
+        if d is None:
+            return redirect(url_for("gastos"))
+        return gasto_detalle_form(d.gasto_id, detalle_id)
+
+    @app.route("/gastos/detalle/eliminar/<int:detalle_id>", methods=["POST"])
+    def gasto_detalle_eliminar(detalle_id):
+        d = db.session.get(GastoDetalle, detalle_id)
+        if d:
+            g = d.gasto
+            db.session.delete(d)
+            db.session.commit()
+            flash("Detalle eliminado.", "info")
+            return redirect(url_for("gastos", mes=g.mes, anio=g.anio))
+        return redirect(url_for("gastos"))
+
+    # ------------------------- INGRESO DE O/C Y O/S -------------------
+    @app.route("/ordenes")
+    def ordenes():
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        lista = gastos_mes(mes, anio)
+        total = round(sum(g.importe for g in lista), 2)
+        cls_nombres = dict(clasificadores_proyecto())
+        cls_nombres.update(CLASIFICADORES)
+        bloqueos_orden = {}
+        bloqueos_material = {}
+        es_super = es_super_actual()
+        for g in lista:
+            if _orden_bloqueada(g, p):
+                bloqueos_orden[g.id] = ("Esta orden pertenece a un mes cerrado (distinto al "
+                                        "mes de trabajo del proyecto). No se puede eliminar.")
+                for d in g.detalles:
+                    bloqueos_material[d.id] = ("No se puede eliminar: la orden pertenece a un "
+                                               "mes cerrado (distinto al mes de trabajo del "
+                                               "proyecto).")
+                continue
+            if g.devengado and not es_super:
+                bloqueos_orden[g.id] = ("Esta orden ya está devengada. "
+                                        "No se puede eliminar.")
+                for d in g.detalles:
+                    bloqueos_material[d.id] = ("La orden ya está devengada. "
+                                               "No se puede eliminar el material.")
+                continue
+            movs = _movs_ingreso_orden(g)
+            if movs:
+                bloqueos_orden[g.id] = ("Esta orden tiene materiales con ingresos en almacén. "
+                                        "Elimine primero los movimientos de entrada del almacén.")
+                descs_mov = {m.descripcion for m in movs}
+                for d in g.detalles:
+                    if (d.detalle or "").strip().upper() in descs_mov:
+                        bloqueos_material[d.id] = ("Este material tiene ingresos en almacén. "
+                                                   "Elimine primero los movimientos de entrada del almacén.")
+        return render_template("ordenes.html", p=p, lista=lista, total=total,
+                               mes=mes, anio=anio, MESES=MESES,
+                               clasificadores=clasificadores_oc(p),
+                               cls_nombres=cls_nombres,
+                               bloqueos_orden=bloqueos_orden,
+                               bloqueos_material=bloqueos_material,
+                               COMPONENTES=COMPONENTES)
+
+    @app.route("/ordenes/nuevo", methods=["POST"])
+    def orden_nuevo():
+        return orden_form(None)
+
+    @app.route("/ordenes/editar/<int:orden_id>", methods=["GET", "POST"])
+    def orden_editar(orden_id):
+        return orden_form(orden_id)
+
+    def orden_form(orden_id):
+        p = get_proyecto()
+        g = db.session.get(Gasto, orden_id) if orden_id else Gasto(
+            fecha=fecha_defecto(p),
+            mes=p.mes_actual, anio=p.anio, componente="Costo Directo",
+            clasificador=(p.clasificador_bienes or "2.6.2.3.99.4"))
+        if orden_id and g is None:
+            abort(404)
+        if g.id and _orden_bloqueada(g, p):
+            flash("Esta orden pertenece a un mes cerrado. No se pueden modificar sus datos.", "error")
+            return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+        if g.id and g.devengado and not es_super_actual():
+            flash("Esta orden ya está devengada. No se pueden modificar sus datos.", "error")
+            return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        error = None
+        if request.method == "POST":
+            g.fecha = parse_fecha(request.form.get("fecha")) or g.fecha
+            try:
+                g.siaf = int(request.form.get("siaf", 0) or 0)
+            except ValueError:
+                pass
+            g.tipo_doc = request.form.get("tipo_doc", "O/C").upper()
+            try:
+                g.num_doc = int(request.form.get("num_doc", 0) or 0)
+            except ValueError:
+                pass
+            g.proveedor = request.form.get("proveedor", "").upper()
+            g.clasificador = request.form.get("clasificador", g.clasificador)
+            g.componente = request.form.get("componente", "Costo Directo")
+            g.pecosa = request.form.get("pecosa", "").upper()
+            try:
+                if request.form.get("mes"):
+                    g.mes = int(request.form.get("mes"))
+                if request.form.get("anio"):
+                    g.anio = int(request.form.get("anio"))
+            except ValueError:
+                pass
+            if not orden_id and not es_super_actual() and (g.anio, g.mes) != (p.anio, p.mes_actual):
+                error = (f"No se puede registrar una orden en un mes cerrado. "
+                         f"El mes de trabajo actual es {MESES[p.mes_actual - 1]} {p.anio}.")
+            if not orden_id:
+                duplicada = (Gasto.query
+                             .filter(Gasto.tipo_doc == g.tipo_doc,
+                                     Gasto.num_doc == g.num_doc,
+                                     Gasto.siaf == g.siaf,
+                                     Gasto.anio == g.anio)
+                             .order_by(Gasto.id)
+                             .first())
+                if duplicada:
+                    error = (f"La orden ya existe: {g.tipo_doc} N° {g.num_doc} con "
+                             f"SIAF {g.siaf} ya está registrada para "
+                             f"{MESES[duplicada.mes - 1]} {duplicada.anio}. "
+                             f"Elimine o edite esa orden si desea modificarla; "
+                             f"no puede volver a registrarse en otro mes.")
+            if error is None:
+                db.session.add(g)
+                db.session.commit()
+                flash("Orden registrada correctamente.", "success")
+                return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+        tmpl = "_orden_form.html" if es_modal else "orden_form.html"
+        clf = clasificadores_oc(p)
+        if g.id and g.clasificador and g.clasificador not in [c for c, _ in clf]:
+            clf = [(g.clasificador, g.clasificador)] + clf
+        return render_template(tmpl, g=g, p=p, MESES=MESES, error=error,
+                               clasificadores=clf,
+                               COMPONENTES=COMPONENTES)
+
+    @app.route("/ordenes/devengar/<int:orden_id>", methods=["POST"])
+    def orden_devengar(orden_id):
+        g = db.session.get(Gasto, orden_id)
+        if g:
+            p = get_proyecto()
+            if es_super_actual() or (g.mes, g.anio) == (p.mes_actual, p.anio):
+                g.devengado = "devengado" in request.form
+                db.session.commit()
+            return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+        return redirect(url_for("ordenes"))
+
+    def _movs_ingreso_orden(g):
+        """Movimientos de entrada (E) en almacén vinculados a una orden por
+        N° de documento y descripción de sus materiales."""
+        if not g or g.num_doc is None:
+            return []
+        descs = [d.detalle.strip().upper() for d in g.detalles
+                 if (d.detalle or "").strip()]
+        if not descs:
+            return []
+        return (AlmacenMovimiento.query
+                .filter(AlmacenMovimiento.tipo == "E",
+                        AlmacenMovimiento.numero_doc == str(g.num_doc),
+                        AlmacenMovimiento.descripcion.in_(descs))
+                .all())
+
+    def _orden_bloqueada(g, p):
+        """True si la orden pertenece a un mes distinto al mes de trabajo actual
+        (mes pasado o posterior, es decir un mes cerrado). En ese estado no se
+        permite modificar la orden ni ingresar/editar/eliminar materiales.
+        El Super Usuario queda exento."""
+        if es_super_actual():
+            return False
+        return (g.anio, g.mes) != (p.anio, p.mes_actual)
+
+    @app.route("/ordenes/eliminar/<int:orden_id>", methods=["POST"])
+    def orden_eliminar(orden_id):
+        g = db.session.get(Gasto, orden_id)
+        if g:
+            p = get_proyecto()
+            if _orden_bloqueada(g, p):
+                flash("Esta orden pertenece a un mes cerrado (distinto al mes de trabajo del "
+                      "proyecto). No se puede eliminar.", "error")
+                return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+            if g.devengado and not es_super_actual():
+                flash("Esta orden ya está devengada. No se puede eliminar.", "error")
+                return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+            if _movs_ingreso_orden(g):
+                flash("La orden tiene materiales con ingresos en almacén. "
+                      "Elimine primero los movimientos de entrada del almacén.", "error")
+                return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+            mes, anio = g.mes, g.anio
+            db.session.delete(g)
+            db.session.commit()
+            flash("Orden eliminada.", "info")
+            return redirect(url_for("ordenes", mes=mes, anio=anio))
+        return redirect(url_for("ordenes"))
+
+    @app.route("/ordenes/<int:orden_id>/materiales/nuevo", methods=["GET", "POST"])
+    def orden_material_nuevo(orden_id):
+        return orden_material_form(orden_id, None)
+
+    @app.route("/ordenes/materiales/editar/<int:detalle_id>", methods=["GET", "POST"])
+    def orden_material_editar(detalle_id):
+        d = db.session.get(GastoDetalle, detalle_id)
+        if d is None:
+            return redirect(url_for("ordenes"))
+        return orden_material_form(d.gasto_id, detalle_id)
+
+    @app.route("/ordenes/materiales/eliminar/<int:detalle_id>", methods=["POST"])
+    def orden_material_eliminar(detalle_id):
+        d = db.session.get(GastoDetalle, detalle_id)
+        if d:
+            g = d.gasto
+            p = get_proyecto()
+            if _orden_bloqueada(g, p):
+                flash("No se puede eliminar: la orden pertenece a un mes cerrado (distinto al "
+                      "mes de trabajo del proyecto).", "error")
+                return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+            if g.devengado and not es_super_actual():
+                flash("La orden ya está devengada. No se puede eliminar el material.", "error")
+                return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+            movs = _movs_ingreso_orden(g)
+            if movs and (d.detalle or "").strip().upper() in {m.descripcion for m in movs}:
+                flash("Este material tiene ingresos en almacén. "
+                      "Elimine primero los movimientos de entrada del almacén.", "error")
+                return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+            db.session.delete(d)
+            db.session.commit()
+            flash("Material eliminado.", "info")
+            return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+        return redirect(url_for("ordenes"))
+
+    def orden_material_form(orden_id, detalle_id):
+        p = get_proyecto()
+        g = db.session.get(Gasto, orden_id)
+        if g is None:
+            return redirect(url_for("ordenes"))
+        if _orden_bloqueada(g, p):
+            flash("Esta orden pertenece a un mes cerrado. No se puede ingresar ni modificar materiales.", "error")
+            return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+        if g.devengado and not es_super_actual():
+            flash("Esta orden ya está devengada. No se puede ingresar ni modificar materiales.", "error")
+            return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+        d = (db.session.get(GastoDetalle, detalle_id) if detalle_id
+             else GastoDetalle(und="UND", cantidad=1))
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        if request.method == "POST":
+            d.gasto_id = g.id
+            d.detalle = request.form.get("detalle", "").upper()
+            d.und = request.form.get("und", "UND").upper()
+            try:
+                d.cantidad = float(request.form.get("cantidad", 1) or 1)
+                d.precio_unitario = float(request.form.get("precio_unitario", 0) or 0)
+            except ValueError:
+                pass
+            if not detalle_id:
+                d.orden = len(g.detalles) + 1
+                g.detalles.append(d)
+            db.session.commit()
+            flash("Material agregado correctamente.", "success")
+            return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
+        tmpl = "_orden_material_form.html" if es_modal else "orden_material_form.html"
+        return render_template(tmpl, g=g, d=d, p=p, MESES=MESES)
+
+    # ------------------------- ALMACEN --------------------------------
+    @app.route("/almacen")
+    def almacen():
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        movs = (AlmacenMovimiento.query
+                .filter(AlmacenMovimiento.mes == mes, AlmacenMovimiento.anio == anio)
+                .order_by(AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
+        diario = almacen_diario(mes, anio)
+        valorizado = almacen_valorizado(mes, anio)
+        valor_total = {
+            "cant_in": round(sum(x["cant_in"] for x in valorizado), 2),
+            "valor_in": round(sum(x["valor_in"] for x in valorizado), 2),
+            "cant_out": round(sum(x["cant_out"] for x in valorizado), 2),
+            "valor_out": round(sum(x["valor_out"] for x in valorizado), 2),
+            "saldo": round(sum(x["saldo"] for x in valorizado), 2),
+            "valor_saldo": round(sum(x["valor_saldo"] for x in valorizado), 2),
+        }
+        return render_template("almacen.html", p=p, movs=movs, mes=mes, anio=anio,
+                               MESES=MESES, almacen=almacen_items(mes, anio),
+                               diario=diario, valorizado=valorizado,
+                               valor_total=valor_total)
+
+    @app.route("/almacen/nuevo", methods=["GET", "POST"])
+    def almacen_nuevo():
+        return almacen_form(None)
+
+    @app.route("/almacen/editar/<int:mov_id>", methods=["GET", "POST"])
+    def almacen_editar(mov_id):
+        return almacen_form(mov_id)
+
+    @app.route("/almacen/eliminar/<int:mov_id>", methods=["POST"])
+    def almacen_eliminar(mov_id):
+        m = db.session.get(AlmacenMovimiento, mov_id)
+        if m:
+            mes, anio = m.mes, m.anio
+            db.session.delete(m)
+            db.session.commit()
+            flash("Movimiento eliminado.", "info")
+            return redirect(url_for("almacen", mes=mes, anio=anio))
+        return redirect(url_for("almacen"))
+
+    def almacen_form(mov_id):
+        p = get_proyecto()
+        m = db.session.get(AlmacenMovimiento, mov_id) if mov_id else AlmacenMovimiento(
+            fecha=fecha_defecto(p), tipo="E",
+            mes=p.mes_actual, anio=p.anio)
+        if mov_id and m is None:
+            abort(404)
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        if not mov_id and not request.method == "POST":
+            m.descripcion = request.args.get("descripcion", "").upper()
+            m.und = request.args.get("und", "").upper()
+            m.tipo = request.args.get("tipo", "E")
+            if m.tipo == "E":
+                m.responsable = p.responsable_almacen or ""
+            elif not request.args.get("responsable"):
+                m.responsable = ""
+            if request.args.get("mes"):
+                try:
+                    m.mes = int(request.args.get("mes"))
+                except ValueError:
+                    pass
+            if request.args.get("anio"):
+                try:
+                    m.anio = int(request.args.get("anio"))
+                except ValueError:
+                    pass
+        error = None
+        alerta = None
+        bloquear_descripcion = (bool(mov_id) or request.form.get("desc_bloqueada") == "1"
+                                or bool(request.args.get("descripcion")))
+        if request.method == "POST":
+            m.descripcion = request.form.get("descripcion", "").upper()
+            m.und = request.form.get("und", "UND").upper()
+            m.fecha = parse_fecha(request.form.get("fecha")) or m.fecha
+            m.tipo = request.form.get("tipo", "E")
+            try:
+                m.cantidad = float(request.form.get("cantidad", 1) or 1)
+                m.precio_unitario = float(request.form.get("precio_unitario", 0) or 0)
+            except ValueError:
+                pass
+            m.numero_doc = request.form.get("numero_doc", "").upper()
+            m.pecosa_guia = request.form.get("pecosa_guia", "").upper()
+            m.proveedor = request.form.get("proveedor", "").upper()
+            m.responsable = request.form.get("responsable", "").upper()
+            m.actividad = request.form.get("actividad", "").upper()
+            try:
+                m.mes = int(request.form.get("mes", p.mes_actual))
+                m.anio = int(request.form.get("anio", p.anio))
+            except ValueError:
+                pass
+            if m.tipo == "S":
+                try:
+                    cantidad_salida = float(request.form.get("cantidad", 1) or 1)
+                except ValueError:
+                    cantidad_salida = 1
+                stock = saldo_insumo(m.descripcion, excluir_id=m.id if mov_id else None)
+                if stock < 0:
+                    alerta = ("ALERTA: el material \"{}\" tiene saldo NEGATIVO "
+                              "({:,.2f} {}). No se puede registrar la salida. "
+                              "Revise los movimientos de entrada de este material.".format(
+                                  m.descripcion, stock, m.und or "UND"))
+                elif stock == 0:
+                    error = ("No cuenta con saldo en almacén para el material "
+                             "\"{}\". Saldo disponible: 0.00 {}.".format(
+                                 m.descripcion, m.und or "UND"))
+                elif stock < cantidad_salida:
+                    error = ("La cantidad de salida ({:,.2f} {}) supera el saldo "
+                             "disponible ({:,.2f} {}) del material \"{}\".".format(
+                                 cantidad_salida, m.und or "UND",
+                                 stock, m.und or "UND", m.descripcion))
+            if error is None and alerta is None:
+                if not mov_id:
+                    db.session.add(m)
+                db.session.commit()
+                flash("Movimiento de almacén guardado.", "success")
+                return redirect(url_for("almacen", mes=m.mes, anio=m.anio))
+        insumos = [(d, u) for d, u in
+                   db.session.query(AlmacenMovimiento.descripcion, AlmacenMovimiento.und)
+                   .distinct().order_by(AlmacenMovimiento.descripcion).all()]
+        det_mats = [(d, u) for d, u in
+                    db.session.query(GastoDetalle.detalle, GastoDetalle.und)
+                    .filter(GastoDetalle.detalle != None, GastoDetalle.detalle != "")
+                    .distinct().order_by(GastoDetalle.detalle).all()]
+        vistos = set()
+        insumos = [par for par in insumos + det_mats
+                   if not (par[0] or "") in vistos and not vistos.add(par[0] or "")]
+        precios = {}
+        for desc, pu in db.session.query(AlmacenMovimiento.descripcion,
+                                         AlmacenMovimiento.precio_unitario).distinct().all():
+            precios.setdefault((desc or "").upper(), set()).add(float(pu or 0))
+        for det, pu in db.session.query(GastoDetalle.detalle,
+                                        GastoDetalle.precio_unitario).all():
+            if det:
+                precios.setdefault(det.upper(), set()).add(float(pu or 0))
+        precios = {d: sorted(s) for d, s in precios.items()}
+        tipo_fijo = None if mov_id else (request.args.get("tipo") or "E")
+        tmpl = "_almacen_form.html" if es_modal else "almacen_form.html"
+        status = 400 if (es_modal and (error or alerta)) else 200
+        return render_template(tmpl, m=m, p=p, MESES=MESES,
+                               insumos=insumos, precios=precios, tipo_fijo=tipo_fijo,
+                               bloquear_descripcion=bloquear_descripcion,
+                               error=error, alerta=alerta), status
+
+    @app.route("/almacen/oc", methods=["GET"])
+    def almacen_oc():
+        p = get_proyecto()
+        num = request.args.get("num", "").strip()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        if not num:
+            return render_template("_almacen_oc.html", p=p, MESES=MESES,
+                                   mes=mes, anio=anio, oc_list=[], error=None)
+        try:
+            num_i = int(num)
+        except ValueError:
+            return render_template("_oc_resultados.html", p=p, mes=mes, anio=anio,
+                                   oc_list=[], error=f"N° de O/C inválido: {num}")
+        oc_list = (Gasto.query
+                   .filter(Gasto.tipo_doc == "O/C", Gasto.num_doc == num_i,
+                           Gasto.proveedor != None, Gasto.proveedor != "")
+                   .order_by(Gasto.fecha, Gasto.id).all())
+        error = None if oc_list else f"No se encontró ninguna O/C con N° {num}."
+        return render_template("_oc_resultados.html", p=p, mes=mes, anio=anio,
+                               oc_list=oc_list, error=error)
+
+    @app.route("/almacen/agregar_oc", methods=["POST"])
+    def almacen_agregar_oc():
+        p = get_proyecto()
+        oc_id = request.form.get("oc_id", type=int)
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        g = db.session.get(Gasto, oc_id) if oc_id else None
+        if g and g.detalles:
+            responsable = (p.responsable_almacen or "").upper()
+            creados = 0
+            for d in g.detalles:
+                if not (d.detalle or "").strip():
+                    continue
+                db.session.add(AlmacenMovimiento(
+                    descripcion=d.detalle.strip().upper(),
+                    und=(d.und or "UND").strip().upper(),
+                    fecha=g.fecha or datetime.today().date(),
+                    tipo="E",
+                    cantidad=d.cantidad or 0,
+                    precio_unitario=d.precio_unitario or 0,
+                    numero_doc=str(g.num_doc or "").upper(),
+                    proveedor=(g.proveedor or "").strip().upper(),
+                    responsable=responsable,
+                    actividad="",
+                    mes=mes, anio=anio))
+                creados += 1
+            db.session.commit()
+            flash(f"Se agregaron {creados} materiales de la O/C N° {g.num_doc} al almacén.", "success")
+        else:
+            flash("No se pudo agregar: O/C no encontrada o sin materiales.", "error")
+        return redirect(url_for("almacen", mes=mes, anio=anio))
+
+    # ------------------------- TAREO / PLANILLA ---------------------------
+    @app.route("/tareo")
+    def tareo():
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        calendario = calendario_mes(anio, mes)
+        mes_ant, anio_ant = (12, anio - 1) if mes == 1 else (mes - 1, anio)
+        obreros = (Trabajador.query
+                   .filter(Trabajador.tipo == "OBRERO",
+                           Trabajador.mes == mes, Trabajador.anio == anio)
+                   .order_by(Trabajador.nombre).all())
+        tecnicos = (Trabajador.query
+                    .filter(Trabajador.tipo == "TECNICO",
+                            Trabajador.mes == mes, Trabajador.anio == anio)
+                    .order_by(Trabajador.nombre).all())
+        resumen_obreros, total_dias_obreros = resumen_tareo(obreros, calendario)
+        resumen_tecnicos, total_dias_tecnicos = resumen_tareo(tecnicos, calendario)
+        puede_copiar = (not (obreros or tecnicos)
+                        and Trabajador.query
+                            .filter(Trabajador.mes == mes_ant,
+                                    Trabajador.anio == anio_ant).count() > 0)
+        return render_template("tareo.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, calendario=calendario,
+                               obreros=obreros, tecnicos=tecnicos,
+                               total_obreros=len(obreros),
+                               total_tecnicos=len(tecnicos),
+                               dev_obreros=(gasto_planilla("Costo Directo", mes, anio)
+                                            is not None),
+                               dev_tecnicos=(gasto_planilla("Gastos Generales", mes, anio)
+                                             is not None),
+                               resumen_obreros=resumen_obreros,
+                               resumen_tecnicos=resumen_tecnicos,
+                               total_dias_obreros=total_dias_obreros,
+                               total_dias_tecnicos=total_dias_tecnicos,
+                               puede_copiar=puede_copiar,
+                               mes_ant=mes_ant, anio_ant=anio_ant)
+
+    @app.route("/tareo/guardar", methods=["POST"])
+    def tareo_guardar():
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        # El formulario envia mes/anio en el cuerpo: se respeta lo que se guarda.
+        try:
+            fmes = int(request.form.get("mes", ""))
+            if 1 <= fmes <= 12:
+                mes = fmes
+        except (TypeError, ValueError):
+            pass
+        try:
+            fanio = int(request.form.get("anio", ""))
+            if 1990 <= fanio <= 2100:
+                anio = fanio
+        except (TypeError, ValueError):
+            pass
+        tipo = (request.form.get("tipo", "") or "").strip().upper()
+        if tipo not in ("OBRERO", "TECNICO"):
+            tipo = None
+        calendario = calendario_mes(anio, mes)
+        n_dias = len(calendario)
+        q = Trabajador.query.filter(Trabajador.mes == mes, Trabajador.anio == anio)
+        if tipo:
+            q = q.filter(Trabajador.tipo == tipo)
+        trabajadores = q.all()
+        guardados = 0
+        for t in trabajadores:
+            inicio_dia = 1
+            if (t.fecha_inicio and t.fecha_inicio.year == anio
+                    and t.fecha_inicio.month == mes):
+                inicio_dia = max(1, t.fecha_inicio.day)
+            valores = [int(x) for x in request.form.getlist(f"dias_{t.id}")
+                       if x.strip().isdigit()]
+            valores = {d for d in valores if inicio_dia <= d <= n_dias}
+            # Domingo: solo se cuenta si la semana (L-S) trabajada esta completa.
+            # La semana se evalua sobre todos los dias L-S del mes (aunque esten
+            # antes de la fecha de inicio): si el trabajador empezo a mitad de
+            # semana, el domingo de esa semana no se activa.
+            for d in calendario:
+                if not d["es_domingo"] or d["dia"] < inicio_dia:
+                    continue
+                lunes = max(1, d["dia"] - 6)
+                requeridos = list(range(lunes, d["dia"]))
+                completo = bool(requeridos) and all(x in valores for x in requeridos)
+                if completo:
+                    valores.add(d["dia"])
+                else:
+                    valores.discard(d["dia"])
+            valores = sorted(valores)
+            if valores != t.dias_lista:
+                t.dias_lista = valores
+                guardados += 1
+        db.session.commit()
+        flash(f"Tareo de {MESES[mes - 1]} {anio} guardado "
+              f"({guardados} registros actualizados).", "success")
+        return redirect(url_for("tareo", mes=mes, anio=anio))
+
+    @app.route("/tareo/copiar", methods=["POST"])
+    def tareo_copiar():
+        """Copia el personal (datos personales) del mes anterior al mes
+        seleccionado. Solo se copian los datos de personal: no dias trabajados,
+        ni cantidad de dias, ni cajas marcadas (checks)."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        # El formulario envia mes/anio en el cuerpo: se respeta lo que se copia.
+        try:
+            fmes = int(request.form.get("mes", ""))
+            if 1 <= fmes <= 12:
+                mes = fmes
+        except (TypeError, ValueError):
+            pass
+        try:
+            fanio = int(request.form.get("anio", ""))
+            if 1990 <= fanio <= 2100:
+                anio = fanio
+        except (TypeError, ValueError):
+            pass
+        mes_ant, anio_ant = (12, anio - 1) if mes == 1 else (mes - 1, anio)
+        if Trabajador.query.filter(Trabajador.mes == mes,
+                                   Trabajador.anio == anio).count() > 0:
+            flash(f"El mes de {MESES[mes - 1]} {anio} ya tiene personal "
+                  "registrado. No se copió.", "warning")
+            return redirect(url_for("tareo", mes=mes, anio=anio))
+        previos = (Trabajador.query
+                   .filter(Trabajador.mes == mes_ant, Trabajador.anio == anio_ant)
+                   .all())
+        copiados = 0
+        for t in previos:
+            db.session.add(Trabajador(
+                tipo=t.tipo, nombre=t.nombre, dni=t.dni,
+                fecha_nacimiento=t.fecha_nacimiento, cargo=t.cargo,
+                sexo=t.sexo, fecha_inicio=t.fecha_inicio, aporte=t.aporte,
+                sueldo_mensual=t.sueldo_mensual,
+                mes=mes, anio=anio))
+            copiados += 1
+        db.session.commit()
+        flash(f"Personal de {MESES[mes_ant - 1]} {anio_ant} copiado a "
+              f"{MESES[mes - 1]} {anio} ({copiados} registros). Solo datos "
+              "personales: los días trabajados se ingresan en el tareo.",
+              "success")
+        return redirect(url_for("tareo", mes=mes, anio=anio))
+
+    def gasto_planilla(comp, mes, anio):
+        """Gasto PLLA (planilla de pago del tareo) del panel indicado."""
+        return (Gasto.query
+                .filter(Gasto.tipo_doc == "PLLA", Gasto.componente == comp,
+                        Gasto.mes == mes, Gasto.anio == anio)
+                .first())
+
+    @app.route("/tareo/devengar", methods=["GET", "POST"])
+    def tareo_devengar():
+        """Popup de devengado de la planilla: crea/actualiza el gasto PLLA y
+        activa el flag devengado de los trabajadores del panel."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        tipo = ((request.args.get("tipo") or request.form.get("tipo", ""))
+                .strip().upper())
+        if tipo not in ("OBRERO", "TECNICO"):
+            tipo = "OBRERO"
+        comp = "Costo Directo" if tipo == "OBRERO" else "Gastos Generales"
+        clasif = p.clasificador_personal or "2.6.2.3.99.3"
+        trabajadores = (Trabajador.query
+                        .filter(Trabajador.tipo == tipo, Trabajador.mes == mes,
+                                Trabajador.anio == anio)
+                        .order_by(Trabajador.nombre).all())
+        g = gasto_planilla(comp, mes, anio)
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        error = None
+        if request.method == "POST":
+            fecha = parse_fecha(request.form.get("fecha"))
+            try:
+                siaf = int(request.form.get("siaf", 0) or 0)
+            except ValueError:
+                siaf = 0
+            try:
+                num_doc = int(request.form.get("num_doc", 0) or 0)
+            except ValueError:
+                num_doc = 0
+            try:
+                monto = round(float(request.form.get("monto", 0) or 0), 2)
+            except (TypeError, ValueError):
+                monto = 0
+            proveedor = (request.form.get("proveedor", "") or "").strip().upper()
+            if not fecha:
+                error = "Indique la fecha de devengado."
+            elif not proveedor:
+                error = "Indique el nombre / proveedor de la planilla."
+            elif monto <= 0:
+                error = "Indique el Monto de Planilla (mayor a S/ 0.00)."
+            if error is None:
+                if g is None:
+                    n_orden = (db.session.query(db.func.coalesce(
+                        db.func.max(Gasto.orden), 0)).scalar()) + 1
+                    g = Gasto(tipo_doc="PLLA", num_doc=num_doc, clasificador=clasif,
+                              componente=comp, mes=mes, anio=anio,
+                              devengado=True, orden=n_orden)
+                    db.session.add(g)
+                g.fecha = fecha
+                g.siaf = siaf
+                g.num_doc = num_doc
+                g.proveedor = proveedor
+                g.devengado = True
+                if not g.detalles:
+                    g.detalles.append(GastoDetalle(orden=1))
+                d = g.detalles[0]
+                d.detalle = (f"PLANILLA DE PAGO CORRESPONDIENTE AL MES DE "
+                             f"{MESES[mes - 1]} {anio}")
+                d.und = "PLLA"
+                d.cantidad = 1
+                d.precio_unitario = monto
+                for t in trabajadores:
+                    if not t.devengado:
+                        t.devengado = True
+                db.session.commit()
+                flash(f"Planilla de {tipo.capitalize()} devengada por "
+                      f"S/ {monto:,.2f}.", "success")
+                return redirect(url_for("tareo", mes=mes, anio=anio))
+        tmpl = "_tareo_devengar_form.html" if es_modal else "tareo_devengar.html"
+        if error:
+            return render_template(tmpl, p=p, mes=mes, anio=anio, tipo=tipo,
+                                   g=g, MESES=MESES, error=error), 400
+        return render_template(tmpl, p=p, mes=mes, anio=anio, tipo=tipo,
+                               g=g, MESES=MESES, error=error)
+
+    @app.route("/tareo/desdevengar", methods=["POST"])
+    def tareo_desdevengar():
+        """Retira el devengado de la planilla: elimina el gasto PLLA del panel."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        tipo = (request.form.get("tipo", "") or "").strip().upper()
+        if tipo not in ("OBRERO", "TECNICO"):
+            return redirect(url_for("tareo", mes=mes, anio=anio))
+        comp = "Costo Directo" if tipo == "OBRERO" else "Gastos Generales"
+        g = gasto_planilla(comp, mes, anio)
+        if g:
+            db.session.delete(g)
+        for t in (Trabajador.query
+                  .filter(Trabajador.tipo == tipo, Trabajador.mes == mes,
+                          Trabajador.anio == anio).all()):
+            if t.devengado:
+                t.devengado = False
+        db.session.commit()
+        flash(f"Devengado de la planilla {tipo.capitalize()} retirado.", "info")
+        return redirect(url_for("tareo", mes=mes, anio=anio))
+
+    @app.route("/tareo/imprimir")
+    def tareo_imprimir():
+        """Vista imprimible institucional del tareo/planilla mensual."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        tipo = request.args.get("tipo", "").strip().upper()
+        if tipo not in ("OBRERO", "TECNICO"):
+            tipo = ""
+        calendario = calendario_mes(anio, mes)
+        obreros = (Trabajador.query
+                   .filter(Trabajador.tipo == "OBRERO",
+                           Trabajador.mes == mes, Trabajador.anio == anio)
+                   .order_by(Trabajador.nombre).all())
+        tecnicos = (Trabajador.query
+                    .filter(Trabajador.tipo == "TECNICO",
+                            Trabajador.mes == mes, Trabajador.anio == anio)
+                    .order_by(Trabajador.nombre).all())
+        if tipo == "OBRERO":
+            tecnicos = []
+        elif tipo == "TECNICO":
+            obreros = []
+        resumen_obreros, total_dias_obreros = resumen_tareo(obreros, calendario)
+        resumen_tecnicos, total_dias_tecnicos = resumen_tareo(tecnicos, calendario)
+        return render_template("tareo_imprimir.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, calendario=calendario,
+                               obreros=obreros, tecnicos=tecnicos,
+                               resumen_obreros=resumen_obreros,
+                               resumen_tecnicos=resumen_tecnicos,
+                               total_dias_obreros=total_dias_obreros,
+                               total_dias_tecnicos=total_dias_tecnicos)
+
+    @app.route("/tareo/planilla/opciones")
+    def planilla_opciones():
+        """Popup con las dos modalidades de generacion de la planilla de pagos
+        para la seccion activa (obrero o tecnico)."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        seccion = request.args.get("seccion", "obrero").strip().lower()
+        if seccion not in ("obrero", "tecnico"):
+            seccion = "obrero"
+        return render_template("_planilla_opciones.html", p=p, mes=mes, anio=anio,
+                               seccion=seccion,
+                               MESES=MESES,
+                               TABLA_CIVIL_POR_ANIO=TABLA_CIVIL_POR_ANIO)
+
+    @app.route("/tareo/planilla/imprimir")
+    def planilla_imprimir():
+        """Planilla de pagos imprimible por seccion (obrero o tecnico),
+        con o sin beneficios/descuentos de ley."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        opcion = request.args.get("opcion", "sin").strip().lower()
+        if opcion not in ("sin", "con"):
+            opcion = "sin"
+        seccion = request.args.get("seccion", "obrero").strip().lower()
+        if seccion not in ("obrero", "tecnico"):
+            seccion = "obrero"
+        con_beneficios = opcion == "con"
+        calendario = calendario_mes(anio, mes)
+        filas_obreros, filas_tecnicos = [], []
+        tot_obreros = {"ingresos": 0, "descuentos": 0, "neto": 0}
+        tot_tecnicos = {"ingresos": 0, "descuentos": 0, "neto": 0}
+        if seccion == "obrero":
+            obreros = (Trabajador.query
+                       .filter(Trabajador.tipo == "OBRERO",
+                               Trabajador.mes == mes, Trabajador.anio == anio)
+                       .order_by(Trabajador.nombre).all())
+            filas_obreros = [calcular_obrero(t, calendario, anio, mes, con_beneficios)
+                             for t in obreros]
+            tot_obreros = {
+                "ingresos": round(sum(f["ingresos"] for f in filas_obreros), 2),
+                "descuentos": round(sum(f["descuentos"] for f in filas_obreros), 2),
+                "neto": round(sum(f["neto"] for f in filas_obreros), 2),
+            }
+        else:
+            tecnicos = (Trabajador.query
+                        .filter(Trabajador.tipo == "TECNICO",
+                                Trabajador.mes == mes, Trabajador.anio == anio)
+                        .order_by(Trabajador.nombre).all())
+            filas_tecnicos = [calcular_tecnico(t, calendario, anio, con_beneficios)
+                              for t in tecnicos]
+            tot_tecnicos = {
+                "ingresos": round(sum(f["ingresos"] for f in filas_tecnicos), 2),
+                "descuentos": round(sum(f["descuentos"] for f in filas_tecnicos), 2),
+                "neto": round(sum(f["neto"] for f in filas_tecnicos), 2),
+            }
+        return render_template("planilla_imprimir.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, calendario=calendario,
+                               seccion=seccion, con_beneficios=con_beneficios,
+                               filas_obreros=filas_obreros,
+                               filas_tecnicos=filas_tecnicos,
+                               tot_obreros=tot_obreros, tot_tecnicos=tot_tecnicos,
+                               tabla=tabla_civil(anio),
+                               TABLA_CIVIL_POR_ANIO=TABLA_CIVIL_POR_ANIO)
+
+    @app.route("/tareo/nuevo", methods=["GET", "POST"])
+    def trabajador_nuevo():
+        return trabajador_form(None)
+
+    @app.route("/tareo/editar/<int:tid>", methods=["GET", "POST"])
+    def trabajador_editar(tid):
+        return trabajador_form(tid)
+
+    @app.route("/tareo/eliminar/<int:tid>", methods=["POST"])
+    def trabajador_eliminar(tid):
+        t = db.session.get(Trabajador, tid)
+        if t:
+            mes, anio, tipo = t.mes, t.anio, t.tipo
+            db.session.delete(t)
+            db.session.commit()
+            flash(f"Registro de {t.nombre} eliminado del tareo.", "info")
+            return redirect(url_for("tareo", mes=mes, anio=anio))
+        return redirect(url_for("tareo"))
+
+    def trabajador_form(tid):
+        p = get_proyecto()
+        t = (db.session.get(Trabajador, tid) if tid
+             else Trabajador(tipo=(request.args.get("tipo") or "OBRERO"),
+                             fecha_nacimiento=None, fecha_inicio=None,
+                             mes=p.mes_actual, anio=p.anio))
+        if tid and t is None:
+            abort(404)
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        error = None
+        if request.method == "POST":
+            mes_previo, anio_previo = (t.mes, t.anio) if tid else (None, None)
+            t.tipo = (request.form.get("tipo", "OBRERO") or "OBRERO").upper()
+            cargo_previo = t.cargo if tid else None
+            t.nombre = request.form.get("nombre", "").strip().upper()
+            t.dni = request.form.get("dni", "").strip()
+            t.cargo = request.form.get("cargo", "").strip().upper()
+            t.sexo = (request.form.get("sexo", "M") or "M").upper()
+            t.fecha_nacimiento = parse_fecha(request.form.get("fecha_nacimiento"))
+            t.fecha_inicio = parse_fecha(request.form.get("fecha_inicio"))
+            try:
+                t.mes = int(request.form.get("mes", p.mes_actual))
+                t.anio = int(request.form.get("anio", p.anio))
+            except ValueError:
+                pass
+            t.aporte = (request.form.get("aporte", "AFP") or "AFP").strip().upper()
+            if t.aporte not in ("AFP", "ONP"):
+                t.aporte = "AFP"
+            try:
+                t.sueldo_mensual = round(float(request.form.get("sueldo_mensual", 0) or 0), 2)
+            except (TypeError, ValueError):
+                t.sueldo_mensual = 0.0
+            cargos_validos = CARGOS_OBRERO if t.tipo == "OBRERO" else CARGOS_TECNICO
+            if not t.nombre:
+                error = "Debe indicar el nombre completo del trabajador."
+            elif not t.dni or not t.dni.isdigit() or len(t.dni) != 8:
+                error = "El DNI debe tener 8 dígitos numéricos."
+            elif t.tipo not in ("OBRERO", "TECNICO"):
+                error = "Tipo de personal no válido."
+            elif t.cargo not in cargos_validos and (not tid or t.cargo != cargo_previo):
+                error = (f"El cargo debe ser uno de: {', '.join(cargos_validos)}.")
+            elif (t.fecha_inicio and t.anio and t.mes
+                    and (t.fecha_inicio.year > t.anio
+                         or (t.fecha_inicio.year == t.anio
+                             and t.fecha_inicio.month > t.mes))):
+                error = "La fecha de inicio no puede ser posterior al mes tareado."
+            else:
+                if tid and (mes_previo, anio_previo) != (t.mes, t.anio):
+                    t.dias_lista = []
+                if t.fecha_inicio and t.fecha_inicio.year == t.anio and t.fecha_inicio.month == t.mes:
+                    n_dias = len(calendario_mes(t.anio, t.mes))
+                    t.dias_lista = [d for d in t.dias_lista if d >= t.fecha_inicio.day and d <= n_dias]
+                duplicado = (Trabajador.query
+                             .filter(Trabajador.dni == t.dni,
+                                     Trabajador.mes == t.mes,
+                                     Trabajador.anio == t.anio,
+                                     Trabajador.id != t.id)
+                             .first())
+                if duplicado:
+                    error = (f"El DNI {t.dni} ({duplicado.nombre}) ya está "
+                             f"registrado en {MESES[t.mes - 1]} {t.anio}.")
+            if error is None:
+                if not tid:
+                    db.session.add(t)
+                db.session.commit()
+                flash(f"Registro de {t.nombre} guardado en el tareo.", "success")
+                return redirect(url_for("tareo", mes=t.mes, anio=t.anio))
+        status = 400 if (es_modal and error) else 200
+        return render_template("_trabajador_form.html", t=t, p=p, MESES=MESES,
+                               CARGOS_OBRERO=CARGOS_OBRERO,
+                               CARGOS_TECNICO=CARGOS_TECNICO,
+                               error=error), status
+
+    # ------------------------- FORMATOS -------------------------------
+    @app.route("/formatos")
+    def formatos():
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        secciones, total, clasif_cols = f05_datos(mes, anio)
+        rows = fe06_rows()
+        resumen = fe06_resumen(rows)
+        fe06_totales_mensual = [round(sum(r["mensual"][i] for r in resumen.values()), 2)
+                                for i in range(12)]
+        sintesis = {
+            "et": round(sum(r["et"] for r in resumen.values()), 2),
+            "e2023": round(sum(r["e2023"] for r in resumen.values()), 2),
+            "e2024": round(sum(r["e2024"] for r in resumen.values()), 2),
+            "e2025": round(sum(r["e2025"] for r in resumen.values()), 2),
+            "pim": round(sum(r["pim"] for r in resumen.values()) +
+                        ampliacion_presupuestal(), 2),
+            "ejec_anio": round(sum(r["total_anio"] for r in resumen.values()), 2),
+            "acum_total": round(sum(r["acum_total"] for r in resumen.values()), 2),
+            "mes_actual": fe06_totales_mensual[mes - 1],
+            "ampliacion": ampliacion_presupuestal(),
+        }
+        sintesis["saldo_pim"] = round(sintesis["pim"] - sintesis["ejec_anio"], 2)
+        sintesis["saldo_proyecto"] = round(sintesis["et"] - sintesis["acum_total"], 2)
+        return render_template("formatos.html", p=p, mes=mes, anio=anio, MESES=MESES,
+                               secciones=secciones, f05_total=total,
+                               clasif_cols=clasif_cols,
+                               fe06_rows=rows, fe06_resumen=resumen,
+                               fe06_totales_mensual=fe06_totales_mensual,
+                               fe06_sintesis=sintesis,
+                               meses_activos=meses_con_ejecucion(anio),
+                               meses_vis=meses_visibles(anio, mes))
+
+    @app.route("/formatos/actividades", methods=["GET", "POST"])
+    def formatos_actividades():
+        """Gestiona la seccion II (Actividades Ejecutadas) del Resumen Financiero.
+
+        GET (modal) lista las actividades del mes/anio; POST reemplaza la lista
+        completa: se conservan los ids existentes, se actualizan las
+        descripciones editadas y se eliminan las marcadas para quitar.
+        """
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        if request.method == "POST":
+            ids = request.form.getlist("actividad_id")
+            descs = request.form.getlist("actividad_desc")
+            ActividadEjecutada.query.filter_by(mes=mes, anio=anio).delete()
+            orden = 0
+            for i, desc in enumerate(descs):
+                desc = (desc or "").strip()
+                if not desc:
+                    continue
+                orden += 1
+                aid = ids[i] if i < len(ids) else ""
+                a = (db.session.get(ActividadEjecutada, int(aid))
+                     if aid.isdigit() else None)
+                if a is None:
+                    a = ActividadEjecutada(mes=mes, anio=anio)
+                a.descripcion = desc
+                a.orden = orden
+                db.session.add(a)
+            db.session.commit()
+            flash("Actividades ejecutadas guardadas correctamente.", "success")
+            return redirect(url_for("formatos", mes=mes, anio=anio))
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        if not es_modal:
+            return redirect(url_for("formatos", mes=mes, anio=anio))
+        return render_template("_actividades_form.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, actividades=actividades_mes(mes, anio))
+
+    @app.route("/formatos/manifiesto/imprimir", methods=["GET"])
+    def imprimir_manifiesto():
+        """Plantilla imprimible institucional del Manifiesto de Gasto con datos reales."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+
+        # Cabecera institucional y datos generales
+        ubicacion = " - ".join(x for x in [p.distrito, p.provincia, p.departamento] if x)
+        # Correlativo del manifiesto: inicia en el mes en que se inicio el ingreso
+        # de datos (primer mes con gastos devengados del anio) y aumenta cada mes
+        # (Marzo N° 001, Abril N° 002, Mayo N° 003, Junio N° 004, ...).
+        n_manifiesto = max(1, mes - mes_inicio_manifiesto(anio) + 1)
+        hdr = {
+            "entidad": p.entidad,
+            "unidad": p.unidad_ejecutora,
+            "proyecto": p.nombre,
+            "cui": p.cui,
+            "meta": p.meta,
+            "fuente": p.fuente,
+            "ubicacion": ubicacion,
+            "modalidad": "ADMINISTRACION DIRECTA",
+            "residente": p.residente,
+            "supervisor": p.supervisor,
+            "asistente": p.asistente,
+            "periodo": f"{MESES[mes-1]} - {anio}",
+            "n_manifiesto": f"{n_manifiesto:03d}",
+            "logo_path": p.logo_path or "",
+            "cip_supervisor": p.cip_supervisor or "",
+            "cip_residente": p.cip_residente or "",
+        }
+
+        # Filas financieras agrupadas por rubro (componente) y clasificador
+        orden_comp = ["Costo Directo", "Gastos Generales", "Gestion de Supervisión",
+                      "Elaboración de Expediente Técnico", "Liquidación de Obra"]
+        grupos = {}
+        for g in gastos_mes(mes, anio, devengado=True):
+            key = (g.componente or "", g.clasificador or "")
+            gr = grupos.setdefault(key, {"componente": g.componente or "",
+                                         "clasificador": g.clasificador or "",
+                                         "filas": [], "subtotal": 0.0})
+            # Misma orden (SIAF + tipo + numero + proveedor) = una sola linea de proveedor.
+            clave_orden = (g.siaf or "", g.tipo_doc or "", g.num_doc or "",
+                           g.proveedor or "")
+            first = gr.get("_ultima_orden") != clave_orden
+            gr["_ultima_orden"] = clave_orden
+            for idx_d, d in enumerate(g.detalles):
+                gr["filas"].append({
+                    "fecha": g.fecha.strftime("%d/%m/%Y") if g.fecha else "",
+                    "siaf": g.siaf or "", "tipo_doc": g.tipo_doc or "",
+                    "num_doc": g.num_doc or "", "proveedor": g.proveedor or "",
+                    "detalle": d.detalle, "und": d.und or "",
+                    "cantidad": d.cantidad, "pu": d.precio_unitario,
+                    "importe": d.importe, "prov_first": first and idx_d == 0,
+                })
+                gr["subtotal"] += d.importe
+
+        def orden_seccion(item):
+            comp, clas = item
+            ci = orden_comp.index(comp) if comp in orden_comp else len(orden_comp)
+            return (ci, clas)
+
+        secciones = []
+        for key in sorted(grupos, key=orden_seccion):
+            gr = grupos[key]
+            gr.pop("_ultima_orden", None)
+            gr["subtotal"] = round(gr["subtotal"], 2)
+            gr["label"] = (f"{gr['componente'].upper()} - "
+                           f"{cls_nombre(p, gr['clasificador'])}")
+            prov_cont = 0
+            for fila in gr["filas"]:
+                if fila["prov_first"]:
+                    prov_cont += 1
+                fila["prov_num"] = prov_cont
+            secciones.append(gr)
+
+        total_gral = round(total_gastos_mes(mes, anio, devengado=True), 2)
+        return render_template("manifiesto_imprimir.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, hdr=hdr, secciones=secciones,
+                               total_gral=total_gral)
+
+    # ------------------------- CONFIGURACION --------------------------
+    @app.route("/configuracion", methods=["GET", "POST"])
+    def configuracion():
+        p = get_proyecto()
+        if request.method == "POST":
+            p.incluir_anios_anteriores = "incluir_anios_anteriores" in request.form
+            db.session.commit()
+            incluir = p.incluir_anios_anteriores
+            for key, value in request.form.items():
+                if key.startswith("pim_") or key.startswith("et_") or \
+                   (incluir and (key.startswith("ejec2023_") or key.startswith("ejec2024_") or
+                                 key.startswith("ejec2025_"))):
+                    try:
+                        pref, cid = key.split("_", 1)
+                        cfg = db.session.get(Presupuesto, int(cid))
+                        if cfg:
+                            setattr(cfg, "pim2026" if pref == "pim" else pref,
+                                    float(value or 0))
+                    except (ValueError, TypeError):
+                        pass
+            db.session.commit()
+            flash("Configuración presupuestal guardada.", "success")
+            return redirect(url_for("configuracion"))
+        orden_detalle = {"PERSONAL": 0, "BIENES": 1, "SERVICIOS": 2,
+                         "ELABORACION DE EXPEDIENTE TECNICO": 3,
+                         "COSTO DE LIQUIDACION": 4}
+        comp_orden = {c: i for i, c in enumerate(COMPONENTES_FE06)}
+        configs = sorted(Presupuesto.query.all(),
+                         key=lambda c: (comp_orden.get(c.componente, 99),
+                                        orden_detalle.get(c.detalle, 99)))
+        return render_template("configuracion.html", p=p, configs=configs)
+
+    # ------------------------- RESPALDO DE DATOS -----------------------
+    @app.route("/respaldo", methods=["GET", "POST"])
+    def respaldo():
+        actor = usuario_actual()
+        es_super = bool(actor and actor.rol == ROL_SUPER)
+        p = None if es_super else get_proyecto()
+        if request.method == "POST":
+            accion = request.form.get("accion")
+            if accion == "crear":
+                try:
+                    dest = crear_respaldo()
+                    flash(f"Respaldo creado correctamente: {os.path.basename(dest)}",
+                          "success")
+                except Exception as e:
+                    flash(f"No se pudo crear el respaldo: {e}", "danger")
+                return redirect(url_for("respaldo"))
+            if accion == "restaurar":
+                nombre = request.form.get("archivo", "")
+                if nombre not in [r["nombre"] for r in listar_respaldos()]:
+                    flash("Archivo de respaldo no válido.", "danger")
+                    return redirect(url_for("respaldo"))
+                try:
+                    pre = restaurar_respaldo(nombre)
+                    flash(f"Base de datos restaurada desde {nombre}. Se guardó una copia "
+                          f"del estado anterior: {os.path.basename(pre)}", "success")
+                except Exception as e:
+                    flash(f"No se pudo restaurar el respaldo: {e}", "danger")
+                return redirect(url_for("respaldo"))
+        db_path = ruta_db()
+        stats = None
+        if os.path.exists(db_path) and not es_super:
+            stats = {"ruta": db_path, "tamano": os.path.getsize(db_path),
+                     "mod": datetime.fromtimestamp(os.path.getmtime(db_path)),
+                     "integridad": verificar_integridad(db_path),
+                     "proyecto": Proyecto.query.count(),
+                     "presupuesto": Presupuesto.query.count(),
+                     "gastos": Gasto.query.count(),
+                     "detalles": GastoDetalle.query.count(),
+                     "almacen": AlmacenMovimiento.query.count()}
+        return render_template("respaldo.html", p=p, stats=stats,
+                               respaldos=listar_respaldos(),
+                               es_super=es_super,
+                               carpeta=RESPALDO_DIR)
+
+    # ------------------------- FORMATOS: IMPRESION --------------------------
+    @app.route("/formatos/fe05/imprimir")
+    def imprimir_fe05():
+        """Vista imprimible del FE-05 Ejecución Presupuestal Mensual."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        secciones, total, clasif_cols = f05_datos(mes, anio)
+        return render_template("fe05_imprimir.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, secciones=secciones, total=total,
+                               clasif_cols=clasif_cols)
+
+    @app.route("/formatos/fe06/imprimir")
+    def imprimir_fe06():
+        """Vista imprimible del FE-06 Presupuesto vs Ejecutado."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        rows = fe06_rows()
+        resumen = fe06_resumen(rows)
+        fe06_totales_mensual = [round(sum(r["mensual"][i] for r in resumen.values()), 2)
+                                for i in range(12)]
+        sintesis = {
+            "et": round(sum(r["et"] for r in resumen.values()), 2),
+            "e2023": round(sum(r["e2023"] for r in resumen.values()), 2),
+            "e2024": round(sum(r["e2024"] for r in resumen.values()), 2),
+            "e2025": round(sum(r["e2025"] for r in resumen.values()), 2),
+            "pim": round(sum(r["pim"] for r in resumen.values()) +
+                         ampliacion_presupuestal(), 2),
+            "ejec_anio": round(sum(r["total_anio"] for r in resumen.values()), 2),
+            "acum_total": round(sum(r["acum_total"] for r in resumen.values()), 2),
+            "mes_actual": fe06_totales_mensual[mes - 1],
+            "ampliacion": ampliacion_presupuestal(),
+        }
+        sintesis["saldo_pim"] = round(sintesis["pim"] - sintesis["ejec_anio"], 2)
+        sintesis["saldo_proyecto"] = round(sintesis["et"] - sintesis["acum_total"], 2)
+        return render_template("fe06_imprimir.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, fe06_rows=rows, fe06_resumen=resumen,
+                               fe06_totales_mensual=fe06_totales_mensual,
+                                fe06_sintesis=sintesis,
+                                meses_activos=meses_con_ejecucion(anio),
+                                meses_vis=meses_visibles(anio, mes))
+
+    @app.route("/formatos/panel/imprimir")
+    def imprimir_panel():
+        """Vista imprimible del Resumen Financiero: replica de la hoja PANEL
+        del informe financiero con todos los cuadros y calculos del aplicativo."""
+        p = get_proyecto()
+        if Presupuesto.query.count() == 0 and Gasto.query.count() == 0:
+            flash("Aún no hay datos registrados para generar el Resumen "
+                  "Financiero. Ingrese la configuración presupuestal y los "
+                  "gastos del proyecto.", "warning")
+            return redirect(url_for("formatos"))
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        datos = panel_datos(mes, anio)
+        return render_template("panel_imprimir.html", p=p, MESES=MESES, d=datos)
+
+    @app.route("/almacen/fe07/imprimir")
+    def imprimir_fe07():
+        """Vista imprimible del FE-07 Movimiento Diario de Almacén."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        diario = almacen_diario(mes, anio)
+        material = request.args.get("material", "").strip()
+        if material:
+            diario = dict(diario)
+            diario["items"] = [i for i in diario["items"] if i["descripcion"] == material]
+        return render_template("fe07_imprimir.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, diario=diario)
+
+    @app.route("/almacen/fe08/imprimir")
+    def imprimir_fe08():
+        """Vista imprimible del FE-08 Almacén Valorizado."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        valorizado = almacen_valorizado(mes, anio)
+        valor_total = {
+            "cant_in": round(sum(x["cant_in"] for x in valorizado), 2),
+            "valor_in": round(sum(x["valor_in"] for x in valorizado), 2),
+            "cant_out": round(sum(x["cant_out"] for x in valorizado), 2),
+            "valor_out": round(sum(x["valor_out"] for x in valorizado), 2),
+            "saldo": round(sum(x["saldo"] for x in valorizado), 2),
+            "valor_saldo": round(sum(x["valor_saldo"] for x in valorizado), 2),
+        }
+        return render_template("fe08_imprimir.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, valorizado=valorizado,
+                               valor_total=valor_total)
+
+    @app.route("/api/resumen")
+    def api_resumen():
+        p = get_proyecto()
+        return jsonify({
+            "por_mes": ejecucion_por_mes(p.anio),
+            "por_componente": ejecucion_por_componente(p.anio),
+            "meses": MESES,
+            "kpis": kpis(),
+        })
+
+
+app = create_app()
+
+
+if __name__ == "__main__":
+    # Por defecto escucha en la red local (0.0.0.0). Para modo solo-local:
+    #   set HOST=127.0.0.1  (o inicie con iniciar_local.bat)
+    host = os.environ.get("HOST", "0.0.0.0")
+    try:
+        port = int(os.environ.get("PORT", "5000"))
+    except ValueError:
+        port = 5000
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(debug=debug, host=host, port=port)
+

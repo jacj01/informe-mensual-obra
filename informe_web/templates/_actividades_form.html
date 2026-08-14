@@ -1,0 +1,76 @@
+<form method="post" class="form-panel" action="{{ url_for('formatos_actividades', mes=mes, anio=anio) }}">
+  <input type="hidden" name="modal" value="1">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <div class="card">
+    <div class="card-head between">
+      <h3><i class="bi bi-list-check"></i> Actividades Ejecutadas - {{ MESES[mes-1] }} {{ anio }}</h3>
+      <span class="badge badge-blue" id="cont-actividades">{{ actividades|length }}</span>
+    </div>
+
+    <div class="note">
+      <i class="bi bi-info-circle"></i>
+      <div>
+        Estas actividades se muestran en la secci&oacute;n II del Resumen Financiero.
+        Escriba cada actividad en su propia l&iacute;nea; use "Agregar actividad"
+        para a&ntilde;adir una nueva al final de la lista.
+      </div>
+    </div>
+
+    <div class="actividades-lista" id="lista-actividades">
+      {% for a in actividades %}
+      <div class="actividad-item">
+        <div class="actividad-num">{{ loop.index }}</div>
+        <div class="field actividad-campo">
+          <textarea name="actividad_desc" rows="2" data-no-validar placeholder="Describa la actividad ejecutada...">{{ a.descripcion }}</textarea>
+        </div>
+        <input type="hidden" name="actividad_id" value="{{ a.id or '' }}">
+        <button type="button" class="icon-btn danger" onclick="quitarActividad(this)" title="Quitar actividad" aria-label="Quitar actividad"><i class="bi bi-trash"></i></button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="form-actions between">
+    <button type="button" class="btn btn-outline" onclick="agregarActividad()"><i class="bi bi-plus-lg"></i> Agregar actividad</button>
+    <div style="display:flex;gap:12px">
+      <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar</button>
+      <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+    </div>
+  </div>
+</form>
+
+<script>
+  function renumerarActividades() {
+    var items = document.querySelectorAll('#lista-actividades .actividad-item');
+    var cont = document.getElementById('cont-actividades');
+    items.forEach(function (item, i) {
+      var num = item.querySelector('.actividad-num');
+      if (num) num.textContent = String(i + 1);
+    });
+    if (cont) cont.textContent = String(items.length);
+  }
+
+  function quitarActividad(btn) {
+    var item = btn.closest('.actividad-item');
+    if (item) item.remove();
+    renumerarActividades();
+  }
+
+  function agregarActividad() {
+    var lista = document.getElementById('lista-actividades');
+    var item = document.createElement('div');
+    item.className = 'actividad-item';
+    item.innerHTML =
+      '<div class="actividad-num"></div>' +
+      '<div class="field actividad-campo">' +
+      '<textarea name="actividad_desc" rows="2" data-no-validar placeholder="Describa la actividad ejecutada..."></textarea>' +
+      '</div>' +
+      '<input type="hidden" name="actividad_id" value="">' +
+      '<button type="button" class="icon-btn danger" onclick="quitarActividad(this)" ' +
+      'title="Quitar actividad" aria-label="Quitar actividad"><i class="bi bi-trash"></i></button>';
+    lista.appendChild(item);
+    renumerarActividades();
+    var ta = item.querySelector('textarea');
+    if (ta) ta.focus();
+  }
+</script>

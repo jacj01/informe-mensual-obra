@@ -1,0 +1,150 @@
+<form method="post" class="form-panel"
+      action="{{ url_for('usuario_editar', uid=u.id) if es_edicion else url_for('usuario_nuevo') }}">
+  <input type="hidden" name="modal" value="1">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-person-gear"></i> {{ 'Editar usuario' if es_edicion else 'Nuevo usuario' }}</h3>
+    </div>
+    {% if error %}
+      <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    <div class="form-grid">
+      <div class="field">
+        <label>Usuario (para ingresar)</label>
+        <input type="text" name="usuario" value="{{ u.usuario }}" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Nombres completos</label>
+        <input type="text" name="nombres" value="{{ u.nombres }}">
+      </div>
+      <div class="field">
+        <label>Rol</label>
+        <select name="rol" id="rol">
+          <option value="Usuario" {{ 'selected' if u.rol == 'Usuario' }}>Usuario</option>
+          <option value="Administrador" {{ 'selected' if u.rol in ('Administrador', 'Super Usuario') }}>Administrador</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Contraseña {{ '(opcional)' if es_edicion }}</label>
+        <input type="password" name="clave" {{ 'data-no-validar' if es_edicion else 'required' }} minlength="6" autocomplete="new-password">
+        {% if es_edicion %}
+        <div class="field-hint">Dejar en blanco para mantener la contraseña actual.</div>
+        {% endif %}
+      </div>
+      <div class="field full">
+        <label class="check-line">
+          <input type="checkbox" name="activo" {{ 'checked' if u.activo }}>
+          Activo (puede ingresar al aplicativo)
+        </label>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-key"></i> Accesos autorizados</h3>
+    </div>
+    <p class="field-hint" id="perm-hint">
+      Marque las opciones a las que este usuario podrá ingresar o modificar.
+      El rol <b>Administrador</b> siempre accede a todo sin restricciones.
+    </p>
+    <div class="perm-grid">
+      {% for clave, etiqueta in permisos_opciones %}
+      <label class="perm-item">
+        <input type="checkbox" name="permisos" value="{{ clave }}" class="perm-check"
+               {{ 'checked' if (clave in u.permiso_lista or u.rol in ['Administrador', 'Super Usuario']) }}
+               {{ 'disabled' if u.rol in ['Administrador', 'Super Usuario'] }}>
+        <span>{{ etiqueta }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  {% if es_super and not es_edicion %}
+  <div class="card" id="licenciaOpciones" style="display:none">
+    <div class="card-head">
+      <h3><i class="bi bi-shield-check"></i> Licencia del Administrador</h3>
+    </div>
+    <p class="field-hint">Elija cómo inicia la licencia del nuevo Administrador.</p>
+    <label class="check-line">
+      <input type="radio" name="licencia" value="nueva" checked>
+      <span><b>Licencia nueva</b> — inicia sin licencia: se le pedirá comprar una
+      licencia para poder ingresar al aplicativo.</span>
+    </label>
+    <label class="check-line">
+      <input type="radio" name="licencia" value="mantener">
+      <span><b>Mantener la licencia actual</b> — continúa con la fecha de vigencia
+      de la licencia ya ingresada.</span>
+    </label>
+  </div>
+  {% endif %}
+  {% if es_super and hay_datos %}
+  <div class="card" id="nuevoProyecto" style="display:none">
+    <div class="card-head">
+      <h3><i class="bi bi-file-earmark-plus"></i> Reiniciar el proyecto del Administrador</h3>
+    </div>
+    <div class="alert alert-error">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      Al guardar puede iniciar el proyecto de este <b>Administrador</b> desde cero:
+      se borrarán los datos de su proyecto (cabecera, presupuesto, gastos,
+      almacén y trabajadores) para empezar un proyecto nuevo sin datos. No afecta
+      a los proyectos de los demás administradores.
+    </div>
+    <label class="check-line">
+      <input type="checkbox" name="limpiar_datos" id="limpiarDatos" value="1">
+      Sí, quiero limpiar todos los datos de este proyecto. Antes se guardará un respaldo
+      automático en <b>Respaldo BD</b>.
+    </label>
+  </div>
+  {% endif %}
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar</button>
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</form>
+
+<script>
+  (function () {
+    var rol = document.getElementById('rol');
+    var checks = document.querySelectorAll('.perm-check');
+    var hint = document.getElementById('perm-hint');
+    var lic = document.getElementById('licenciaOpciones');
+    function sync() {
+      var admin = rol.value === 'Administrador';
+      checks.forEach(function (chk) {
+        chk.disabled = admin;
+        if (admin) chk.checked = true;
+      });
+      if (hint) hint.style.display = admin ? 'none' : '';
+      if (lic) lic.style.display = admin ? '' : 'none';
+    }
+    if (rol) {
+      rol.addEventListener('change', sync);
+      sync();
+    }
+
+    var bloque = document.getElementById('nuevoProyecto');
+    var chkLimpieza = document.getElementById('limpiarDatos');
+    var form = document.querySelector('.form-panel');
+    if (bloque && chkLimpieza && form) {
+      function actualizarNuevoProyecto() {
+        var esAdmin = rol && rol.value === 'Administrador';
+        bloque.style.display = esAdmin ? '' : 'none';
+        if (!esAdmin) chkLimpieza.checked = false;
+        if (chkLimpieza.checked) {
+          form.dataset.confirm = 'Se borrarán TODOS los datos del proyecto actual ' +
+            '(cabecera, presupuesto, gastos, almacén y trabajadores) para iniciar un ' +
+            'nuevo proyecto en cero. Antes se guardará un respaldo automático en ' +
+            'Respaldo BD, desde donde podrá recuperar los datos si los necesita.';
+          form.dataset.confirmTitle = 'Iniciar nuevo proyecto';
+          form.dataset.confirmBtn = 'Sí, limpiar e iniciar';
+          form.dataset.confirmColor = 'btn-red';
+        } else {
+          delete form.dataset.confirm;
+        }
+      }
+      chkLimpieza.addEventListener('change', actualizarNuevoProyecto);
+      if (rol) rol.addEventListener('change', actualizarNuevoProyecto);
+      actualizarNuevoProyecto();
+    }
+  })();
+</script>

@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Base de datos y respaldos (contienen datos reales de la obra)
+informe_web/instance/
+informe_web/Respaldo BD/
+
+# Logs, PID y temporales
+informe_web/servidor.log
+informe_web/servidor.pid
+informe_web/_render.html
+
+# Archivos subidos por el usuario
+informe_web/static/uploads/
+
+# Copias de seguridad de código
+informe_web/*.bak_*
+
+# Documentos con datos del proyecto (raíz)
+/*.xlsx
+/*.txt
+
+# Configuracion y archivos locales de herramientas
+.agents/
+.opencode/
+opencode.json
+skills-lock.json
+Auditoria_QA/
+
+# Entorno
+.env

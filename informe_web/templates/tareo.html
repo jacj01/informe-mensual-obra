@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+{% block title %}Tareo y Planilla{% endblock %}
+{% block og_title %}Tareo y Planilla{% endblock %}
+{% block meta_description %}Registro del tareo de trabajadores y generación de planillas de obreros y técnicos del informe financiero mensual de obra.{% endblock %}
+{% block heading %}Tareo y Planilla{% endblock %}
+{% block subheading %}Control de personal obrero y técnico de obra{% endblock %}
+
+{% macro pan_tareo(titulo, icono, lista, resumen, total_dias, tipo, boton, devengado) %}
+<div class="card">
+  <div class="card-head between">
+    <h3><i class="bi {{ icono }}"></i> {{ titulo }} - {{ MESES[mes-1] }} {{ anio }}</h3>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="badge badge-blue">{{ lista|length }} registros</span>
+      <button type="button" class="dev-label {{ 'on' if devengado }}"
+              title="Devengar la planilla: abre el formulario de devengado (gasto PLLA en Manifiesto, FE-05 y FE-06)"
+              onclick="return abrirModal('{{ url_for('tareo_devengar', mes=mes, anio=anio, tipo=tipo) }}')">
+        <i class="bi {{ 'bi-check-circle-fill' if devengado else 'bi-circle' }}"></i> DEVENGADO
+      </button>
+      <button type="button" class="btn btn-outline" onclick="alternarTodos(this.closest('.card'))" title="Marcar o desmarcar todos los días de todos los trabajadores">
+        <i class="bi bi-check2-all"></i> Marcar todos
+      </button>
+      <a class="btn btn-primary" href="{{ url_for('tareo_imprimir', mes=mes, anio=anio, tipo=tipo) }}" target="_blank" title="Imprimir {{ titulo }}"><i class="bi bi-printer"></i> Imprimir</a>
+      <button type="button" class="btn btn-gold" onclick="return abrirModal('{{ url_for('trabajador_nuevo', tipo=tipo) }}')">
+        <i class="bi bi-person-plus"></i> {{ boton }}
+      </button>
+    </div>
+  </div>
+  <div class="tareo-form">
+    <input type="hidden" name="mes" value="{{ mes }}">
+    <input type="hidden" name="anio" value="{{ anio }}">
+    <input type="hidden" name="tipo" value="{{ tipo }}">
+    <div class="table-scroll">
+      <table class="table">
+        <thead>
+          <tr class="tareo-cab-fila">
+            <th rowspan="2" class="tareo-th-num">N°</th>
+            <th rowspan="2" class="tareo-nombre">APELLIDOS Y NOMBRES</th>
+            <th rowspan="2" class="tareo-th-mini">DNI</th>
+            <th rowspan="2" class="tareo-th-fija">FECHA<br>NACIMIENTO</th>
+            <th rowspan="2" class="tareo-th-mini">SEXO</th>
+            <th rowspan="2" class="tareo-th-fija">CARGO</th>
+            <th rowspan="2" class="tareo-th-fija">FECHA<br>INICIO<br>LABORAL</th>
+            <th colspan="{{ calendario|length }}" class="tareo-cab-mes">DIAS DEL MES DE {{ MESES[mes-1] }} {{ anio }}</th>
+            <th rowspan="2" class="tareo-th-vert">DIAS TRABAJADOS</th>
+            <th rowspan="2" class="tareo-th-vert">DIAS DOMINGOS</th>
+            <th rowspan="2" class="tareo-th-vert">DIAS FERIADOS</th>
+            <th rowspan="2" class="tareo-th-vert">TOTAL DIAS TRAB.</th>
+            <th rowspan="2" class="right tareo-th-accion">ACCIONES</th>
+          </tr>
+          <tr>
+            {% for d in calendario %}
+            <th class="tareo-th-dia {{ 'th-domingo' if d.es_domingo else '' }} {{ 'th-feriado' if d.es_feriado else '' }}"
+                data-dia="{{ d.dia }}" title="{{ d.nombre }}">
+              <span class="th-letra">{{ d.letra }}</span>
+              <span class="th-num">{{ d.dia }}</span>
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in lista %}
+          {% set inicio_dia = 1 %}
+          {% if t.fecha_inicio and t.fecha_inicio.year == anio and t.fecha_inicio.month == mes %}
+          {% set inicio_dia = t.fecha_inicio.day %}
+          {% endif %}
+          <tr class="tareo-fila" data-cargo="{{ (t.cargo or '').strip().upper() }}">
+            <td class="num">{{ loop.index }}</td>
+            <td class="strong wrap tareo-nombre">{{ t.nombre }}</td>
+            <td class="num">{{ t.dni }}</td>
+            <td>{{ t.fecha_nacimiento.strftime('%d/%m/%Y') if t.fecha_nacimiento else '' }}</td>
+            <td class="num">{{ t.sexo }}</td>
+            <td class="wrap">{{ t.cargo }}</td>
+            <td>{{ t.fecha_inicio.strftime('%d/%m/%Y') if t.fecha_inicio else '' }}</td>
+            {% for d in calendario %}
+            {% if d.dia >= inicio_dia %}
+            <td class="tareo-dia {{ 'es-domingo' if d.es_domingo else '' }} {{ 'es-feriado' if d.es_feriado else '' }}">
+              <label class="dia-check" title="{{ d.nombre }} {{ d.dia }}">
+                <input type="checkbox" class="cb-dia {{ 'cb-domingo' if d.es_domingo else '' }} {{ 'cb-feriado' if d.es_feriado else '' }}"
+                       name="dias_{{ t.id }}" value="{{ d.dia }}" data-dia="{{ d.dia }}"
+                       {{ 'checked' if d.dia in t.dias_lista else '' }}>
+                {% if d.es_domingo %}<span class="mk">D</span>
+                {% elif d.es_feriado %}<span class="mk">F</span>{% endif %}
+              </label>
+            </td>
+            {% else %}
+            <td class="tareo-dia"><span class="tareo-inactivo"></span></td>
+            {% endif %}
+            {% endfor %}
+            <td class="tareo-sum td-trabajados" data-role="trabajados">0</td>
+            <td class="tareo-sum td-domingos" data-role="domingos">0</td>
+            <td class="tareo-sum td-feriados" data-role="feriados">0</td>
+            <td class="tareo-sum td-total" data-role="total">0</td>
+            <td class="row-actions">
+              <button type="button" class="icon-btn" title="Editar" aria-label="Editar trabajador"
+                      onclick="return abrirModal('{{ url_for('trabajador_editar', tid=t.id) }}')">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <form method="post" action="{{ url_for('trabajador_eliminar', tid=t.id) }}" class="inline"
+                    data-confirm="¿Eliminar del tareo a {{ t.nombre }}?" data-confirm-title="Eliminar registro" data-confirm-btn="Eliminar">
+                <button type="submit" class="icon-btn danger" title="Eliminar" aria-label="Eliminar trabajador"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="{{ 7 + calendario|length + 5 }}" class="empty">Aún no hay registros para {{ MESES[mes-1] }} {{ anio }}.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if resumen %}
+    <div class="tareo-resumen">
+      <div class="tareo-resumen-titulo"><i class="bi bi-bar-chart"></i> Resumen por cargo - {{ MESES[mes-1] }} {{ anio }}</div>
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th colspan="7" class="tareo-cab-fila">CARGO</th>
+              {% for d in calendario %}
+              <th class="tareo-th-dia {{ 'th-domingo' if d.es_domingo else '' }} {{ 'th-feriado' if d.es_feriado else '' }}"
+                  data-dia="{{ d.dia }}" title="{{ d.nombre }}">
+                <span class="th-letra">{{ d.letra }}</span>
+                <span class="th-num">{{ d.dia }}</span>
+              </th>
+              {% endfor %}
+              <th></th><th></th><th></th>
+              <th class="tareo-th-vert">TOTAL</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for r in resumen %}
+          <tr class="tareo-fila-resumen" data-cargo="{{ r.cargo }}" data-resumen="1">
+            <td colspan="7">{{ r.cargo }}</td>
+            {% for d in calendario %}
+            <td class="rs-dia" data-dia="{{ d.dia }}">{{ r.por_dia[d.dia - 1] }}</td>
+            {% endfor %}
+            <td></td><td></td><td></td>
+            <td class="rs-total" data-role="total">{{ r.por_dia|sum }}</td>
+            <td></td>
+          </tr>
+          {% endfor %}
+          {% if resumen %}
+          <tr class="tareo-fila-total" data-resumen-total="1">
+            <td colspan="7">TOTAL GENERAL</td>
+            {% for d in calendario %}
+            <td class="rs-dia" data-dia="{{ d.dia }}">{{ total_dias[d.dia - 1] }}</td>
+            {% endfor %}
+            <td></td><td></td><td></td>
+            <td class="rs-total" data-role="total">{{ total_dias|sum }}</td>
+            <td></td>
+          </tr>
+          {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="hero-card">
+  <div>
+    <div class="hero-label">Planilla de personal</div>
+    <div class="hero-title">Tareo mensual de obra</div>
+    <div class="hero-meta">
+      <span class="tag"><i class="bi bi-person-wrench"></i> {{ total_obreros }} obreros</span>
+      <span class="tag"><i class="bi bi-person-gear"></i> {{ total_tecnicos }} técnicos</span>
+      <span class="tag"><i class="bi bi-calendar3"></i> {{ MESES[mes-1] }} {{ anio }}</span>
+    </div>
+  </div>
+  <div class="hero-actions">
+    <button type="button" class="btn btn-gold" onclick="return generarPlanilla()" title="Generar la planilla de pagos del personal de la sección activa (con o sin beneficios y descuentos de ley)">
+      <i class="bi bi-file-earmark-spreadsheet"></i> Generar Planilla
+    </button>
+    {% if puede_copiar %}
+    <form method="post" action="{{ url_for('tareo_copiar') }}" class="inline"
+          data-confirm="¿Copiar el personal de {{ MESES[mes_ant-1] }} {{ anio_ant }} a {{ MESES[mes-1] }} {{ anio }}? Solo se copiarán los datos personales, no los días trabajados ni las marcas."
+          data-confirm-title="Copiar personal" data-confirm-btn="Copiar">
+      <input type="hidden" name="mes" value="{{ mes }}">
+      <input type="hidden" name="anio" value="{{ anio }}">
+      <button type="submit" class="btn btn-outline" title="Copiar el personal del mes anterior (solo datos personales)">
+        <i class="bi bi-copy"></i> Copiar personal del mes anterior
+      </button>
+    </form>
+    {% endif %}
+    <form method="get" class="filters" style="display:inline-flex;gap:8px;align-items:center">
+      <select name="mes" onchange="this.form.submit()">
+        {% for m in MESES %}
+        <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="anio" value="{{ anio }}" readonly title="Año configurado en la cabecera del proyecto">
+    </form>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="obrero"><i class="bi bi-person-wrench"></i> Personal Obrero</button>
+  <button class="tab" data-tab="tecnico"><i class="bi bi-person-gear"></i> Personal Técnico</button>
+</div>
+
+<div class="tab-panel active" id="tab-obrero">
+  {{ pan_tareo('Personal Obrero', 'bi-person-wrench', obreros, resumen_obreros, total_dias_obreros, 'OBRERO', 'Nuevo obrero', dev_obreros) }}
+</div>
+
+<div class="tab-panel" id="tab-tecnico">
+  {{ pan_tareo('Personal Técnico', 'bi-person-gear', tecnicos, resumen_tecnicos, total_dias_tecnicos, 'TECNICO', 'Nuevo técnico', dev_tecnicos) }}
+</div>
+
+<div class="note">
+  <i class="bi bi-info-circle"></i>
+  <div>
+    Marque con un check los días que trabajó cada trabajador. Si marca toda la semana de
+    <b>lunes a sábado</b>, el domingo <b>D</b> se selecciona automáticamente; si la semana no está
+    completa, el <b>D</b> no se puede seleccionar. Las celdas <b>F</b> (feriados) se marcan si el
+    trabajador laboró ese día. Las columnas <b>DIAS TRABAJADOS</b>, <b>DIAS DOMINGOS</b> y
+    <b>DIAS FERIADOS</b> se contabilizan según los checks seleccionados y el total es la suma de las tres.
+    Los cambios se guardan automáticamente. El botón <b>DEVENGADO</b> abre el formulario de
+    devengado, donde se registra el <b>Monto de Planilla</b> y el <b>Nº Nota de Pago</b>: al guardar
+    se registra un gasto <b>PLLA</b> (Und PLLA, Cantidad 1, P.U = Monto de Planilla)
+    en el <b>Manifiesto de Gastos</b> y se considera en <b>FE-05</b> y <b>FE-06</b> —
+    <b>Personal Obrero</b> → <b>Costo Directo / PERSONAL</b>, <b>Personal Técnico</b> → <b>Gastos Generales / PERSONAL</b>.
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  var autosaveTimers = {};
+
+  function guardarTareo(card) {
+    var fd = new FormData();
+    var mes = card.querySelector('input[name=mes]');
+    var anio = card.querySelector('input[name=anio]');
+    var tipo = card.querySelector('input[name=tipo]');
+    fd.append('mes', mes ? mes.value : '');
+    fd.append('anio', anio ? anio.value : '');
+    if (tipo) fd.append('tipo', tipo.value);
+    fd.append('_csrf', csrfValor);
+    card.querySelectorAll('.cb-dia').forEach(function (cb) {
+      if (cb.checked) fd.append(cb.name, cb.value);
+    });
+    fetch('{{ url_for('tareo_guardar') }}', { method: 'POST', body: fd })
+      .then(function (r) {
+        if (r.redirected) { window.location.href = r.url; return; }
+        window.location.reload();
+      })
+      .catch(function () { window.location.reload(); });
+  }
+
+  function programarGuardado(card) {
+    var mes = card.querySelector('input[name=mes]');
+    var anio = card.querySelector('input[name=anio]');
+    var tipo = card.querySelector('input[name=tipo]');
+    var key = (mes ? mes.value : '') + '-' + (anio ? anio.value : '') + '-' + (tipo ? tipo.value : '');
+    clearTimeout(autosaveTimers[key]);
+    autosaveTimers[key] = setTimeout(function () { guardarTareo(card); }, 800);
+  }
+
+  function alternarTodos(card) {
+    var cbs = card.querySelectorAll('.cb-dia:not(.cb-domingo)');
+    var todos = cbs.length > 0 &&
+      Array.prototype.every.call(cbs, function (c) { return c.checked; });
+    cbs.forEach(function (cb) { cb.checked = !todos; });
+    card.querySelectorAll('.tareo-fila').forEach(syncSemanas);
+    recalcularTabla(card);
+    programarGuardado(card);
+  }
+
+  function syncSemanas(fila) {
+    var domingos = fila.querySelectorAll('.cb-domingo');
+    domingos.forEach(function (cbD) {
+      var S = parseInt(cbD.dataset.dia, 10);
+      var lunes = Math.max(1, S - 6);
+      var req = 0, ok = 0;
+      for (var d = lunes; d < S; d++) {
+        req++;
+        var cb = fila.querySelector('.cb-dia[data-dia="' + d + '"]');
+        if (cb && cb.checked) ok++;
+      }
+      var completo = req > 0 && ok === req;
+      cbD.checked = completo;
+      cbD.disabled = true;
+    });
+  }
+
+  function recalcularTabla(panel) {
+    var filas = panel.querySelectorAll('.tareo-fila');
+    filas.forEach(function (fila) {
+      var cbs = fila.querySelectorAll('.cb-dia');
+      var trabajados = 0, domingos = 0, feriados = 0;
+      cbs.forEach(function (cb) {
+        if (!cb.checked) return;
+        if (cb.classList.contains('cb-domingo')) domingos++;
+        else if (cb.classList.contains('cb-feriado')) feriados++;
+        else trabajados++;
+      });
+      fila.querySelector('[data-role=trabajados]').textContent = trabajados;
+      fila.querySelector('[data-role=domingos]').textContent = domingos;
+      fila.querySelector('[data-role=feriados]').textContent = feriados;
+      fila.querySelector('[data-role=total]').textContent = trabajados + domingos + feriados;
+    });
+
+    var resumenRows = panel.querySelectorAll('[data-resumen="1"]');
+    resumenRows.forEach(function (row) {
+      var cargo = row.dataset.cargo;
+      var filasCargo = [];
+      filas.forEach(function (f) { if (f.dataset.cargo === cargo) filasCargo.push(f); });
+      var sum = 0;
+      row.querySelectorAll('.rs-dia').forEach(function (cel) {
+        var d = parseInt(cel.dataset.dia, 10);
+        var n = 0;
+        filasCargo.forEach(function (f) {
+          var cb = f.querySelector('.cb-dia[data-dia="' + d + '"]');
+          if (cb && cb.checked) n++;
+        });
+        cel.textContent = n;
+        sum += n;
+      });
+      row.querySelector('[data-role=total]').textContent = sum;
+    });
+
+    var trow = panel.querySelector('[data-resumen-total="1"]');
+    if (trow) {
+      var totalSum = 0;
+      trow.querySelectorAll('.rs-dia').forEach(function (cel) {
+        var d = parseInt(cel.dataset.dia, 10);
+        var n = 0;
+        resumenRows.forEach(function (row) {
+          var c = row.querySelector('.rs-dia[data-dia="' + d + '"]');
+          if (c) n += parseInt(c.textContent, 10) || 0;
+        });
+        cel.textContent = n;
+        totalSum += n;
+      });
+      trow.querySelector('[data-role=total]').textContent = totalSum;
+    }
+  }
+
+  document.querySelectorAll('.tareo-form').forEach(function (form) {
+    form.addEventListener('change', function (e) {
+      var t = e.target;
+      if (t && t.classList && t.classList.contains('cb-dia')) {
+        var fila = t.closest('.tareo-fila');
+        if (fila) syncSemanas(fila);
+        recalcularTabla(form);
+        programarGuardado(form);
+      }
+    });
+    form.querySelectorAll('.tareo-fila').forEach(syncSemanas);
+    recalcularTabla(form);
+  });
+
+  function generarPlanilla() {
+    var tab = document.querySelector('.tab.active');
+    var seccion = (tab && tab.dataset.tab) ? tab.dataset.tab : 'obrero';
+    var url = '{{ url_for('planilla_opciones') }}' + '?mes=' + {{ mes }} + '&anio=' + {{ anio }} + '&seccion=' + seccion;
+    return abrirModal(url);
+  }
+
+  function activarTabTareo(nombre) {
+    document.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+    var btn = document.querySelector('.tab[data-tab="' + nombre + '"]');
+    var panel = document.getElementById('tab-' + nombre);
+    if (btn) btn.classList.add('active');
+    if (panel) panel.classList.add('active');
+  }
+
+  document.querySelectorAll('.tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var nombre = btn.dataset.tab;
+      activarTabTareo(nombre);
+      sessionStorage.setItem('tareoTabActivo', nombre);
+      var url = new URL(window.location.href);
+      url.searchParams.set('tab', nombre);
+      history.replaceState(null, '', url.toString());
+    });
+  });
+
+  // Restaurar la pestaña tras recargar/guardar: usa el parámetro ?tab= de la
+  // URL (asignado por history.replaceState) o el último tab en sessionStorage.
+  var tabInicial = new URL(window.location.href).searchParams.get('tab') ||
+                   sessionStorage.getItem('tareoTabActivo');
+  if (tabInicial) activarTabTareo(tabInicial);
+</script>
+{% endblock %}

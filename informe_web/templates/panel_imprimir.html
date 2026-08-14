@@ -1,0 +1,497 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Resumen financiero imprimible del informe mensual de obra - {{ d.mes_nombre }} {{ d.anio }}.">
+<title>Informe Mensual {{ d.mes_nombre }} {{ d.anio }} - Resumen Financiero</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<style>
+  .hoja { width: 210mm; min-height: 297mm; padding: 10mm 12mm; }
+
+  table.tabla { width: auto; min-width: 0; max-width: 100%; margin: 6px auto; table-layout: auto; }
+  table.tabla.tabla-ancha { width: 100%; }
+  table.tabla th, table.tabla td { padding: 3px 6px; line-height: 1.4; }
+
+  .panel-main { text-align: center; font-size: 15pt; font-weight: 800; color: var(--azul);
+                text-transform: uppercase; letter-spacing: 1.2px; margin: 2px 0 8px; }
+
+  .pv { margin: 2px 0 6px; border: .6px solid var(--borde); border-radius: 3px; }
+  .pv-line { display: flex; align-items: stretch; border-bottom: .6px solid var(--borde); }
+  .pv-line:last-child { border-bottom: none; }
+  .pv-lab { flex: 0 0 220px; background: var(--bg); color: var(--azul-osc); font-weight: 700;
+            font-size: 7.4pt; text-transform: uppercase; padding: 4px 8px; letter-spacing: .3px;
+            border-right: .6px solid var(--borde); display: flex; align-items: center; }
+  .pv-val { flex: 1; min-width: 0; padding: 4px 8px; font-size: 8.6pt; overflow-wrap: anywhere; }
+  .pv-val.cen { text-align: center; }
+  .pv-val .letra { font-size: 8.2pt; }
+
+  .sec-band { background: var(--azul); color: #fff; font-weight: 800; font-size: 9.5pt;
+              text-transform: uppercase; letter-spacing: .5px; padding: 5px 9px; margin-top: 10px; }
+  .sec-band.b2 { background: var(--azul-osc); font-size: 8.6pt; }
+  .sec-band.b3 { background: var(--azul-claro); font-size: 8.6pt; }
+
+  .sec-txt { margin: 7px 3px; font-size: 8.3pt; text-align: justify; line-height: 1.55; }
+  .meta-line { margin: 1px 3px; font-size: 8pt; line-height: 1.45; }
+  .meta-line .lbl { font-weight: 700; color: var(--azul-osc); }
+  .meta-grid { margin: 6px 3px; }
+
+  .firmas { margin-top: 150px; padding: 0 28%; text-align: center; }
+  .firma .linea { width: 88%; }
+
+  .charts-row { display: flex; gap: 10px; margin: 10px 0 14px; }
+  .chart-box { flex: 1; border: .6px solid var(--borde); border-radius: 3px; padding: 8px 8px 6px; }
+  .chart-title { text-align: center; font-weight: 800; font-size: 8.6pt; text-transform: uppercase;
+                 color: var(--azul-osc); margin-bottom: 4px; letter-spacing: .3px; }
+  .chart-sub { text-align: center; font-size: 7.4pt; color: var(--texto2); margin-bottom: 6px; }
+  .chart-bars { display: flex; align-items: flex-end; justify-content: space-around; height: 170px; }
+  .chart-canvas { position: relative; height: 170px; }
+  .bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+             flex: 1; height: 100%; min-width: 0; }
+  .bar-val { font-size: 6.2pt; color: var(--texto); margin-bottom: 2px; white-space: nowrap; }
+  .bar { width: 58%; max-width: 34px; background: var(--azul); border-radius: 2px 2px 0 0; }
+  .bar-label { font-size: 6.8pt; color: var(--texto2); margin-top: 3px; }
+
+  @media print {
+    @page { size: A4 portrait; margin: 16mm 14mm 18mm; }
+    .hoja { width: auto; min-height: auto; margin: 0; box-shadow: none; padding: 0 2mm; }
+    .firmas { page-break-inside: avoid; }
+    .pv, .sec-band, .sec-txt, .meta-grid, .meta-line, .charts-row,
+    table.tabla { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <h2>Resumen Financiero - Informe Mensual {{ d.mes_nombre }} {{ d.anio }}</h2>
+  <div class="spacer"></div>
+  <span class="nota">Replica de la hoja PANEL del informe financiero.</span>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('formatos', mes=d.mes, anio=d.anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+
+<div class="hoja">
+
+  <div class="panel-main">Informe Mensual {{ d.mes_nombre }} {{ d.anio }}</div>
+
+  <!-- ===================== CABECERA ===================== -->
+  <div class="pv">
+    <div class="pv-line">
+      <div class="pv-lab">Proyecto</div>
+      <div class="pv-val">&ldquo;{{ d.p.nombre or '' }}&rdquo;</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Residente de Obra</div>
+      <div class="pv-val">{{ d.p.residente or '' }}</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Supervisor de Obra</div>
+      <div class="pv-val">{{ d.p.supervisor or '' }}</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Amb. Interv.</div>
+      <div class="pv-val">DISTRITO DE {{ d.p.distrito or '' }}</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Asistente Administrativo</div>
+      <div class="pv-val">{{ d.p.asistente or '' }}</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Fecha</div>
+      <div class="pv-val">{{ d.periodo }}</div>
+    </div>
+  </div>
+
+  <!-- ===================== INTRODUCCION ===================== -->
+  <div class="sec-band b2">Introduccion</div>
+  <div class="sec-txt">
+    Que mediante la aprobaci&oacute;n del expediente t&eacute;cnico
+    &ldquo;{{ d.p.nombre or '' }}&rdquo;, con Resoluci&oacute;n de Alcald&iacute;a N&deg;
+    {{ d.p.aprobacion or '' }}, por el Alcalde de la {{ d.p.entidad or '' }} de fecha
+    {{ d.p.fecha_aprobacion|fecha_larga }} se da inicio a las actividades de
+    ejecuci&oacute;n tanto f&iacute;sico como financiero del proyecto antes mencionado.
+  </div>
+
+  <!-- ===================== DATOS GENERALES ===================== -->
+  <div class="sec-band">Datos Generales del Proyecto</div>
+  <div class="pv">
+    <div class="pv-line">
+      <div class="pv-lab">Proyecto</div>
+      <div class="pv-val">&ldquo;{{ d.p.nombre or '' }}&rdquo;</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Codigo Unico de Inversion</div>
+      <div class="pv-val">N&deg; {{ d.p.cui or '' }}.</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Ubicaci&oacute;n</div>
+      <div class="pv-val">{{ d.ubicacion }}</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Entidad Ejecutora</div>
+      <div class="pv-val">{{ d.p.entidad or '' }}.</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Unidad Ejecutora</div>
+      <div class="pv-val">{{ d.p.unidad_ejecutora or '' }}.</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Aprobacion</div>
+      <div class="pv-val">{{ d.p.aprobacion or '' }}{% if d.p.fecha_aprobacion %}, de fecha {{ d.p.fecha_aprobacion|fecha_larga }}{% endif %}.</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Presupuesto Seg&uacute;n Expediente Tecnico</div>
+      <div class="pv-val">S/ {{ "{:,.2f}".format(d.presupuesto_et) }}</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Costo Directo</div>
+      <div class="pv-val">S/ {{ "{:,.2f}".format(d.costo_directo) }}</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">A&ntilde;o</div>
+      <div class="pv-val">{{ d.anio }}</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Meta</div>
+      <div class="pv-val">{% if d.meta_num %}{{ "%04d"|format(d.meta_num) }} - {{ d.anio }}{% else %}{{ d.p.meta or '' }}{% endif %}</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Rubro</div>
+      <div class="pv-val">{{ d.p.rubro or '' }}.</div>
+    </div>
+    <div class="pv-line">
+      <div class="pv-lab">Fuente de Financiamiento</div>
+      <div class="pv-val">{{ d.p.fuente or '' }}.</div>
+    </div>
+  </div>
+
+  <!-- ===================== GRAFICOS ===================== -->
+  {% set mmax = d.graf_mensual|map(attribute='monto')|max or 1 %}
+  {% set graf_h = 130 %}
+  <div class="charts-row">
+    <div class="chart-box">
+      <div class="chart-title">Ejecuci&oacute;n presupuestal mensual {{ d.anio }}</div>
+      <div class="chart-sub">Gasto devengado por mes (S/)</div>
+      <div class="chart-bars">
+        {% for b in d.graf_mensual %}
+        <div class="bar-col">
+          <div class="bar-val">{{ "{:,.0f}".format(b.monto) if b.monto else '' }}</div>
+          <div class="bar" style="height: {{ (graf_h * b.monto / mmax)|round|int }}px"></div>
+          <div class="bar-label">{{ b.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Ejecuci&oacute;n por componente {{ d.anio }}</div>
+      <div class="chart-sub">Distribuci&oacute;n del gasto devengado (S/)</div>
+      <div class="chart-canvas"><canvas id="chartComponentes"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ===================== I. RESUMEN DE LA EJECUCION PRESUPUESTAL ===================== -->
+  <div class="sec-band">I. Resumen de la Ejecucion Presupuestal</div>
+  <table class="tabla">
+    <colgroup><col style="width:330px"><col style="width:135px"><col style="width:55px"></colgroup>
+    <thead>
+      <tr><th>Concepto</th><th class="num">Monto</th><th>Meta</th></tr>
+    </thead>
+    <tbody>
+      {% for f in d.resumen_i %}
+      <tr class="{{ 'fila-total' if loop.last else '' }}">
+        <td>{{ f.concepto }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.monto) }}</td>
+        <td class="ctr">{{ "%03d"|format(f.meta) if f.meta else '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="tabla">
+    <colgroup><col style="width:285px"><col style="width:115px"><col style="width:95px"><col style="width:205px"></colgroup>
+    <thead>
+      <tr><th>Concepto</th><th class="num">Monto</th><th class="num">% de Ejecucion (PIM)</th><th>Base de Calculo</th></tr>
+    </thead>
+    <tbody>
+      {% for f in d.pin_rows %}
+      <tr>
+        <td>{{ f.concepto }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.monto) }}</td>
+        <td class="num">{{ "{:,.2f}%".format(f.pct) }}</td>
+        <td>{{ f.base }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- ===================== II. ACTIVIDADES EJECUTADAS ===================== -->
+  <div class="sec-band">II. Actividades Ejecutadas</div>
+  <table class="tabla">
+    <colgroup><col style="width:40px"><col style="width:470px"></colgroup>
+    <thead>
+      <tr><th>Item</th><th>Descripcion Detallada de Actividades</th></tr>
+    </thead>
+    <tbody>
+      {% for a in d.actividades %}
+      <tr><td class="ctr">{{ loop.index }}</td><td>{{ a.descripcion }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- ===================== III. DEVENGADO MENSUAL ===================== -->
+  <div class="sec-band">III. Devengado Mensual</div>
+  <table class="tabla tabla-ancha">
+    <colgroup>
+      <col style="width:95px"><col style="width:160px">
+      {% for m in d.meses_col %}<col>{% endfor %}
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="2">Clasificador</th>
+        <th rowspan="2">Descripcion del Gasto</th>
+        <th colspan="{{ d.meses_col|length }}">Gasto devengado {{ MESES[0] }} a {{ MESES[d.mes-1] }} (S/)</th>
+      </tr>
+      <tr>
+        {% for m in d.meses_col %}<th>{{ MESES[m-1] }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for grupo in d.dev_mensual %}
+      <tr class="fila-sub"><td colspan="{{ 2 + d.meses_col|length }}">{{ grupo.grupo }}</td></tr>
+      {% for f in grupo.filas %}
+      <tr>
+        <td>{{ f.clas }}</td>
+        <td>{{ f.detalle }}</td>
+        {% for v in f.valores %}<td class="num">{{ "{:,.2f}".format(v) }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+      {% endfor %}
+      <tr class="fila-total">
+        <td colspan="2">TOTAL</td>
+        {% for v in d.dev_mensual_total %}<td class="num">{{ "{:,.2f}".format(v) }}</td>{% endfor %}
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== IV. DEVENGADO HASTA EL MES ===================== -->
+  <div class="sec-band">IV. Devengado Hasta el Mes de {{ d.mes_nombre }} {{ d.anio }}</div>
+  <table class="tabla">
+    <colgroup><col style="width:105px"><col style="width:165px"><col style="width:155px"></colgroup>
+    <thead>
+      <tr><th>Clasificador</th><th>Descripcion del Gasto</th><th class="num">Gasto devengado {{ MESES[0] }} a {{ MESES[d.mes-1] }} (S/.)</th></tr>
+    </thead>
+    <tbody>
+      {% for grupo in d.dev_acum %}
+      <tr class="fila-sub"><td colspan="3">{{ grupo.grupo }}</td></tr>
+      {% for f in grupo.filas %}
+      <tr>
+        <td>{{ f.clas }}</td>
+        <td>{{ f.detalle }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.acum) }}</td>
+      </tr>
+      {% endfor %}
+      {% endfor %}
+      <tr class="fila-total">
+        <td colspan="2">TOTAL</td>
+        <td class="num">{{ "{:,.2f}".format(d.dev_acum_total) }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== V. RESUMEN GASTO DEVENGADO ===================== -->
+  <div class="sec-band">V. Resumen Gasto Devengado</div>
+  <table class="tabla">
+    <colgroup><col style="width:105px"><col style="width:150px"><col style="width:125px"><col style="width:135px"><col style="width:115px"></colgroup>
+    <thead>
+      <tr>
+        <th>Clasificador</th>
+        <th>Descripcion del Gasto</th>
+        <th class="num">Presupuesto Anual (PIN {{ d.anio }}) (S/.)</th>
+        <th class="num">Gasto devengado {{ MESES[0] }} a {{ MESES[d.mes-1] }} (S/.)</th>
+        <th class="num">% Ejecucion Presupuestal Anual (Gasto/PIN)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in d.resumen_dev %}
+      <tr>
+        <td>{{ f.clas }}</td>
+        <td>{{ f.detalle }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.pin) }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.gas) }}</td>
+        <td class="num">{{ "{:,.2f}%".format(f.pct) }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fila-total">
+        <td colspan="2">TOTAL</td>
+        <td class="num">{{ "{:,.2f}".format(d.resumen_dev_total.pin) }}</td>
+        <td class="num">{{ "{:,.2f}".format(d.resumen_dev_total.gas) }}</td>
+        <td class="num">{{ "{:,.2f}%".format(d.resumen_dev_total.pct) }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== EJECUCION PRESUPUESTAL ===================== -->
+  <div class="sec-band">Ejecucion Presupuestal</div>
+
+  <div class="sec-band b2">1. Del Presupuesto</div>
+  <div class="sec-txt">
+    El presupuesto total de obra es de S/{{ "{:,.2f}".format(d.presupuesto_et) }}
+    ({{ d.presupuesto_letras }}). Segun expediente tecnico.
+  </div>
+  <table class="tabla">
+    <colgroup><col style="width:380px"><col style="width:150px"></colgroup>
+    <thead>
+      <tr><th>Componente</th><th class="num">Presupuesto</th></tr>
+    </thead>
+    <tbody>
+      {% for f in d.componentes_presupuesto %}
+      <tr class="{{ 'fila-total' if loop.last else '' }}">
+        <td>{{ f.label }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.monto) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="sec-band b2">2. Resumen de Ejecucion Presupuestal</div>
+
+  {% if d.ejec_anuales %}
+  {% for ej in d.ejec_anuales %}
+  <div class="sec-band b3">{{ ej.titulo }}</div>
+  <div class="meta-grid">
+    <div class="meta-line"><span class="lbl">Modalidad de ejecuci&oacute;n:</span> Por administraci&oacute;n directa.</div>
+    <div class="meta-line"><span class="lbl">Fuente de financiamiento:</span> {{ d.p.fuente or '' }}.</div>
+    <div class="meta-line"><span class="lbl">Rubro:</span> {{ d.p.rubro or '' }}.</div>
+    <div class="meta-line"><span class="lbl">Meta:</span> {{ ej.meta }} - al mes de diciembre del {{ ej.anio }}.</div>
+  </div>
+  <table class="tabla">
+    <colgroup><col style="width:105px"><col style="width:300px"><col style="width:145px"></colgroup>
+    <thead>
+      <tr><th>Codigo</th><th>Detalle</th><th class="num">{{ d.p.rubro or 'CANON SOBRECANON, REGALIAS, RENTAS DE ADUANAS Y PARTICIPACIONES.' }}</th></tr>
+    </thead>
+    <tbody>
+      {% for f in ej.filas %}
+      <tr>
+        <td>{{ f.clas }}</td>
+        <td>{{ f.detalle }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.monto) }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fila-total"><td colspan="2">TOTAL</td><td class="num">{{ "{:,.2f}".format(ej.total) }}</td></tr>
+    </tbody>
+  </table>
+  {% endfor %}
+  {% endif %}
+
+  <div class="sec-band b3">2.4. Resumen General de Ejecucion Presupuestal</div>
+  <div class="meta-grid">
+    <div class="meta-line"><span class="lbl">Modalidad de ejecuci&oacute;n:</span> Por administraci&oacute;n directa.</div>
+    <div class="meta-line"><span class="lbl">Fuente de financiamiento:</span> {{ d.p.fuente or '' }}.</div>
+    <div class="meta-line"><span class="lbl">Rubro:</span> {{ d.p.rubro or '' }}.</div>
+    {% if d.incluir_anios %}
+      {% for y in range(2023, d.anio + 1) %}
+      <div class="meta-line"><span class="lbl">Mes y a&ntilde;o:</span> a diciembre del {{ y }}.</div>
+      {% endfor %}
+    {% else %}
+      <div class="meta-line"><span class="lbl">Mes y a&ntilde;o:</span> a diciembre del {{ d.anio }}.</div>
+    {% endif %}
+  </div>
+  <table class="tabla">
+    <colgroup><col style="width:105px"><col style="width:295px"><col style="width:145px"><col style="width:55px"></colgroup>
+    <thead>
+      <tr><th>Codigo</th><th>Detalle</th><th class="num">{{ d.p.rubro or 'CANON SOBRECANON, REGALIAS, RENTAS DE ADUANAS Y PARTICIPACIONES.' }}</th><th>A&ntilde;o</th></tr>
+    </thead>
+    <tbody>
+      {% for f in d.gen %}
+      <tr>
+        <td>{{ f.clas }}</td>
+        <td>{{ f.detalle }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.monto) }}</td>
+        <td class="ctr">{{ f.anio }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fila-total"><td colspan="2">TOTAL</td><td class="num">{{ "{:,.2f}".format(d.gen_total) }}</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <div class="sec-band b3">2.5. Resumen General</div>
+  <table class="tabla">
+    <colgroup><col style="width:105px"><col style="width:300px"><col style="width:145px"></colgroup>
+    <thead>
+      <tr><th>Codigo</th><th>Detalle</th><th class="num">{{ d.p.rubro or 'CANON SOBRECANON, REGALIAS, RENTAS DE ADUANAS Y PARTICIPACIONES.' }}</th></tr>
+    </thead>
+    <tbody>
+      {% for f in d.resumen_general %}
+      <tr>
+        <td>{{ f.clas }}</td>
+        <td>{{ f.detalle }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.monto) }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fila-total"><td colspan="2">TOTAL</td><td class="num">{{ "{:,.2f}".format(d.resumen_general_total) }}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sec-band b3">2.6. De la Ejecucion Financiera</div>
+  <div class="sec-txt">{{ d.ejec_fin_texto }}</div>
+  <table class="tabla">
+    <colgroup><col style="width:375px"><col style="width:145px"><col style="width:145px"></colgroup>
+    <thead>
+      <tr><th>Componentes</th><th class="num">Presupuesto</th><th class="num">Ejecutado Total</th></tr>
+    </thead>
+    <tbody>
+      {% for f in d.ejec_fin %}
+      <tr class="{{ 'fila-total' if loop.last else '' }}">
+        <td>{{ f.label }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.presupuesto) }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.ejecutado) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% for n in d.narrativas %}
+  <div class="sec-band b3">{{ n.titulo }}</div>
+  <div class="sec-txt">{{ n.texto }}</div>
+  {% endfor %}
+
+  <!-- ===================== FIRMAS ===================== -->
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ d.p.administrador_obra or d.p.asistente or '' }}</div>
+      <div class="cargo">Administrador de Obra</div>
+      <div class="reg">{% if d.p.colegiatura_admin %}Colegiatura: {{ d.p.colegiatura_admin }}{% endif %}</div>
+    </div>
+  </div>
+
+</div>
+<script src="{{ url_for('static', filename='vendor/chart.js/chart.umd.min.js') }}"></script>
+<script>
+  (function () {
+    var el = document.getElementById('chartComponentes');
+    if (!el || typeof Chart === 'undefined') return;
+    var porComp = {{ d.graf_circular | tojson }};
+    new Chart(el, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(porComp),
+        datasets: [{
+          data: Object.values(porComp),
+          backgroundColor: ['#1F4E79', '#C9A227', '#2E8B57', '#8E44AD', '#E67E22'],
+          borderColor: '#ffffff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }
+      }
+    });
+  })();
+</script>
+</body>
+</html>

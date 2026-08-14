@@ -1,0 +1,79 @@
+{% set es_edicion = g.id is not none %}
+<form method="post" class="form-panel" action="{{ url_for('gasto_editar', gasto_id=g.id) if g.id else url_for('gasto_nuevo') }}">
+  <input type="hidden" name="modal" value="1">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  {% if error %}
+  <div class="alert alert-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div>
+  {% endif %}
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-person-lines-fill"></i> {{ 'Editar proveedor' if es_edicion else 'Nuevo proveedor' }}</h3>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Fecha</label>
+        <input type="date" name="fecha" value="{{ g.fecha.strftime('%Y-%m-%d') if g.fecha else '' }}" required>
+      </div>
+      <div class="field">
+        <label>SIAF</label>
+        <input type="number" name="siaf" value="{{ g.siaf }}">
+      </div>
+      <div class="field">
+        <label>Tipo de documento</label>
+        <select name="tipo_doc">
+          <option value="O/C" {{ 'selected' if g.tipo_doc == 'O/C' }}>O/C (Orden de compra)</option>
+          <option value="O/S" {{ 'selected' if g.tipo_doc == 'O/S' }}>O/S (Orden de servicio)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>N° de documento</label>
+        <input type="number" name="num_doc" value="{{ g.num_doc }}">
+      </div>
+      <div class="field full">
+        <label>Proveedor</label>
+        <input type="text" name="proveedor" value="{{ g.proveedor }}">
+      </div>
+      <div class="field">
+        <label>Clasificador</label>
+        <select name="clasificador">
+          {% for code, det in clasificadores %}
+          <option value="{{ code }}" {{ 'selected' if g.clasificador == code }}>{{ code }} - {{ det }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Componente</label>
+        <select name="componente">
+          {% for comp in COMPONENTES %}
+          <option value="{{ comp }}" {{ 'selected' if g.componente == comp }}>{{ comp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>N° Pecosa</label>
+        <input type="text" name="pecosa" value="{{ g.pecosa }}">
+      </div>
+      <div class="field">
+        <label>Mes <i class="bi bi-lock-fill lock-ico"></i></label>
+        <select disabled title="Mes configurado en la cabecera del proyecto">
+          {% for m in MESES %}
+          <option value="{{ loop.index }}" {{ 'selected' if loop.index == p.mes_actual }}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Año <i class="bi bi-lock-fill lock-ico"></i></label>
+        <input type="number" value="{{ p.anio }}" disabled title="Año configurado en la cabecera del proyecto">
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <i class="bi bi-info-circle"></i>
+    Aquí solo se registra el proveedor y sus datos de documento. Después podrá
+    agregar los materiales o servicios adquiridos de ese proveedor sin repetir sus datos.
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar proveedor</button>
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</form>

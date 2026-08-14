@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Respaldo de Datos{% endblock %}
+{% block og_title %}Respaldo de Datos{% endblock %}
+{% block meta_description %}Generación y restauración de respaldos de la base de datos del informe financiero mensual de obra.{% endblock %}
+{% block heading %}Respaldo de Datos{% endblock %}
+{% block subheading %}Crear, guardar y recuperar la base de datos del aplicativo{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head"><h3><i class="bi bi-database"></i> Base de datos actual</h3></div>
+  <div class="form-grid">
+    <div class="field">
+      <label>Ubicación</label>
+      <div class="value">{{ stats.ruta if stats else 'No se encontró la base de datos' }}</div>
+    </div>
+    <div class="field">
+      <label>Tamaño</label>
+      <div class="value">{{ "{:,.0f}".format(stats.tamano / 1024) if stats else '-' }} KB</div>
+    </div>
+    <div class="field">
+      <label>Última modificación</label>
+      <div class="value">{{ stats.mod.strftime('%d/%m/%Y %H:%M:%S') if stats else '-' }}</div>
+    </div>
+    <div class="field">
+      <label>Registros guardados</label>
+      <div class="value">
+        {{ stats.proyecto }} proyecto · {{ stats.presupuesto }} config. presupuestal ·
+        {{ stats.gastos }} gastos · {{ stats.detalles }} detalles · {{ stats.almacen }} mov. almacén
+      </div>
+    </div>
+    <div class="field">
+      <label>Integridad (PRAGMA integrity_check)</label>
+      {% if stats and not stats.integridad %}
+      <div class="value"><span class="badge badge-green"><i class="bi bi-shield-check"></i> Base íntegra</span></div>
+      {% elif stats and stats.integridad %}
+      <div class="value"><span class="badge badge-red"><i class="bi bi-shield-x"></i> Errores detectados</span></div>
+      <div class="value" style="color:var(--rojo)">{{ stats.integridad|join(' · ') }}</div>
+      {% else %}
+      <div class="value">-</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="note">
+    <i class="bi bi-info-circle"></i>
+    Todos los datos del aplicativo (cabecera, presupuesto, manifiesto de gastos y almacén)
+    se guardan en un solo archivo de base de datos local. Al crear un respaldo se copia ese
+    archivo a la carpeta <strong>{{ carpeta }}</strong>. Para usar el aplicativo sin conexión
+    o en otro equipo, copie la carpeta del proyecto junto con sus respaldos.
+    <br><i class="bi bi-arrow-repeat"></i>
+    Al arrancar el servidor se genera automáticamente un respaldo diario de la base maestra
+    y de cada administrador (archivos <strong>auto_AAAAMMDD_*.db</strong>), verificado con
+    <strong>PRAGMA integrity_check</strong>.
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h3><i class="bi bi-plus-circle"></i> Crear respaldo</h3></div>
+  <form method="post">
+    <input type="hidden" name="accion" value="crear">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-database-add"></i> Crear respaldo ahora</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head"><h3><i class="bi bi-clock-history"></i> Respaldos guardados</h3></div>
+  {% if respaldos %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Archivo</th>
+          <th class="num">Tamaño</th>
+          <th class="num">Fecha</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in respaldos %}
+        <tr>
+          <td>{{ r.nombre }}</td>
+          <td class="num">{{ "{:,.0f}".format(r.tamano / 1024) }} KB</td>
+          <td class="num">{{ r.mod.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+          <td class="cell-actions">
+            <form method="post" class="inline"
+                  data-confirm="¿Restaurar la base de datos desde {{ r.nombre }}? Se guardará una copia automática del estado actual antes de restaurar."
+                  data-confirm-title="Restaurar base de datos" data-confirm-btn="Restaurar">
+              <input type="hidden" name="accion" value="restaurar">
+              <input type="hidden" name="archivo" value="{{ r.nombre }}">
+              <button type="submit" class="btn btn-sm btn-outline"><i class="bi bi-arrow-counterclockwise"></i> Restaurar</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">Todavía no hay respaldos. Haga clic en "Crear respaldo ahora".</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Material{% endblock %}
+{% block heading %}{{ 'Editar material' if d.id else 'Ingresar material / servicio' }}{% endblock %}
+{% block subheading %}Material o servicio de la orden {{ g.tipo_doc }} N° {{ g.num_doc }}{% endblock %}
+
+{% block content %}
+{% include "_orden_material_form.html" %}
+{% endblock %}

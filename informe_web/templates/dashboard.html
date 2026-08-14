@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Resumen Financiero{% endblock %}
+{% block og_title %}Resumen Financiero{% endblock %}
+{% block meta_description %}Panel principal del informe financiero mensual de obra: ejecución presupuestal, PIM, saldos y avance por componente en administración directa.{% endblock %}
+{% block heading %}Resumen Financiero{% endblock %}
+{% block subheading %}{% endblock %}
+
+{% block content %}
+{% set saldo = k.saldo_anio %}
+{% if saldo < 0 %}
+  {% set semaforo = 'red' %}
+  {% set semaforo_txt = 'Negativo' %}
+  {% set semaforo_msg = 'El saldo PIM ' ~ p.anio ~ ' es negativo: la ejecución (S/ ' ~ "{:,.2f}".format(k.ejecutado_anio) ~ ') ha superado el PIM asignado (S/ ' ~ "{:,.2f}".format(k.pim) ~ ').' %}
+{% elif saldo <= k.pim * 0.10 %}
+  {% set semaforo = 'amber' %}
+  {% set semaforo_txt = 'Por agotarse' %}
+  {% set semaforo_msg = 'El saldo PIM ' ~ p.anio ~ ' está próximo a agotarse: queda menos del 10% del presupuesto (S/ ' ~ "{:,.2f}".format(saldo) ~ ').' %}
+{% else %}
+  {% set semaforo = 'green' %}
+  {% set semaforo_txt = 'En orden' %}
+  {% set semaforo_msg = 'El saldo PIM ' ~ p.anio ~ ' se encuentra dentro de lo esperado.' %}
+{% endif %}
+<div class="hero-card">
+  <div>
+    <div class="hero-label">Proyecto</div>
+    <div class="hero-title">{{ p.nombre }}</div>
+    <div class="hero-meta">
+      <span class="tag"><i class="bi bi-hash"></i> CUI: {{ p.cui }}</span>
+      <span class="tag"><i class="bi bi-bullseye"></i> Meta: {{ p.meta }}</span>
+      <span class="tag"><i class="bi bi-geo-alt"></i> {{ p.distrito }}, {{ p.provincia }}, {{ p.departamento }}</span>
+    </div>
+  </div>
+  <div class="hero-actions">
+    {% if not usuario or usuario.rol == 'Administrador' or 'cabecera' in permisos_usuario %}
+    <a class="btn btn-white" href="{{ url_for('cabecera') }}"><i class="bi bi-pencil-square"></i> Editar datos</a>
+    {% endif %}
+    {% if not usuario or usuario.rol == 'Administrador' or 'ordenes' in permisos_usuario %}
+    <a class="btn btn-gold" href="{{ url_for('ordenes') }}"><i class="bi bi-plus-lg"></i> Registrar Orden</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi">
+    <div class="kpi-icon blue"><i class="bi bi-cash-stack"></i></div>
+    <div>
+      <div class="kpi-label">PIM {{ p.anio }}</div>
+      <div class="kpi-value">S/ {{ "{:,.2f}".format(k.pim) }}</div>
+    </div>
+  </div>
+  {% if p.ampliacion_presupuestal %}
+  <div class="card kpi">
+    <div class="kpi-icon orange"><i class="bi bi-plus-circle"></i></div>
+    <div>
+      <div class="kpi-label">Ampliación presupuestal</div>
+      <div class="kpi-value">S/ {{ "{:,.2f}".format(p.monto_ampliacion) }}</div>
+      <div class="kpi-sub">Adicional de obra (incluido en el PIM)</div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="card kpi">
+    <div class="kpi-icon green"><i class="bi bi-graph-up"></i></div>
+    <div>
+      <div class="kpi-label">Ejecutado {{ p.anio }}</div>
+      <div class="kpi-value">S/ {{ "{:,.2f}".format(k.ejecutado_anio) }}</div>
+      <div class="kpi-sub">{{ "%.2f"|format(k.porc_anio) }}% del PIM</div>
+    </div>
+  </div>
+  <div class="card kpi">
+    <div class="kpi-icon purple"><i class="bi bi-wallet2"></i></div>
+    <div>
+      <div class="kpi-label">Gasto del mes ({{ MESES[p.mes_actual - 1][:3] }})</div>
+      <div class="kpi-value">S/ {{ "{:,.2f}".format(k.gasto_mes) }}</div>
+    </div>
+  </div>
+  <div class="card kpi sem-{{ semaforo }}">
+    <div class="kpi-icon orange"><i class="bi bi-hourglass-split"></i></div>
+    <div>
+      <div class="kpi-label">Saldo PIM {{ p.anio }}</div>
+      <div class="kpi-value">S/ {{ "{:,.2f}".format(k.saldo_anio) }}</div>
+      <div class="semaforo sem-{{ semaforo }}" role="status" aria-label="Estado del saldo PIM {{ p.anio }}: {{ semaforo_txt }}">
+        <span class="luz {{ 'on-verde' if semaforo == 'green' else '' }}" title="Correcto"></span>
+        <span class="luz {{ 'on-ambar' if semaforo == 'amber' else '' }}" title="Por agotarse"></span>
+        <span class="luz {{ 'on-rojo' if semaforo == 'red' else '' }}" title="Negativo"></span>
+        <span class="semaforo-txt">{{ semaforo_txt }}</span>
+      </div>
+    </div>
+  </div>
+  {% if p.incluir_anios_anteriores %}
+  <div class="card kpi">
+    <div class="kpi-icon teal"><i class="bi bi-pie-chart"></i></div>
+    <div>
+      <div class="kpi-label">Acumulado 2023-2026</div>
+      <div class="kpi-value">S/ {{ "{:,.2f}".format(k.acumulado_total) }}</div>
+      <div class="kpi-sub">de S/ {{ "{:,.2f}".format(k.presupuesto_total) }}</div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="card kpi">
+    <div class="kpi-icon red"><i class="bi bi-bank"></i></div>
+    <div>
+      <div class="kpi-label">Saldo del proyecto</div>
+      <div class="kpi-value">S/ {{ "{:,.2f}".format(k.saldo_proyecto) }}</div>
+    </div>
+  </div>
+</div>
+
+{% if semaforo != 'green' %}
+<div class="alert saldo-alert {{ 'alert-error saldo-alert-pulse' if semaforo == 'red' else 'alert-warning' }}" role="alert">
+  <i class="bi {{ 'bi-exclamation-octagon-fill' if semaforo == 'red' else 'bi-exclamation-triangle-fill' }}"></i>
+  <div>
+    {% if semaforo == 'red' %}
+    <b>¡ALERTA! Saldo PIM {{ p.anio }} NEGATIVO</b>
+    {% else %}
+    <b>Atención: el saldo PIM {{ p.anio }} está por agotarse</b>
+    {% endif %}
+    <span>{{ semaforo_msg }}</span>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-bar-chart-fill"></i> Ejecución presupuestal mensual {{ p.anio }}</h3>
+    </div>
+    <div class="chart-box"><canvas id="chartMensual"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-pie-chart-fill"></i> Ejecución por componente {{ p.anio }}</h3>
+    </div>
+    <div class="chart-box"><canvas id="chartComponentes"></canvas></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head between">
+    <h3><i class="bi bi-clock-history"></i> Últimos gastos registrados</h3>
+    <a class="btn btn-ghost" href="{{ url_for('gastos') }}">Ver todos <i class="bi bi-arrow-right"></i></a>
+  </div>
+  <div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Fecha</th><th>SIAF</th><th>Documento</th><th>Proveedor</th>
+        <th>Detalle</th><th>Componente</th><th class="num">Importe</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in recientes %}
+      <tr>
+        <td>{{ g.fecha.strftime("%d/%m/%Y") if g.fecha else '' }}</td>
+        <td>{{ g.siaf }}</td>
+        <td>{{ g.tipo_doc }} {{ g.num_doc }}</td>
+        <td>{{ g.proveedor }}</td>
+        <td class="wrap">{{ g.detalles[0].detalle if g.detalles else '' }}</td>
+        <td><span class="badge badge-blue">{{ g.componente }}</span></td>
+        <td class="num strong">S/ {{ "{:,.2f}".format(g.importe) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">No hay gastos registrados aún.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-diagram-3"></i> Ejecución por componente</h3></div>
+    <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Componente</th><th class="num">Ejecutado</th><th class="num">PIM</th><th class="num">%</th></tr></thead>
+      <tbody>
+        {% for comp, dato in fe06_resumen.items() %}
+        <tr>
+          <td>{{ comp }}</td>
+          <td class="num">S/ {{ "{:,.2f}".format(dato.total_anio) }}</td>
+          <td class="num">S/ {{ "{:,.2f}".format(dato.pim) }}</td>
+          <td class="num">{{ "%.1f"|format(dato.total_anio/dato.pim*100 if dato.pim else 0) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-lightning-charge"></i> Acciones rápidas</h3></div>
+    <div class="quick-actions">
+      {% if not usuario or usuario.rol == 'Administrador' or 'gastos' in permisos_usuario %}
+      <a class="qa" href="{{ url_for('gasto_nuevo') }}" onclick="return abrirModal(this.href)"><i class="bi bi-receipt-cutoff"></i><span>Nuevo gasto</span></a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'almacen' in permisos_usuario %}
+      <a class="qa" href="{{ url_for('almacen_nuevo') }}" onclick="return abrirModal(this.href)"><i class="bi bi-box-arrow-in-down"></i><span>Movimiento de almacén</span></a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'formatos' in permisos_usuario %}
+      <a class="qa" href="{{ url_for('formatos') }}"><i class="bi bi-file-earmark-spreadsheet-fill"></i><span>Ver formatos</span></a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'configuracion' in permisos_usuario %}
+      <a class="qa" href="{{ url_for('configuracion') }}"><i class="bi bi-sliders2"></i><span>Configuración</span></a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.js/chart.umd.min.js') }}"></script>
+<script>
+  const porMes = {{ por_mes | tojson }};
+  const porComp = {{ por_comp | tojson }};
+  const meses = {{ MESES | tojson }};
+
+  new Chart(document.getElementById('chartMensual'), {
+    type: 'bar',
+    data: {
+      labels: meses,
+      datasets: [{
+        label: 'S/ ejecutado',
+        data: porMes,
+        backgroundColor: 'rgba(31, 78, 121, 0.75)',
+        borderRadius: 6,
+        maxBarThickness: 34
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { callback: v => 'S/ ' + v.toLocaleString() } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartComponentes'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(porComp),
+      datasets: [{
+        data: Object.values(porComp),
+        backgroundColor: ['#1F4E79', '#C9A227', '#2E8B57', '#8E44AD', '#E67E22'],
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: { callbacks: { label: c => ' S/ ' + c.parsed.toLocaleString() } }
+      }
+    }
+  });
+</script>
+{% endblock %}

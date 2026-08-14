@@ -1,0 +1,180 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Reporte imprimible FE-06 de presupuesto vs ejecutado de obra en administración directa - {{ anio }}.">
+<title>FE-06 Presupuesto vs Ejecutado - {{ anio }}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<style>
+  .hoja { padding: 8mm 7mm; }
+  @media print { .hoja { padding: 0; } @page { size: A4 landscape; margin: 7mm 6mm 8mm; } }
+  table.tabla { margin-top: 3px; }
+  table.tabla th, table.tabla td { padding: 3.5px 3px; font-size: 6.6pt; line-height: 1.35; }
+  table.tabla thead th { font-size: 6pt; padding: 5px 3px; }
+  table.tabla thead th.num { text-align: center; }
+  .row-total td { background: #E3EAF2; color: var(--azul-osc); font-weight: 800; font-size: 7pt; text-transform: uppercase; padding: 4px 4px; }
+  .fila-total td { font-size: 7.5pt; padding: 5px 4px; }
+  .resumen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .resumen-box { border: 1px solid var(--borde); border-radius: 4px; overflow: hidden; }
+  .resumen-box h4 { margin: 0; padding: 4px 12px; background: var(--azul); color: #fff; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .3px; }
+  .resumen-box table { width: 100%; border-collapse: collapse; }
+  .resumen-box th, .resumen-box td { border: .5px solid var(--borde); padding: 2px 10px; font-size: 7pt; text-align: left; line-height: 1.3; }
+  .resumen-box .num { text-align: right; }
+  .resumen-box .strong { font-weight: 700; }
+  .resumen-box thead th { background: var(--bg); color: var(--azul-osc); font-weight: 700; font-size: 6.5pt; text-transform: uppercase; padding: 3px 10px; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <h2>FE-06 Presupuesto vs Ejecutado</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('formatos', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+<div class="hoja">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Cuadro Comparativo Presupuesto Analitico Aprobado y Ejecutado</div>
+      <div class="subtitulo">PERIODO: {{ MESES[mes-1] }} - {{ anio }}</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">{{ MESES[mes-1] }} {{ anio }}</div>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Codigo Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Correlativo Meta</span><span class="info-val">{{ p.meta or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Fuente Financ.</span><span class="info-val">{{ p.fuente or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Modalidad</span><span class="info-val">ADMINISTRACION DIRECTA</span></div>
+  </div>
+  <div class="responsables">
+    <div class="resp-item"><div class="resp-label">Supervisor de Obra</div><div class="resp-val">{{ p.supervisor or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Residente de Obra</div><div class="resp-val">{{ p.residente or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
+  </div>
+
+  <div style="overflow-x:auto">
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th style="min-width:62px">Especif. de gasto</th><th style="min-width:120px">Detalle</th>
+        <th class="num" style="min-width:55px">Exp. Tecnico</th>
+        {% if p.incluir_anios_anteriores %}<th class="num" style="min-width:48px">2023</th><th class="num" style="min-width:48px">2024</th><th class="num" style="min-width:48px">2025</th>{% endif %}
+        <th class="num" style="min-width:60px">PIM {{ anio }}</th>
+        {% for m in meses_vis %}<th class="num" style="min-width:42px">{{ MESES[m-1][:3] }}</th>{% endfor %}
+        <th class="num" style="min-width:55px">Ejec. {{ anio }}</th><th class="num" style="min-width:30px">%</th>
+        <th class="num" style="min-width:55px">Saldo {{ anio }}</th>
+        {% if p.incluir_anios_anteriores %}<th class="num" style="min-width:52px">Acum. total</th><th class="num" style="min-width:52px">Saldo proyecto</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for comp in ['Costo Directo', 'Gastos Generales', 'Gestion de Supervisión', 'Elaboración de Expediente Técnico', 'Liquidación de Obra'] %}
+      {% set r = fe06_resumen[comp] %}
+      <tr class="row-total">
+        <td colspan="2"><strong>{{ comp }}</strong></td>
+        <td class="num strong">{{ "{:,.2f}".format(r.et) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(r.e2023) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.e2024) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.e2025) }}</td>
+        {% endif %}
+        <td class="num strong">{{ "{:,.2f}".format(r.pim) }}</td>
+        {% for m in meses_vis %}<td class="num">{{ "{:,.2f}".format(r.mensual[m-1]) }}</td>{% endfor %}
+        <td class="num strong">{{ "{:,.2f}".format(r.total_anio) }}</td>
+        <td class="num">{{ "%.1f"|format(r.total_anio/r.pim*100 if r.pim else 0) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(r.saldo_pim) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num strong">{{ "{:,.2f}".format(r.acum_total) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.saldo_et) }}</td>
+        {% endif %}
+      </tr>
+      {% for sub in fe06_rows if sub.componente == comp %}
+      <tr>
+        <td>{{ sub.clasificador }}</td>
+        <td>{{ sub.detalle }}</td>
+        <td class="num">{{ "{:,.2f}".format(sub.et) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(sub.e2023) }}</td>
+        <td class="num">{{ "{:,.2f}".format(sub.e2024) }}</td>
+        <td class="num">{{ "{:,.2f}".format(sub.e2025) }}</td>
+        {% endif %}
+        <td class="num">{{ "{:,.2f}".format(sub.pim) }}</td>
+        {% for m in meses_vis %}<td class="num">{{ "{:,.2f}".format(sub.mensual[m-1]) }}</td>{% endfor %}
+        <td class="num strong">{{ "{:,.2f}".format(sub.total_anio) }}</td>
+        <td class="num">{{ "%.1f"|format(sub.porc_pim) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(sub.saldo_pim) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num strong">{{ "{:,.2f}".format(sub.acum_total) }}</td>
+        <td class="num">{{ "{:,.2f}".format(sub.saldo_et) }}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total">
+        <td colspan="2">TOTAL RUBRO 18</td>
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='et')) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='e2023')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='e2024')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='e2025')) }}</td>
+        {% endif %}
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='pim')) }}</td>
+        {% for m in meses_vis %}<td class="num">{{ "{:,.2f}".format(fe06_totales_mensual[m-1]) }}</td>{% endfor %}
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='total_anio')) }}</td>
+        <td class="num">{{ "%.2f"|format(fe06_resumen.values()|sum(attribute='total_anio')/fe06_resumen.values()|sum(attribute='pim')*100 if fe06_resumen.values()|sum(attribute='pim') else 0) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='saldo_pim')) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='acum_total')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='saldo_et')) }}</td>
+        {% endif %}
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+
+  <div class="resumen-grid">
+    <div class="resumen-box">
+      <h4>Resumen a Nivel PIM</h4>
+      <table>
+        <thead><tr><th>DESCRIPCION</th><th class="num">S/.</th><th class="num">%</th></tr></thead>
+        <tbody>
+          {% set pim_val = fe06_sintesis.pim %}
+          {% set ejec_val = fe06_sintesis.ejec_anio %}
+          <tr><td><strong>PIM ASIGNADO {{ anio }}</strong></td><td class="num strong">{{ "{:,.2f}".format(pim_val) }}</td><td class="num">100%</td></tr>
+          <tr><td>GASTO EJECUTADO {{ anio }}</td><td class="num">{{ "{:,.2f}".format(ejec_val) }}</td><td class="num">{{ "%.2f"|format(ejec_val/pim_val*100 if pim_val else 0) }}%</td></tr>
+          <tr><td>GASTO FINANCIERO MES DE {{ MESES[mes-1] }}</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.mes_actual) }}</td><td class="num">{{ "%.2f"|format(fe06_sintesis.mes_actual/pim_val*100 if pim_val else 0) }}%</td></tr>
+          <tr><td><strong>SALDO {{ anio }}</strong></td><td class="num strong">{{ "{:,.2f}".format(fe06_sintesis.saldo_pim) }}</td><td class="num">{{ "%.2f"|format(fe06_sintesis.saldo_pim/pim_val*100 if pim_val else 0) }}%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="resumen-box">
+      <h4>Resumen a Nivel de Expediente</h4>
+      <table>
+        <thead><tr><th>DESCRIPCION</th><th class="num">S/.</th></tr></thead>
+        <tbody>
+          <tr><td><strong>PRESUPUESTO TOTAL DE OBRA</strong></td><td class="num strong">{{ "{:,.2f}".format(fe06_sintesis.et) }}</td></tr>
+          {% if p.incluir_anios_anteriores %}
+          <tr><td>GASTO EJECUTADO 2023</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.e2023) }}</td></tr>
+          <tr><td>GASTO EJECUTADO 2024</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.e2024) }}</td></tr>
+          <tr><td>GASTO EJECUTADO 2025</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.e2025) }}</td></tr>
+          {% endif %}
+          <tr><td>GASTO EJECUTADO AL MES DE {{ MESES[mes-1] }} {{ anio }}</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.ejec_anio) }}</td></tr>
+          <tr><td><strong>SALDO {{ anio }}</strong></td><td class="num strong">{{ "{:,.2f}".format(fe06_sintesis.saldo_proyecto) }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</body>
+</html>

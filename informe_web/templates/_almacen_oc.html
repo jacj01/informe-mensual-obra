@@ -1,0 +1,56 @@
+<div class="card">
+  <div class="card-head between">
+    <h3><i class="bi bi-bag-check"></i> Agregar por O/C</h3>
+    <button type="button" class="icon-btn" onclick="cerrarModal()" title="Cerrar"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div class="form-panel">
+    <div class="form-grid">
+      <div class="field full">
+        <label>N° de O/C</label>
+        <div class="oc-buscar">
+          <input type="number" id="oc-num" placeholder="Ingrese el N° de la O/C" min="0">
+          <button type="button" class="btn btn-primary" id="btn-buscar-oc"><i class="bi bi-search"></i> Buscar</button>
+        </div>
+        <div class="field-hint">Busque la orden de compra y presione "Agregar" para insertar cada material como un movimiento de almacén (entrada).</div>
+      </div>
+    </div>
+    <div id="oc-resultados">
+      {% include "_oc_resultados.html" %}
+    </div>
+  </div>
+</div>
+<div class="form-actions">
+  <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+</div>
+
+<script>
+  (function () {
+  const ocUrl = {{ url_for('almacen_oc') | tojson }};
+  const ocMes = {{ mes }};
+  const ocAnio = {{ anio }};
+
+  function buscarOC() {
+    const num = (document.getElementById('oc-num').value || '').trim();
+    if (!num) return;
+    const btn = document.getElementById('btn-buscar-oc');
+    btn.disabled = true;
+    fetch(ocUrl + '?num=' + encodeURIComponent(num) + '&mes=' + ocMes + '&anio=' + ocAnio, {
+      headers: { 'X-Modal': '1' }
+    }).then(function (r) { return r.text(); }).then(function (html) {
+      const cont = document.getElementById('oc-resultados');
+      cont.innerHTML = html;
+      ejecutarScripts(cont);
+      bindModalForms(cont);
+      btn.disabled = false;
+    }).catch(function () { btn.disabled = false; });
+  }
+
+  document.getElementById('btn-buscar-oc').addEventListener('click', buscarOC);
+  document.getElementById('oc-num').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); buscarOC(); }
+  });
+
+  const modal = document.getElementById('modal');
+  if (modal) modal.querySelector('.modal-box').classList.add('lg');
+  })();
+</script>

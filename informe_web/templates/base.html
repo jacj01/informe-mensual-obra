@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="robots" content="{% block robots %}index, follow, max-image-preview:large{% endblock %}">
+  {% set _pag_desc = (self.meta_description() or '')|trim %}
+  <meta name="description" content="{{ _pag_desc or 'Sistema para el registro y control del informe financiero mensual de obra en administración directa de la Municipalidad Distrital de Toraya.' }}">
+  <meta name="author" content="INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C.">
+  <meta name="application-name" content="Informe Mensual de Obra">
+  <meta name="theme-color" content="#1b3a6b">
+  <link rel="canonical" href="{{ request.base_url }}">
+  <link rel="icon" href="{{ url_for('static', filename='img/Logo.png', v=4) }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/Logo.png', v=4) }}">
+  <meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}">
+  <meta property="og:description" content="{{ _pag_desc or 'Registro y exportación del informe financiero mensual de obra en administración directa.' }}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ request.url }}">
+  <meta property="og:site_name" content="Informe Mensual de Obra">
+  <meta property="og:image" content="{{ url_for('static', filename='img/Logo.png', _external=True, v=4) }}">
+  <meta property="og:locale" content="es_PE">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{% block twitter_title %}{{ self.title() }}{% endblock %}">
+  <meta name="twitter:description" content="{{ _pag_desc or 'Registro y exportación del informe financiero mensual de obra en administración directa.' }}">
+  <meta name="twitter:image" content="{{ url_for('static', filename='img/Logo.png', _external=True, v=4) }}">
+  <title>{% block title %}Informe Mensual de Obra{% endblock %}{% if p and p.entidad %} | {{ p.entidad }}{% endif %}</title>
+  <!--{% block meta_description %}{% endblock %}-->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Informe Mensual de Obra",
+    "url": "{{ request.base_url }}",
+    "description": "Sistema para el registro y control del informe financiero mensual de obra en administración directa.",
+    "applicationCategory": "FinanceApplication",
+    "inLanguage": "es",
+    "operatingSystem": "Web",
+    "offers": {
+      "@type": "Offer",
+      "category": "SoftwareSubscription"
+    }
+    {% if p and p.entidad %},
+    "publisher": {
+      "@type": "Organization",
+      "name": "{{ p.entidad }}"
+    }
+    {% endif %}
+  }
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=9">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo"><img src="{{ url_for('static', filename='img/Logo.png', v=4) }}" alt="Logo"></div>
+      <div>
+        <div class="brand-title">Informe Mensual de Obra</div>
+        <div class="brand-sub">{{ p.meta if p else '' }}</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a class="nav-link {{ 'active' if active == 'dashboard' }}" href="{{ url_for('dashboard') }}">
+        <i class="bi bi-speedometer2"></i> <span>Inicio</span>
+      </a>
+      {% if not usuario or usuario.rol == 'Administrador' or 'cabecera' in permisos_usuario %}
+      <a class="nav-link {{ 'active' if active == 'cabecera' }}" href="{{ url_for('cabecera') }}">
+        <i class="bi bi-card-heading"></i> <span>Datos del Proyecto</span>
+      </a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'ordenes' in permisos_usuario %}
+      <a class="nav-link {{ 'active' if active == 'ordenes' }}" href="{{ url_for('ordenes') }}">
+        <i class="bi bi-bag-check"></i> <span>Ingreso de O/C o O/S</span>
+      </a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'gastos' in permisos_usuario %}
+      <a class="nav-link {{ 'active' if active == 'gastos' }}" href="{{ url_for('gastos') }}">
+        <i class="bi bi-receipt"></i> <span>Manifiesto de Gastos</span>
+      </a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'formatos' in permisos_usuario %}
+      <a class="nav-link {{ 'active' if active == 'formatos' }}" href="{{ url_for('formatos') }}">
+        <i class="bi bi-file-earmark-spreadsheet"></i> <span>Formatos Financiero</span>
+      </a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'almacen' in permisos_usuario %}
+      <a class="nav-link {{ 'active' if active == 'almacen' }}" href="{{ url_for('almacen') }}">
+        <i class="bi bi-box-seam"></i> <span>Almacén de Obra</span>
+      </a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'tareo' in permisos_usuario %}
+      <a class="nav-link {{ 'active' if active == 'tareo' }}" href="{{ url_for('tareo') }}">
+        <i class="bi bi-clipboard-data"></i> <span>Tareo y Planilla</span>
+      </a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'configuracion' in permisos_usuario %}
+      <a class="nav-link {{ 'active' if active == 'configuracion' }}" href="{{ url_for('configuracion') }}">
+        <i class="bi bi-sliders"></i> <span>Configuración Presupuestal</span>
+      </a>
+      {% endif %}
+      {% if usuario and usuario.rol in ['Administrador', 'Super Usuario'] %}
+      <a class="nav-link {{ 'active' if active == 'usuarios' }}" href="{{ url_for('usuarios') }}">
+        <i class="bi bi-person-gear"></i> <span>Gestión de Usuarios</span>
+      </a>
+      {% endif %}
+      {% if usuario and usuario.rol == 'Super Usuario' %}
+      <a class="nav-link {{ 'active' if active == 'suscripcion' }}" href="{{ url_for('suscripcion') }}">
+        <i class="bi bi-credit-card-2-front"></i> <span>Suscripción</span>
+      </a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'respaldo' in permisos_usuario %}
+      <a class="nav-link {{ 'active' if active == 'respaldo' }}" href="{{ url_for('respaldo') }}">
+        <i class="bi bi-database"></i> <span>Respaldo de Datos</span>
+      </a>
+      {% endif %}
+    </nav>
+    <div class="sidebar-foot">
+      <a class="btn btn-export" href="{{ url_for('logout') }}" title="Cerrar sesión">
+        <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+      </a>
+      <div class="year-badge"><i class="bi bi-calendar3"></i> Período {{ p.anio if p else '' }}</div>
+      <div class="credit">
+        <div class="credit-line">Elaborado y Diseñado por INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA SOCIEDAD ANONIMA CERRADA</div>
+        <div class="credit-contact">RUC: 20603860935<br>Cel: 918 358 910<br>Cel: 974 369 366<br>Correo: ingcpa.sac@gmail.com</div>
+        <div class="credit-version">Version 1.0</div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="toggle" id="toggleSidebar"><i class="bi bi-list"></i></button>
+      <div class="topbar-title">
+        <h1>{% block heading %}{% endblock %}</h1>
+        <p>{% block subheading %}{% endblock %}</p>
+      </div>
+      <div class="topbar-right">
+        {% if susc %}
+        <div class="lic-widget {{ 'lic-widget-bad' if not susc.vigente else ('lic-widget-warn' if susc.dias_restantes <= 15 else '') }}"
+             title="{{ 'Cuenta principal sin límite de tiempo' if susc.es_super else 'Licencia ' ~ susc.plan ~ (' adquirida, vigente hasta el ' ~ susc.fecha_fin.strftime('%d/%m/%Y') if susc.fecha_fin else '') }}">
+          <i class="bi bi-award"></i>
+          <div class="lic-widget-info">
+            <div class="lic-widget-line">
+              <b>{{ 'Cuenta Principal' if susc.es_super else susc.plan }}</b>
+              {% if not susc.es_super and susc.fecha_inicio and susc.fecha_fin %}
+              <span class="lic-widget-range">{{ susc.fecha_inicio.strftime('%d/%m/%Y') }} → {{ susc.fecha_fin.strftime('%d/%m/%Y') }}</span>
+              {% endif %}
+            </div>
+            <div class="lic-widget-sub">
+              {% if susc.es_super %}
+                Sin límite de tiempo
+              {% elif not susc.vigente %}
+                VENCIDA
+              {% else %}
+                {{ susc.dias_restantes }} día{{ 's' if susc.dias_restantes != 1 }} restante{{ 's' if susc.dias_restantes != 1 }} para vencer
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        <div class="chip">
+          <i class="bi bi-person-circle"></i>
+          <div>
+            <div class="chip-name">{{ 'Cuenta Principal' if usuario and usuario.rol == 'Super Usuario' else (usuario.nombres if usuario else (p.residente if p else '')) }}</div>
+            <div class="chip-role">{{ 'Administrador' if usuario and usuario.rol == 'Super Usuario' else (usuario.rol if usuario else 'Residente de Obra') }}</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    {% if susc and (not susc.vigente or susc.dias_restantes <= 15) %}
+    <div class="susc-banner {{ 'susc-banner-error' if not susc.vigente else 'susc-banner-warn' }}">
+      <i class="bi {{ 'bi-x-octagon-fill' if not susc.vigente else 'bi-clock-history' }}"></i>
+      <span>
+        {% if not susc.vigente %}
+          La suscripción vencida el {{ susc.fecha_fin.strftime('%d/%m/%Y') if susc.fecha_fin else '—' }}.
+          El aplicativo quedó bloqueado.
+        {% else %}
+          La suscripción <b>{{ susc.plan }}</b> vence en
+          {{ susc.dias_restantes }} día{{ 's' if susc.dias_restantes != 1 }}
+          ({{ susc.fecha_fin.strftime('%d/%m/%Y') if susc.fecha_fin else '—' }}).
+        {% endif %}
+      </span>
+      {% if susc.es_super %}
+      <a class="btn btn-primary btn-sm" href="{{ url_for('suscripcion') }}">Renovar</a>
+      {% else %}
+      <button type="button" class="btn btn-gold btn-sm" onclick="abrirModal('{{ url_for('licencia_form') }}')">
+        <i class="bi bi-file-earmark-arrow-up"></i> Ampliar licencia
+      </button>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <div class="modal" id="modal">
+    <div class="modal-backdrop" onclick="cerrarModal()"></div>
+    <div class="modal-box">
+      <button type="button" class="modal-close" onclick="cerrarModal()" title="Cerrar"><i class="bi bi-x-lg"></i></button>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="confirm-popup" id="confirmPopup" role="dialog" aria-modal="true">
+    <div class="confirm-backdrop" id="confirmBackdrop"></div>
+    <div class="confirm-box">
+      <div class="confirm-icon" id="confirmIcon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div class="confirm-title" id="confirmTitle">Confirmar acción</div>
+      <div class="confirm-msg" id="confirmMsg"></div>
+      <div class="confirm-actions">
+        <button type="button" class="btn btn-outline" id="confirmCancel">Cancelar</button>
+        <button type="button" class="btn btn-red" id="confirmOk">Sí, continuar</button>
+      </div>
+    </div>
+  </div>
+
+  <script id="flash-data" type="application/json">{{ get_flashed_messages(with_categories=true)|tojson }}</script>
+
+  <div id="toast-container" aria-live="polite"></div>
+
+  <script>
+    var csrfValor = (function () {
+      var m = document.querySelector('meta[name="csrf-token"]');
+      return m ? m.getAttribute('content') : '';
+    })();
+
+    function inyectarCsrf(contenedor) {
+      if (!csrfValor) return;
+      contenedor.querySelectorAll('form').forEach(function (f) {
+        if (f.querySelector('input[name="_csrf"]')) return;
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = '_csrf';
+        inp.value = csrfValor;
+        f.appendChild(inp);
+      });
+    }
+
+    function ejecutarScripts(contenedor) {
+      contenedor.querySelectorAll('script').forEach(function (s) {
+        var ns = document.createElement('script');
+        s.getAttributeNames().forEach(function (a) { ns.setAttribute(a, s.getAttribute(a)); });
+        ns.textContent = s.textContent;
+        s.parentNode.replaceChild(ns, s);
+      });
+    }
+
+    inyectarCsrf(document);
+
+    function bindModalForms(contenedor) {
+      inyectarCsrf(contenedor);
+      contenedor.querySelectorAll('form').forEach(function (form) {
+        if (form.dataset.ajaxBound) return;
+        form.dataset.ajaxBound = '1';
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          normalizarMontos(form);
+          if (!validarFormulario(form)) return;
+          var btn = form.querySelector('button[type=submit]');
+          if (btn) btn.disabled = true;
+          fetch(form.action, {
+            method: 'POST',
+            headers: { 'X-Modal': '1' },
+            body: new FormData(form)
+          }).then(function (r) {
+            if (r.redirected) {
+              window.location.href = r.url;
+              return;
+            }
+            return r.text().then(function (text) {
+              if (r.ok) {
+                window.location.reload();
+                return;
+              }
+              var body = document.getElementById('modalBody');
+              body.innerHTML = text;
+              ejecutarScripts(body);
+              bindModalForms(body);
+              if (btn) btn.disabled = false;
+            });
+          }).catch(function () {
+            if (btn) btn.disabled = false;
+            form.submit();
+          });
+        });
+      });
+    }
+
+    function abrirModal(url) {
+      if (!url) return false;
+      fetch(url, { headers: { 'X-Modal': '1' } })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          var body = document.getElementById('modalBody');
+          body.innerHTML = html;
+          ejecutarScripts(body);
+          bindModalForms(body);
+          formatearMontos(body);
+          document.getElementById('modal').classList.add('open');
+          document.body.classList.add('modal-open');
+        })
+        .catch(function () {
+          window.location.href = url;
+        });
+      return false;
+    }
+
+    function cerrarModal() {
+      var m = document.getElementById('modal');
+      if (m && m.classList.contains('open')) {
+        m.classList.remove('open');
+        m.querySelector('.modal-box').classList.remove('lg');
+        document.body.classList.remove('modal-open');
+        document.getElementById('modalBody').innerHTML = '';
+      } else if (window.history.length > 1) {
+        window.history.back();
+      }
+    }
+
+    // Confirmación tipo popup (reemplaza confirm() del navegador)
+    var confirmarResolve = null;
+
+    function confirmarPopup(opciones) {
+      return new Promise(function (resolve) {
+        confirmarResolve = resolve;
+        var icono = document.getElementById('confirmIcon');
+        icono.className = 'confirm-icon' + (opciones.icono ? ' ' + opciones.icono : '');
+        document.getElementById('confirmTitle').textContent = opciones.titulo || 'Confirmar acción';
+        document.getElementById('confirmMsg').textContent = opciones.mensaje || '';
+        var ok = document.getElementById('confirmOk');
+        ok.textContent = opciones.botonOk || 'Sí, continuar';
+        ok.className = 'btn ' + (opciones.colorOk || 'btn-red');
+        document.getElementById('confirmPopup').classList.add('open');
+        document.body.classList.add('modal-open');
+      });
+    }
+
+    function resolverConfirmacion(aceptar) {
+      var cb = confirmarResolve;
+      confirmarResolve = null;
+      document.getElementById('confirmPopup').classList.remove('open');
+      document.body.classList.remove('modal-open');
+      if (cb) cb(aceptar);
+    }
+
+    document.getElementById('confirmOk').addEventListener('click', function () { resolverConfirmacion(true); });
+    document.getElementById('confirmCancel').addEventListener('click', function () { resolverConfirmacion(false); });
+    document.getElementById('confirmBackdrop').addEventListener('click', function () { resolverConfirmacion(false); });
+
+    // Mensajes de alerta tipo popup (toast)
+    function mostrarToast(categoria, texto) {
+      var mapa = { success: 'success', info: 'info', warning: 'warning', error: 'error', danger: 'error' };
+      var c = mapa[categoria] || 'info';
+      var iconos = { success: 'bi-check-circle-fill', info: 'bi-info-circle-fill', warning: 'bi-exclamation-triangle-fill', error: 'bi-x-circle-fill' };
+      var cont = document.getElementById('toast-container');
+      if (!cont) return;
+      var t = document.createElement('div');
+      t.className = 'toast toast-' + c;
+      t.innerHTML = '<i class="bi ' + iconos[c] + '"></i><span></span><button type="button" class="toast-close" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>';
+      t.querySelector('span').textContent = texto;
+      cont.appendChild(t);
+      requestAnimationFrame(function () { t.classList.add('show'); });
+      var cerrar = function () {
+        t.classList.remove('show');
+        setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 260);
+      };
+      t.querySelector('.toast-close').addEventListener('click', cerrar);
+      setTimeout(cerrar, 6000);
+    }
+
+    (function () {
+      var data = document.getElementById('flash-data');
+      if (!data) return;
+      var mensajes = [];
+      try { mensajes = JSON.parse(data.textContent) || []; } catch (e) { mensajes = []; }
+      mensajes.forEach(function (m) { mostrarToast(m[0], m[1]); });
+    })();
+
+    // Submits con data-confirm muestran el popup antes de enviar
+    document.addEventListener('submit', function (e) {
+      var f = e.target;
+      if (!f || f.tagName !== 'FORM' || !f.dataset.confirm) return;
+      if (f.dataset.confirmado) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      confirmarPopup({
+        titulo: f.dataset.confirmTitle || 'Confirmar acción',
+        mensaje: f.dataset.confirm,
+        botonOk: f.dataset.confirmBtn || 'Sí, continuar',
+        colorOk: f.dataset.confirmColor || 'btn-red',
+        icono: f.dataset.confirmIcon || 'danger'
+      }).then(function (aceptar) {
+        if (aceptar) {
+          f.dataset.confirmado = '1';
+          if (f.requestSubmit) f.requestSubmit(); else f.submit();
+        }
+      });
+    }, true);
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      if (document.getElementById('confirmPopup').classList.contains('open')) {
+        resolverConfirmacion(false);
+      } else {
+        cerrarModal();
+      }
+    });
+
+    document.getElementById('toggleSidebar').addEventListener('click', function () {
+      var sb = document.getElementById('sidebar');
+      sb.classList.toggle('collapsed');
+      document.body.classList.toggle('sidebar-collapsed', sb.classList.contains('collapsed'));
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    // Montos en soles (S/): símbolo decimal '.', 2 decimales, separador de miles ','
+    function _numMonto(valor) {
+      var n = parseFloat(String(valor == null ? '' : valor).replace(/,/g, ''));
+      return isNaN(n) ? 0 : n;
+    }
+
+    function formatearMonto(valor) {
+      if (valor === null || valor === undefined) return '';
+      var t = String(valor).trim();
+      if (t === '') return '';
+      return _numMonto(t).toLocaleString('en-US',
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function normalizarMontos(form) {
+      form.querySelectorAll('.monto').forEach(function (inp) {
+        if (inp.value) inp.value = String(inp.value).replace(/,/g, '');
+      });
+    }
+
+    function formatearMontos(contenedor) {
+      contenedor.querySelectorAll('.monto').forEach(function (inp) {
+        if (inp.value) inp.value = formatearMonto(inp.value);
+      });
+    }
+
+    document.addEventListener('focusin', function (e) {
+      var el = e.target;
+      if (el && el.classList && el.classList.contains('monto') && el.value) {
+        el.value = String(el.value).replace(/,/g, '');
+      }
+    });
+
+    document.addEventListener('focusout', function (e) {
+      var el = e.target;
+      if (el && el.classList && el.classList.contains('monto') && el.value) {
+        el.value = formatearMonto(el.value);
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+      formatearMontos(document);
+    });
+
+    // Validación: ningún campo de guardado puede quedar en blanco
+    function limpiarErrorValidacion(form) {
+      var err = form.querySelector('.valid-error');
+      if (err) err.parentNode.removeChild(err);
+      form.querySelectorAll('.campo-invalido').forEach(function (el) {
+        el.classList.remove('campo-invalido');
+      });
+    }
+
+    function mostrarErrorValidacion(form, invalidos) {
+      limpiarErrorValidacion(form);
+      var nom = invalidos.slice(0, 5).map(function (el) {
+        var f = el.closest('.field');
+        var lbl = f ? f.querySelector('label') : null;
+        var txt = lbl ? lbl.textContent : '';
+        txt = txt.replace(/[^A-Za-z\u00c0-\u024f0-9\s\u00b7]/g, '').trim();
+        return txt || el.name || 'campo';
+      });
+      var div = document.createElement('div');
+      div.className = 'alert alert-error valid-error';
+      div.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Complete o corrija los campos marcados: ' +
+        nom.map(function (n) { return '<b>' + n + '</b>'; }).join(', ') +
+        (invalidos.length > 5 ? ' y ' + (invalidos.length - 5) + ' m\u00e1s.' : '.');
+      form.insertBefore(div, form.firstChild);
+    }
+
+    function validarFormulario(form) {
+      if (form.hasAttribute('data-no-validar')) return true;
+      limpiarErrorValidacion(form);
+      var invalidos = [];
+      var primero = null;
+      form.querySelectorAll('input, select, textarea').forEach(function (el) {
+        if (el.type === 'hidden' || el.type === 'checkbox' || el.type === 'radio') return;
+        if (el.disabled || el.readOnly) return;
+        if (el.hasAttribute('data-no-validar')) return;
+        var r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) return;
+        var valor = (el.value || '').trim();
+        var invalido = valor === '';
+        if (!invalido && el.minLength > 0 && valor.length < el.minLength) invalido = true;
+        if (!invalido && el.pattern) {
+          try {
+            var re = new RegExp('^(?:' + el.pattern + ')$');
+            if (!re.test(valor)) invalido = true;
+          } catch (e) {}
+        }
+        if (invalido) {
+          invalidos.push(el);
+          el.classList.add('campo-invalido');
+          if (!primero) primero = el;
+        }
+      });
+      if (invalidos.length > 0) {
+        mostrarErrorValidacion(form, invalidos);
+        if (primero) {
+          primero.focus();
+          if (primero.scrollIntoView) primero.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+        return false;
+      }
+      return true;
+    }
+
+    document.addEventListener('submit', function (e) {
+      var f = e.target;
+      if (f && f.tagName === 'FORM' && !f.dataset.ajaxBound) {
+        normalizarMontos(f);
+        if (!validarFormulario(f)) e.preventDefault();
+      }
+    });
+
+    document.addEventListener('input', function (e) {
+      var el = e.target;
+      if (el && el.classList) el.classList.remove('campo-invalido');
+    });
+
+    // Cierre automático de sesión por inactividad (15 minutos)
+    (function () {
+      var LIMITE = 15 * 60 * 1000;
+      var AVISO = 60 * 1000;
+      var t = null, a = null, banner = null, restante = 0;
+
+      function irLogout() {
+        if (a) clearInterval(a);
+        window.location.href = "{{ url_for('logout') }}";
+      }
+
+      function reiniciar() {
+        clearTimeout(t);
+        if (a) clearInterval(a);
+        if (banner) { banner.remove(); banner = null; }
+        t = setTimeout(function () {
+          if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'sesion-banner';
+            banner.innerHTML = '<div class="sesion-banner-box">' +
+              '<span id="sesion-msg"></span>' +
+              '<button type="button" id="sesion-btn" class="btn btn-primary btn-sm">Continuar sesión</button>' +
+              '</div>';
+            document.body.appendChild(banner);
+            document.getElementById('sesion-btn').addEventListener('click', reiniciar);
+          }
+          var msg = document.getElementById('sesion-msg');
+          restante = AVISO;
+          msg.textContent = 'Su sesión cerrará por inactividad en 60 s.';
+          a = setInterval(function () {
+            restante -= 1000;
+            if (restante <= 0) { irLogout(); return; }
+            msg.textContent = 'Su sesión cerrará por inactividad en ' + Math.round(restante / 1000) + ' s.';
+          }, 1000);
+        }, LIMITE - AVISO);
+      }
+
+      ['mousemove', 'mousedown', 'keydown', 'click', 'scroll', 'touchstart'].forEach(function (ev) {
+        document.addEventListener(ev, reiniciar, { passive: true });
+      });
+      reiniciar();
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

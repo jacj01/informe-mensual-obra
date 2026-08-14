@@ -1,0 +1,60 @@
+{% if error %}
+<div class="alert alert-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div>
+{% elif not oc_list %}
+<div class="empty-sm" style="padding:14px;text-align:center;color:var(--texto2);">
+  <i class="bi bi-search"></i> Ingrese un N° de O/C y presione Buscar.
+</div>
+{% else %}
+{% for g in oc_list %}
+<div class="prov">
+  <div class="prov-head">
+    <div class="prov-info">
+      <span class="prov-num">{{ loop.index }}</span>
+      <div class="prov-datos">
+        <div class="prov-name">{{ g.proveedor }}</div>
+        <div class="prov-meta">
+          <span>O/C N° {{ g.num_doc }}</span>
+          <i class="bi bi-dot"></i>
+          <span>SIAF {{ g.siaf }}</span>
+          <i class="bi bi-dot"></i>
+          <span>{{ g.fecha.strftime("%d/%m/%Y") if g.fecha else '' }}</span>
+          <i class="bi bi-dot"></i>
+          <span>{{ g.detalles|length }} material(es)</span>
+        </div>
+      </div>
+    </div>
+    <div class="prov-right">
+      <form method="post" action="{{ url_for('almacen_agregar_oc') }}" class="inline"
+            data-confirm="¿Agregar los {{ g.detalles|length }} materiales de la O/C N° {{ g.num_doc }} al almacén?"
+            data-confirm-title="Agregar por O/C" data-confirm-btn="Agregar" data-confirm-color="btn-green" data-confirm-icon="success">
+        <input type="hidden" name="oc_id" value="{{ g.id }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="mes" value="{{ mes }}">
+        <input type="hidden" name="anio" value="{{ anio }}">
+        <button type="submit" class="btn btn-green btn-sm"><i class="bi bi-plus-lg"></i> Agregar</button>
+      </form>
+    </div>
+  </div>
+  <table class="table table-prov">
+    <thead>
+      <tr>
+        <th>#</th><th>Material</th><th>Und</th>
+        <th class="num">Cant</th><th class="num">P.U</th><th class="num">Importe</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in g.detalles %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="wrap">{{ d.detalle }}</td>
+        <td>{{ d.und }}</td>
+        <td class="num">{{ d.cantidad }}</td>
+        <td class="num">{{ "{:,.2f}".format(d.precio_unitario) }}</td>
+        <td class="num strong">S/ {{ "{:,.2f}".format(d.importe) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% endif %}

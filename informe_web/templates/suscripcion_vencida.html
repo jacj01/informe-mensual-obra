@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="La suscripción del sistema de informe financiero mensual de obra ha vencido. Renueva tu plan para continuar usando el aplicativo.">
+  <link rel="canonical" href="{{ request.base_url }}">
+  <meta property="og:title" content="Suscripción vencida | Informe Mensual de Obra">
+  <meta property="og:description" content="La suscripción del sistema de informe financiero mensual de obra ha vencido.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_PE">
+  <meta name="theme-color" content="#1b3a6b">
+  <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+  <title>Suscripción vencida | Informe Mensual de Obra</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=9">
+</head>
+<body class="vencida-body">
+  <div class="vencida-card">
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+      {% if mensajes %}
+        <div class="vencida-flash">
+          {% for cat, msg in mensajes %}
+            <div class="alert {{ 'alert-error' if cat == 'error' else 'alert-success' }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    <div class="vencida-top">
+      <div class="vencida-icon"><i class="bi bi-shield-lock"></i></div>
+      <span class="vencida-tag"><i class="bi bi-stopwatch"></i> ACCESO SUSPENDIDO</span>
+      <h1>Suscripción vencida</h1>
+      {% if s and s.fecha_fin %}
+      <p class="vencida-desc">
+        La suscripción de este aplicativo venció el
+        <b>{{ s.fecha_fin.strftime('%d/%m/%Y') }}</b>
+        <span class="vencida-plan">Plan {{ s.plan }}</span>
+      </p>
+      {% else %}
+      <p class="vencida-desc">
+        Esta cuenta aún no tiene licencia. Adquiera una para habilitar el
+        acceso al aplicativo.
+      </p>
+      {% endif %}
+    </div>
+
+    {% if es_super %}
+    <div class="vencida-note">
+      <i class="bi bi-star-fill"></i>
+      <span>Usted es el administrador del sistema: puede renovar la suscripción para restablecer el acceso de todos los usuarios.</span>
+    </div>
+    <a class="vencida-btn gold" href="{{ url_for('suscripcion') }}">
+      <i class="bi bi-credit-card-2-front"></i> Gestionar suscripción
+    </a>
+    {% else %}
+    <div class="vencida-contact">
+      <p class="vencida-contact-txt">Para restablecer el acceso al aplicativo, comuníquese con nuestro número de contacto:</p>
+      <div class="vencida-phone">
+        <i class="bi bi-telephone-fill"></i>
+        <a href="tel:+51974369366">+51 974 369 366</a>
+      </div>
+      <div class="vencida-channels">
+        <a class="chan chan-wa" href="https://wa.me/51974369366" target="_blank" rel="noopener" onclick="return abrirMensajeCompra(event, 'wa')"><i class="bi bi-whatsapp"></i> WhatsApp</a>
+        <a class="chan chan-tg" href="https://t.me/+51974369366" target="_blank" rel="noopener" onclick="return abrirMensajeCompra(event, 'tg')"><i class="bi bi-send"></i> Telegram</a>
+        <a class="chan chan-call" href="tel:+51974369366"><i class="bi bi-telephone"></i> Llamada</a>
+      </div>
+    </div>
+    <div class="vencida-license">
+      <div class="vencida-license-title"><i class="bi bi-file-earmark-check"></i> ¿Ya tiene su archivo de licencia?</div>
+      <p class="vencida-license-txt">Suba el archivo <b>.lic</b> que le fue entregado y la suscripción se renovará automáticamente.</p>
+      <form method="post" action="{{ url_for('licencia_subir') }}" enctype="multipart/form-data" class="vencida-upload" id="vencida-upload-form">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <label class="vencida-file">
+          <i class="bi bi-cloud-arrow-up"></i>
+          <span>Seleccionar archivo de licencia</span>
+          <input type="file" name="licencia" id="vencida-file" accept=".lic,.json,application/json" required>
+        </label>
+        <p class="vencida-file-info" id="vencida-file-info"><i class="bi bi-info-circle"></i> Sin archivo seleccionado</p>
+        <button type="submit" class="vencida-btn gold"><i class="bi bi-arrow-repeat"></i> Renovar ahora</button>
+      </form>
+      <p class="vencida-sub">¿Aún no lo tiene? Comuníquese con el contacto para recibirlo.</p>
+    </div>
+    {% endif %}
+
+    <div class="vencida-actions">
+      <a class="vencida-btn ghost" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</a>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var inp = document.getElementById('vencida-file');
+      var info = document.getElementById('vencida-file-info');
+      if (!inp || !info) return;
+      function escapar(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+      inp.addEventListener('change', function () {
+        if (inp.files && inp.files.length) {
+          info.className = 'vencida-file-info ok';
+          info.innerHTML = '<i class="bi bi-file-earmark-check"></i> Archivo listo: <b>' + escapar(inp.files[0].name) + '</b>';
+        } else {
+          info.className = 'vencida-file-info';
+          info.innerHTML = '<i class="bi bi-info-circle"></i> Sin archivo seleccionado';
+        }
+      });
+    })();
+
+    var datosAdmin = {
+      usuario: {{ admin_usuario|tojson }},
+      nombres: {{ admin_nombres|tojson }}
+    };
+
+    function abrirMensajeCompra(e, canal) {
+      e.preventDefault();
+      var usuario = (datosAdmin.usuario || '').trim();
+      var nombres = (datosAdmin.nombres || '').trim();
+      var mensaje =
+        '\uD83D\uDC4B Hola ICPASAC \uD83D\uDC4B,\n' +
+        'Acabo de realizar la compra de un plan.\n' +
+        'Mi usuario Administrador es: ' + usuario + '\n' +
+        'Mi nombre es: ' + nombres + '\n' +
+        'Por favor, revisa mi comprobante el cual adjunto en este mensaje.\n' +
+        '\u00A1Gracias espero su pronta atencion! \uD83D\uDE4F';
+      var url = canal === 'tg'
+        ? 'https://t.me/+51974369366?text=' + encodeURIComponent(mensaje)
+        : 'https://wa.me/51974369366?text=' + encodeURIComponent(mensaje);
+      window.open(url, '_blank', 'noopener');
+    }
+  </script>
+</body>
+</html>

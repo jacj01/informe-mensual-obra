@@ -1,0 +1,130 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Manifiesto de gasto de obra en administración directa{% if hdr and hdr.periodo %} - {{ hdr.periodo }}{% endif %}.">
+<title>MANIFIESTO DE GASTO - {{ hdr.periodo if hdr else '' }}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<style>
+  table.tabla th, table.tabla td { padding: 2.5px 3px; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h2>Manifiesto de Gasto</h2>
+  <div class="spacer"></div>
+  <span class="nota">Vista de impresión del Manifiesto de Gasto.</span>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('gastos', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+
+<div class="hoja">
+
+  <!-- ===================== ENCABEZADO OFICIAL ===================== -->
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if hdr.logo_path %}<img src="{{ url_for('static', filename=hdr.logo_path) }}" alt="Logo">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ hdr.entidad or '' }}</div>
+      <div class="entidad-sub">{{ hdr.unidad or '' }}</div>
+      <div class="titulo">Manifiesto de Gasto</div>
+      <div class="subtitulo">{{ hdr.modalidad or '' }}</div>
+    </div>
+    <div class="enc-der">
+      <div class="num-doc">N°&nbsp;{{ hdr.n_manifiesto or '______' }}</div>
+      <div style="margin-top:6px;font-weight:700;color:var(--azul)">PERÍODO:&nbsp;{{ hdr.periodo or '' }}</div>
+    </div>
+  </div>
+
+  <!-- ===================== DATOS GENERALES ===================== -->
+  <div class="info-grid">
+    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ hdr.proyecto or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Código Unico</span><span class="info-val">{{ hdr.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Correlativo Meta</span><span class="info-val">{{ hdr.meta or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Fuente Financ.</span><span class="info-val">{{ hdr.fuente or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Modalidad</span><span class="info-val">{{ hdr.modalidad or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Ubicación</span><span class="info-val">{{ hdr.ubicacion or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Residente de Obra</span><span class="info-val">{{ hdr.residente or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Supervisor de Obra</span><span class="info-val">{{ hdr.supervisor or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Admin. de Obra</span><span class="info-val">{{ hdr.asistente or '' }}</span></div>
+    <div class="info-item info-ancho"><span class="info-label">Período</span><span class="info-val">{{ hdr.periodo or '' }}</span></div>
+  </div>
+
+  <!-- ===================== TABLA FINANCIERA ===================== -->
+  <table class="tabla">
+    <colgroup>
+      <col style="min-width:20px"><col style="min-width:55px"><col style="min-width:48px"><col style="min-width:40px"><col style="min-width:38px">
+      <col style="min-width:130px"><col style="min-width:200px"><col style="min-width:28px"><col style="min-width:42px"><col style="min-width:55px"><col style="min-width:60px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>N°</th><th>Fecha</th><th>SIAF</th><th>Tipo Doc</th><th>N°</th>
+        <th>Nombre / Proveedor</th><th>Detalle del Gasto</th><th>Und.</th>
+        <th>Cant.</th><th>P. Unitario</th><th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in secciones %}
+      <tr class="fila-rubro"><td colspan="11">{{ s.label }}</td></tr>
+      {% for f in s.filas %}
+      <tr>
+        <td class="ctr">{{ f.prov_num if f.prov_first else '' }}</td>
+        <td>{{ f.fecha if f.prov_first else '' }}</td>
+        <td>{{ f.siaf if f.prov_first else '' }}</td>
+        <td class="ctr">{{ f.tipo_doc if f.prov_first else '' }}</td>
+        <td class="ctr">{{ f.num_doc if f.prov_first else '' }}</td>
+        <td>{{ f.proveedor if f.prov_first else '' }}</td>
+        <td>{{ f.detalle }}</td>
+        <td class="ctr">{{ f.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.cantidad) if f.cantidad else '' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.pu) if f.pu else '' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.importe) }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fila-sub">
+        <td colspan="10" style="text-align:right">SUBTOTAL {{ s.componente.upper() }} S/.</td>
+        <td class="num">{{ "{:,.2f}".format(s.subtotal) }}</td>
+      </tr>
+      {% else %}
+      <tr class="fila-rubro"><td colspan="11">SIN GASTOS DEVENGADOS PARA EL PERÍODO</td></tr>
+      {% endfor %}
+
+      <!-- ============ TOTAL GENERAL ============ -->
+      <tr class="fila-total">
+        <td colspan="10" style="text-align:right">TOTAL GENERAL S/.</td>
+        <td class="num">{{ "{:,.2f}".format(total_gral) }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== FIRMAS ===================== -->
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ hdr.residente or '' }}</div>
+      <div class="cargo">Residente de Obra</div>
+      <div class="reg">{% if hdr.cip_residente %}CIP: {{ hdr.cip_residente }}{% endif %}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ hdr.supervisor or '' }}</div>
+      <div class="cargo">Supervisor de Obra</div>
+      <div class="reg">{% if hdr.cip_supervisor %}CIP: {{ hdr.cip_supervisor }}{% endif %}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ (p.administrador_obra or p.asistente) if p else '' }}</div>
+      <div class="cargo">V°B° Administración / Entidad</div>
+      <div class="reg"></div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,48 @@
+INFORMACION DEL APLICATIVO - INFORME MENSUAL DE OBRA
+====================================================
+
+Nombre del aplicativo: Informe Mensual de Obra
+Versión actual: 1.0
+Tipo de aplicativo: Web (servidor local, no publicada en internet)
+Tecnologías del frontend: HTML5, CSS3 (estilos propios en style.css),
+  JavaScript (vanilla), Bootstrap Icons, plantillas Jinja2
+Tecnologías del backend: Flask, Flask-SQLAlchemy, SQLAlchemy,
+  migración automática de esquema al arrancar (databases.py)
+Lenguaje principal: Python 3
+Base de datos: SQLite, multi-base: maestra (instance/informe.db) y
+  una por administrador (instance/datos/admin_<id>/informe.db)
+Servidor o nube: Servidor local, Waitress en el puerto 5000
+  (servidor_silencioso.py, ejecutado con pythonw.exe)
+Sistema operativo: Windows (código portable; los datos se guardan
+  en archivos locales)
+Repositorio: No hay repositorio; el proyecto vive en la carpeta
+  informe_web con respaldos manuales en la carpeta Respaldo BD
+Roles de usuario: Super Usuario (controla licencias y suscripción),
+  Administrador (gestiona su propio proyecto y a sus operadores),
+  Usuario u operador (acceso por permisos asignados por sección)
+Módulos principales:
+  - Cabecera / Proyecto (hoja de presentación)
+  - Gastos / Manifiesto de gastos
+  - Órdenes de Compra (O/C) y Órdenes de Servicio (O/S)
+  - Almacén (formatos FE-07 y FE-08)
+  - Tareo y Planilla de pagos del personal
+  - Formatos financieros (FE-05, FE-06 y Resumen Financiero)
+  - Configuración del proyecto
+  - Respaldo de bases de datos
+  - Usuarios (altas, bajas y permisos)
+  - Suscripción / Licencias de uso
+Integraciones externas: Ninguna (todo es local, sin APIs ni
+  servicios externos)
+Sistema de actualización: Manual. Se reemplazan los archivos y al
+  arrancar el servidor las tablas de la base se migran solas
+  (alineación de columnas automática)
+Sistema de impresión: Impresión desde el navegador mediante
+  plantillas especiales (*_imprimir.html) con estilos de impresión
+Cantidad aproximada de usuarios: 3 registrados (1 Super Usuario,
+  2 Administradores); sin operadores activos por el momento
+Tipo de información manejada: Datos financieros de obra pública:
+  presupuesto, gastos (SIAF), órdenes de compra/servicio, almacén,
+  planilla de personal, expediente técnico y liquidación de obra
+Países o normativas aplicables: Perú. Clasificadores del gasto
+  público (SIAF 2.6.2.3), expediente técnico y liquidación de obra;
+  planilla de pagos según el D.L. 728

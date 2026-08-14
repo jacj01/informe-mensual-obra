@@ -1,0 +1,284 @@
+{% set es_entrada = m.tipo == 'E' %}
+<form method="post" class="form-panel" action="{{ url_for('almacen_editar', mov_id=m.id) if m.id else url_for('almacen_nuevo') }}">
+  <input type="hidden" name="modal" value="1">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  {% if alerta %}
+  <div class="alert alert-warning" role="alert"><i class="bi bi-exclamation-triangle-fill"></i> {{ alerta }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="alert alert-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div>
+  {% endif %}
+  <div class="card">
+    <div class="card-head between">
+      <h3><i class="bi bi-box-seam"></i> {{ 'Editar movimiento' if m.id else 'Nuevo movimiento' }}</h3>
+      <button type="button" class="btn btn-green btn-sm" onclick="return abrirModal('{{ url_for('almacen_oc', mes=m.mes, anio=m.anio) }}')" title="Buscar una O/C y agregar todos sus materiales al almacén">
+        <i class="bi bi-bag-check"></i> Agregar por O/C
+      </button>
+    </div>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Descripción del insumo / material</label>
+        <div class="autocomplete-wrap">
+          <input type="text" name="descripcion" id="desc-input" value="{{ m.descripcion }}" autocomplete="off" placeholder="Escriba para buscar un material..." required {% if bloquear_descripcion %}readonly{% endif %}>
+          <div class="autocomplete-list" id="desc-list"></div>
+          {% if bloquear_descripcion %}
+          <input type="hidden" name="desc_bloqueada" value="1">
+          <div class="field-hint">Descripción bloqueada: corresponde al material ya registrado. Para un material nuevo use "Nuevo material".</div>
+          {% else %}
+          <div class="field-hint">Al escribir se muestran todos los materiales de O/C o O/S y los ya usados en almacén; seleccione uno para completar la unidad y el precio.</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="field">
+        <label>Tipo</label>
+        <select name="tipo" id="tipo-sel">
+          {% if tipo_fijo %}
+          <option value="{{ tipo_fijo }}" selected>{{ 'ENTRADA' if tipo_fijo == 'E' else 'SALIDA' }}</option>
+          {% else %}
+          <option value="E" {{ 'selected' if m.tipo == 'E' }}>ENTRADA</option>
+          <option value="S" {{ 'selected' if m.tipo == 'S' }}>SALIDA</option>
+          {% endif %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Fecha</label>
+        <input type="date" name="fecha" value="{{ m.fecha.strftime('%Y-%m-%d') if m.fecha else '' }}" required>
+      </div>
+      <div class="field">
+        <label>Unidad de medida</label>
+        <input type="text" name="und" id="und-input" value="{{ m.und }}" list="lista-unds">
+        <datalist id="lista-unds">
+          {% for u in ['UND', 'KG', 'M', 'M2', 'M3', 'GLN', 'BOLSA', 'U'] %}
+          <option value="{{ u }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
+      <div class="field">
+        <label>Cantidad</label>
+        <input type="number" step="0.01" name="cantidad" value="{{ m.cantidad }}" min="0">
+      </div>
+      <div class="field">
+        <label>Precio unitario (S/)</label>
+        <div class="precio-wrapper">
+          <input type="text" inputmode="decimal" class="monto" min="0" name="precio_unitario" id="precio-input" value="{{ m.precio_unitario or '' }}" autocomplete="off">
+          <select name="precio_unitario" id="precio-select" style="display:none"></select>
+        </div>
+        <div class="field-hint">Precio completado automáticamente según el material seleccionado.</div>
+      </div>
+      <div class="field campo-entrada">
+        <label>N° OC</label>
+        <input type="text" name="numero_doc" value="{{ m.numero_doc }}" placeholder="Ej.: 44">
+      </div>
+      <div class="field campo-entrada">
+        <label>N° de Pecosa o Guía de Remisión</label>
+        <input type="text" name="pecosa_guia" value="{{ m.pecosa_guia }}" placeholder="Ej.: P-0001">
+      </div>
+      <div class="field campo-entrada">
+        <label>Razón social del proveedor (entrada)</label>
+        <input type="text" name="proveedor" value="{{ m.proveedor }}">
+      </div>
+      <div class="field full">
+        <label id="lbl-responsable">{{ 'Nombre quien recepciona' if es_entrada else 'Nombre quien recibe' }}</label>
+        <input type="text" name="responsable" id="resp-input" value="{{ m.responsable }}" {% if es_entrada %}readonly{% endif %}>
+        <div class="field-hint" id="resp-hint" {% if not es_entrada %}style="display:none"{% endif %}>Corresponde al responsable de almacén configurado en la cabecera del proyecto.</div>
+      </div>
+      <div class="field full campo-salida">
+        <label>Actividad o partida (salida)</label>
+        <input type="text" name="actividad" value="{{ m.actividad }}">
+      </div>
+      <div class="field">
+        <label>Mes</label>
+        <select name="mes">
+          {% for mm in MESES %}
+          <option value="{{ loop.index }}" {{ 'selected' if loop.index == m.mes }}>{{ mm }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Año <i class="bi bi-lock-fill lock-ico"></i></label>
+        <input type="number" name="anio" value="{{ m.anio }}" readonly>
+        <div class="field-hint">Año configurado en la cabecera del proyecto.</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <i class="bi bi-info-circle"></i>
+    Los textos (descripción, unidad, proveedor, responsable y actividad) se guardan automáticamente en MAYÚSCULAS.
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar</button>
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</form>
+
+<script>
+  (function () {
+  const insumos = {{ insumos | tojson }};
+  const precios = {{ precios | tojson }};
+  const respAlmacen = {{ p.responsable_almacen | tojson }};
+  const precioActual = {{ (m.precio_unitario if m.precio_unitario is not none else none) | tojson }};
+  const esNuevo = {{ 1 if not m.id else 0 }};
+
+  const tipoSel = document.getElementById('tipo-sel');
+  const descInp = document.getElementById('desc-input');
+  const undInp = document.getElementById('und-input');
+  const respInp = document.getElementById('resp-input');
+  const respLabel = document.getElementById('lbl-responsable');
+  const respHint = document.getElementById('resp-hint');
+  const precioInput = document.getElementById('precio-input');
+  const precioSelect = document.getElementById('precio-select');
+
+  function aplicarTipo() {
+    const esEnt = tipoSel.value === 'E';
+    document.querySelectorAll('.campo-entrada').forEach(function (el) {
+      el.style.display = esEnt ? '' : 'none';
+    });
+    document.querySelectorAll('.campo-salida').forEach(function (el) {
+      el.style.display = esEnt ? 'none' : '';
+    });
+    respLabel.textContent = esEnt ? 'Nombre quien recepciona' : 'Nombre quien recibe';
+    respHint.style.display = esEnt ? '' : 'none';
+    if (esEnt) {
+      respInp.readOnly = true;
+      if (esNuevo) respInp.value = respAlmacen || '';
+    } else {
+      respInp.readOnly = false;
+    }
+  }
+
+  function aplicarPrecios() {
+    const texto = (descInp.value || '').toUpperCase().trim();
+    const lista = precios[texto] || [];
+    if (lista.length > 1) {
+      precioSelect.innerHTML = '';
+      lista.forEach(function (p) {
+        const op = document.createElement('option');
+        op.value = p;
+        op.textContent = 'S/ ' + Number(p).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (Number(p) === Number(precioActual)) op.selected = true;
+        precioSelect.appendChild(op);
+      });
+      precioInput.style.display = 'none';
+      precioInput.disabled = true;
+      precioSelect.style.display = '';
+      precioSelect.disabled = false;
+    } else if (lista.length === 1) {
+      precioInput.value = lista[0];
+      precioInput.readOnly = false;
+      precioInput.disabled = false;
+      precioInput.style.display = '';
+      precioSelect.style.display = 'none';
+      precioSelect.disabled = true;
+    } else {
+      if (!precioActual) precioInput.value = '';
+      precioInput.readOnly = false;
+      precioInput.disabled = false;
+      precioInput.style.display = '';
+      precioSelect.style.display = 'none';
+      precioSelect.disabled = true;
+    }
+  }
+
+  tipoSel.addEventListener('change', aplicarTipo);
+
+  const descList = document.getElementById('desc-list');
+  let descMatches = [];
+  let descIdx = -1;
+
+  function resaltarDesc(idx) {
+    Array.prototype.forEach.call(descList.children, function (el, i) {
+      el.classList.toggle('active', i === idx);
+    });
+  }
+
+  function seleccionarMaterial(par) {
+    descInp.value = par[0];
+    if (!undInp.value || undInp.value.trim() === '') {
+      undInp.value = par[1] || 'UND';
+    }
+    descList.style.display = 'none';
+    aplicarPrecios();
+  }
+
+  function mostrarMateriales(matches) {
+    descMatches = matches;
+    descIdx = -1;
+    descList.innerHTML = '';
+    if (!matches.length) {
+      descList.style.display = 'none';
+      return;
+    }
+    matches.forEach(function (par) {
+      const it = document.createElement('div');
+      it.className = 'autocomplete-item';
+      const txt = document.createElement('span');
+      txt.textContent = par[0];
+      it.appendChild(txt);
+      const und = document.createElement('span');
+      und.className = 'ac-und';
+      und.textContent = par[1] || 'UND';
+      it.appendChild(und);
+      it.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        seleccionarMaterial(par);
+      });
+      descList.appendChild(it);
+    });
+    descList.style.display = 'block';
+  }
+
+  function buscarMateriales() {
+    const texto = (descInp.value || '').toUpperCase().trim();
+    const matches = texto
+      ? insumos.filter(function (par) {
+          return (par[0] || '').toUpperCase().indexOf(texto) !== -1;
+        })
+      : insumos;
+    mostrarMateriales(matches);
+    aplicarPrecios();
+  }
+
+  descInp.addEventListener('input', buscarMateriales);
+  descInp.addEventListener('focus', buscarMateriales);
+  descInp.addEventListener('keydown', function (e) {
+    const total = descList.children.length;
+    if (total === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      descIdx = (descIdx + 1) % total;
+      resaltarDesc(descIdx);
+      descList.children[descIdx].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      descIdx = (descIdx - 1 + total) % total;
+      resaltarDesc(descIdx);
+      descList.children[descIdx].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' && descIdx >= 0) {
+      e.preventDefault();
+      seleccionarMaterial(descMatches[descIdx]);
+    } else if (e.key === 'Escape') {
+      descList.style.display = 'none';
+    }
+  });
+  descInp.addEventListener('change', function () {
+    const texto = descInp.value.toUpperCase().trim();
+    const found = insumos.find(function (par) { return par[0] === texto; });
+    if (found && (!undInp.value || undInp.value.trim() === '')) {
+      undInp.value = found[1] || 'UND';
+    }
+    aplicarPrecios();
+  });
+  document.addEventListener('click', function (e) {
+    const wrap = document.getElementById('desc-input').closest('.autocomplete-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+      descList.style.display = 'none';
+    }
+  });
+
+  aplicarTipo();
+  aplicarPrecios();
+
+  const modal = document.getElementById('modal');
+  if (modal) modal.querySelector('.modal-box').classList.add('lg');
+  })();
+</script>

@@ -1,0 +1,127 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Reporte imprimible FE-07 de movimiento diario de almacén de obra en administración directa - {{ MESES[mes-1] }} {{ anio }}.">
+<title>FE-07 Movimiento Diario - {{ MESES[mes-1] }} {{ anio }}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<style>
+  .seccion { margin-top: 10px; page-break-inside: avoid; }
+  .seccion-titulo { background: var(--azul); color: #fff; font-weight: 700; font-size: 8.5pt; padding: 6px 12px; border-radius: 4px 4px 0 0; margin: 0; }
+  .seccion-meta { background: var(--bg); padding: 5px 12px; font-size: 7.5pt; border: 1px solid var(--borde); border-top: none; display: flex; gap: 16px; flex-wrap: wrap; }
+  .seccion-meta b { color: var(--azul-osc); }
+  .ent { color: #17713a; font-weight: 700; }
+  .sal { color: #a62626; font-weight: 700; }
+  .empty { color: var(--texto2); font-style: italic; padding: 8px; text-align: center; }
+  /* Grupos pastel: Entrada (verde) y Salida (rojo) en los sub-encabezados */
+  table.tabla thead tr:nth-child(2) th:nth-child(-n+5) { background: #e4f3ea; color: #14532d; }
+  table.tabla thead tr:nth-child(2) th:nth-child(n+6) { background: #fdeef0; color: #7f1d1d; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <h2>FE-07 Movimiento Diario de Almacén</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('almacen', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+<div class="hoja">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Movimiento Diario de Almacén</div>
+      <div class="subtitulo">PERIODO: {{ MESES[mes-1] }} - {{ anio }}</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">{{ MESES[mes-1] }} {{ anio }}</div>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Codigo Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Responsable Almacén</span><span class="info-val">{{ p.responsable_almacen or '' }}</span></div>
+  </div>
+  <div class="responsables">
+    <div class="resp-item"><div class="resp-label">Supervisor de Obra</div><div class="resp-val">{{ p.supervisor or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Residente de Obra</div><div class="resp-val">{{ p.residente or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
+  </div>
+
+  {% for item in diario["items"] %}
+  <div class="seccion">
+    <div class="seccion-titulo">{{ item.descripcion }}</div>
+    <div class="seccion-meta">
+      <span><b>Unidad:</b> {{ item.und }}</span>
+      <span><b>Movimientos:</b> {{ item.movs }}</span>
+      <span class="ent"><b>Entradas:</b> {{ "{:,.2f}".format(item.cant_in) }}</span>
+      <span class="sal"><b>Salidas:</b> {{ "{:,.2f}".format(item.cant_out) }}</span>
+      <span><b>Saldo:</b> {{ "{:,.2f}".format(item.saldo) }}</span>
+    </div>
+    <table class="tabla">
+      <colgroup>
+        <col style="width:30px"><col style="width:55px"><col style="width:30px"><col style="width:45px">
+        <col style="width:40px"><col style="width:38px"><col style="width:42px"><col style="width:110px">
+        <col style="width:90px"><col style="width:55px"><col style="width:40px"><col style="width:120px">
+        <col style="width:90px"><col style="width:48px">
+      </colgroup>
+      <thead>
+        <tr>
+          <th rowspan="2">ITEM</th>
+          <th rowspan="2">Fecha</th>
+          <th rowspan="2">UND</th>
+          <th rowspan="2" class="num">Saldo ant.</th>
+          <th colspan="5" style="background:#d3ecdb;color:#14532d">ENTRADA / PROVEEDOR</th>
+          <th colspan="4" style="background:#fbd7da;color:#7f1d1d">SALIDA</th>
+          <th rowspan="2" class="num">Saldo</th>
+        </tr>
+        <tr>
+          <th class="num">Cant</th><th>N° OC</th><th>Pecosa/Guia</th><th>Proveedor</th><th>Recepciona</th>
+          <th>Fecha</th><th class="num">Cant</th><th>Actividad</th><th>Recibe</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(item=0) %}
+        {% for r in item.rows %}
+        {% if r.mov.tipo == 'E' %}{% set ns.item = ns.item + 1 %}{% endif %}
+        <tr>
+          <td class="ctr">{{ ns.item if r.mov.tipo == 'E' else '' }}</td>
+          <td class="ctr">{{ r.mov.fecha.strftime("%d/%m/%Y") if r.mov.tipo == 'E' and r.mov.fecha else '' }}</td>
+          <td>{{ item.und }}</td>
+          <td class="num">{{ "{:,.2f}".format(r.saldo_anterior) }}</td>
+          {% if r.mov.tipo == 'E' %}
+          <td class="num ent">{{ "{:,.2f}".format(r.mov.cantidad) }}</td>
+          <td>{{ r.mov.numero_doc }}</td>
+          <td>{{ r.mov.pecosa_guia }}</td>
+          <td>{{ r.mov.proveedor }}</td>
+          <td>{{ r.mov.responsable }}</td>
+          <td></td><td></td><td></td><td></td>
+          {% else %}
+          <td></td><td></td><td></td><td></td><td></td>
+          <td class="num">{{ r.mov.fecha.strftime("%d/%m/%Y") if r.mov.fecha else '' }}</td>
+          <td class="num sal">{{ "{:,.2f}".format(r.mov.cantidad) }}</td>
+          <td>{{ r.mov.actividad }}</td>
+          <td>{{ r.mov.responsable }}</td>
+          {% endif %}
+          <td class="num"><b>{{ "{:,.2f}".format(r.saldo) }}</b></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="14" class="empty">Sin movimientos para este insumo.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  {% if not diario["items"] %}
+  <p style="text-align:center;color:var(--texto2);font-style:italic;margin-top:20px">No hay movimientos de almacén para {{ MESES[mes-1] }} {{ anio }}.</p>
+  {% endif %}
+</div>
+</body>
+</html>

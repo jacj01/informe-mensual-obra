@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Configuración Presupuestal{% endblock %}
+{% block og_title %}Configuración Presupuestal{% endblock %}
+{% block meta_description %}Configuración del presupuesto y clasificadores presupuestales del informe financiero mensual de obra en administración directa.{% endblock %}
+{% block heading %}Configuración Presupuestal{% endblock %}
+{% block subheading %}Expediente técnico, ejecución histórica y PIM por componente{% endblock %}
+
+{% block content %}
+<form method="post">
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-clock-history"></i> Años de ejecución anteriores</h3></div>
+    <div class="form-grid">
+      <div class="field full">
+        <label class="check-line">
+          <input type="checkbox" name="incluir_anios_anteriores" id="incluir_anios"
+                 {{ 'checked' if p.incluir_anios_anteriores }}>
+          Incluir la ejecución de los años anteriores (2023, 2024, 2025) antes del año actual
+        </label>
+      </div>
+    </div>
+    <div class="note">
+      <i class="bi bi-info-circle"></i>
+      Al desactivar esta opción, las columnas de los años anteriores (2023-2025) no se editarán
+      para los nuevos ingresos. El Exp. Técnico (S/) y el PIM del año actual siempre se mantienen
+      fijos y visibles.
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-table"></i> Presupuesto por componente y clasificador</h3></div>
+    <div class="table-scroll">
+      <table class="table table-compact">
+        <thead>
+          <tr>
+            <th>Componente</th><th>Clasificador</th><th>Detalle</th>
+            <th class="num">Exp. Técnico (S/)</th>
+            <th class="num {{ 'd-none' if not p.incluir_anios_anteriores }}">Ejec. 2023</th>
+            <th class="num {{ 'd-none' if not p.incluir_anios_anteriores }}">Ejec. 2024</th>
+            <th class="num {{ 'd-none' if not p.incluir_anios_anteriores }}">Ejec. 2025</th>
+            <th class="num">PIM {{ p.anio }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in configs %}
+          <tr>
+            <td>{{ c.componente }}</td>
+            <td>{{ c.clasificador }}</td>
+            <td>{{ c.detalle }}</td>
+            <td class="num"><input class="cell total-et monto" type="text" inputmode="decimal" name="et_{{ c.id }}" value="{{ c.et }}" autocomplete="off"></td>
+            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><input class="cell total-2023 monto" type="text" inputmode="decimal" name="ejec2023_{{ c.id }}" value="{{ c.ejec2023 }}" autocomplete="off"></td>
+            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><input class="cell total-2024 monto" type="text" inputmode="decimal" name="ejec2024_{{ c.id }}" value="{{ c.ejec2024 }}" autocomplete="off"></td>
+            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><input class="cell total-2025 monto" type="text" inputmode="decimal" name="ejec2025_{{ c.id }}" value="{{ c.ejec2025 }}" autocomplete="off"></td>
+            <td class="num"><input class="cell total-pim monto" type="text" inputmode="decimal" name="pim_{{ c.id }}" value="{{ c.pim2026 }}" autocomplete="off"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="totales">
+            <td colspan="3"><strong>TOTAL</strong></td>
+            <td class="num"><span id="tot-et" class="total-val">0.00</span></td>
+            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><span id="tot-2023" class="total-val">0.00</span></td>
+            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><span id="tot-2024" class="total-val">0.00</span></td>
+            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><span id="tot-2025" class="total-val">0.00</span></td>
+            <td class="num"><span id="tot-pim" class="total-val">0.00</span></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="note">
+      <i class="bi bi-info-circle"></i>
+      La columna "Ejecución {{ p.anio }}" y los formatos FE-05/FE-06 se calculan automáticamente
+      desde los gastos registrados en el Manifiesto de Gasto. Aquí solo se edita el marco
+      aprobado (expediente técnico), la ejecución de años anteriores (2023-2025) y el PIM.
+    </div>
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar configuración</button>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function recalcularTotales() {
+    var prefijos = { 'et': 'tot-et', '2023': 'tot-2023', '2024': 'tot-2024',
+                     '2025': 'tot-2025', 'pim': 'tot-pim' };
+    Object.keys(prefijos).forEach(function (p) {
+      var total = 0;
+      document.querySelectorAll('input[name^="' + p + '_"]').forEach(function (inp) {
+        total += parseFloat(String(inp.value).replace(/,/g, '')) || 0;
+      });
+      document.getElementById(prefijos[p]).textContent = total.toLocaleString('es-PE',
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.cell').forEach(function (inp) {
+      inp.addEventListener('input', recalcularTotales);
+    });
+    recalcularTotales();
+  });
+</script>
+{% endblock %}

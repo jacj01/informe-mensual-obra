@@ -1,0 +1,155 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Reporte imprimible FE-05 de ejecución presupuestal mensual de obra en administración directa - {{ MESES[mes-1] }} {{ anio }}.">
+<title>FE-05 Ejecucion Mensual - {{ MESES[mes-1] }} {{ anio }}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<style>
+  table.tabla { margin-top: 3px; }
+  table.tabla th, table.tabla td { padding: 2.5px 3px; line-height: 1.35; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <h2>FE-05 Ejecucion Presupuestal Mensual</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('formatos', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+<div class="hoja">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Ejecucion Presupuestal Mensual</div>
+      <div class="subtitulo">TOTAL COSTO DE CONSTRUCCION POR ADM. DIRECTA</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">PERIODO: {{ MESES[mes-1] }} - {{ anio }}</div>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Codigo Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Correlativo Meta</span><span class="info-val">{{ p.meta or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Fuente Financ.</span><span class="info-val">{{ p.fuente or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Modalidad</span><span class="info-val">ADMINISTRACION DIRECTA</span></div>
+  </div>
+  <div class="responsables">
+    <div class="resp-item"><div class="resp-label">Supervisor de Obra</div><div class="resp-val">{{ p.supervisor or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Residente de Obra</div><div class="resp-val">{{ p.residente or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
+  </div>
+
+  {% set pers = p.clasificador_personal or '2.6.2.3.99.3' %}
+  {% set bien = p.clasificador_bienes or '2.6.2.3.99.4' %}
+  {% set serv = p.clasificador_servicios or '2.6.2.3.99.5' %}
+  {% set clabel = {pers: ' (PERSONAL)', bien: ' (BIENES)', serv: ' (SERVICIOS)'} %}
+  {% set ncols = 11 + clasif_cols|length + 4 %}
+  {% for sec in secciones %}
+  <table class="tabla">
+    <colgroup>
+      <col style="width:20px"><col style="width:48px"><col style="width:52px"><col style="width:28px"><col style="width:38px">
+      <col style="width:115px"><col style="width:190px"><col style="width:28px"><col style="width:42px">
+      <col style="width:48px"><col style="width:55px">
+      {% for c in clasif_cols %}<col style="width:52px">{% endfor %}
+      <col style="width:50px"><col style="width:50px"><col style="width:50px"><col style="width:55px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>N°</th><th>SIAF</th><th>Fecha</th><th>Tipo</th><th>N°</th>
+        <th>Proveedor</th><th>Detalle</th><th>Und</th><th class="num">Cant</th>
+        <th class="num">P.U</th><th class="num">Importe</th>
+        {% for c in clasif_cols %}<th class="num">{{ c }}{{ clabel.get(c, '') }}</th>{% endfor %}
+        <th class="num">Directos</th><th class="num">Grales</th>
+        <th class="num">Superv.</th><th class="num">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="fila-rubro"><td colspan="{{ ncols }}">{{ sec.label }}</td></tr>
+      {% for f in sec.filas %}
+      <tr>
+        <td class="ctr">{{ f.prov_num if f.prov_first else '' }}</td>
+        <td>{{ f.g.siaf if f.prov_first else '' }}</td>
+        <td class="ctr">{{ f.g.fecha.strftime("%d/%m/%Y") if f.prov_first and f.g.fecha else '' }}</td>
+        <td class="ctr">{{ f.g.tipo_doc if f.prov_first else '' }}</td>
+        <td class="ctr">{{ f.g.num_doc if f.prov_first else '' }}</td>
+        <td>{{ f.g.proveedor if f.prov_first else '' }}</td>
+        <td>{{ f.d.detalle }}</td>
+        <td class="ctr">{{ f.d.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.d.cantidad) if f.d.cantidad else '' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.d.precio_unitario) }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.d.importe) }}</td>
+        {% for c in clasif_cols %}<td class="num">{{ "{:,.2f}".format(f.clasif[c]) if f.clasif[c] else '-' }}</td>{% endfor %}
+        <td class="num">{{ "{:,.2f}".format(f.directos) if f.directos else '-' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.generales) if f.generales else '-' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.supervision) if f.supervision else '-' }}</td>
+        <td class="num"><b>{{ "{:,.2f}".format(f.d.importe) }}</b></td>
+      </tr>
+      {% endfor %}
+      <tr class="fila-sub">
+        <td colspan="10" style="text-align:right">SUBTOTAL {{ sec.label }}</td>
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.total) }}</b></td>
+        {% for c in clasif_cols %}<td class="num"><b>{{ "{:,.2f}".format(sec.totales.clasif[c]) }}</b></td>{% endfor %}
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.directos) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.generales) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.supervision) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.total) }}</b></td>
+      </tr>
+    </tbody>
+  </table>
+  {% else %}
+  <table class="tabla">
+    <colgroup>
+      <col style="width:20px"><col style="width:48px"><col style="width:52px"><col style="width:28px"><col style="width:38px">
+      <col style="width:115px"><col style="width:190px"><col style="width:28px"><col style="width:42px">
+      <col style="width:48px"><col style="width:55px">
+      {% for c in clasif_cols %}<col style="width:52px">{% endfor %}
+      <col style="width:50px"><col style="width:50px"><col style="width:50px"><col style="width:55px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>N°</th><th>SIAF</th><th>Fecha</th><th>Tipo</th><th>N°</th>
+        <th>Proveedor</th><th>Detalle</th><th>Und</th><th class="num">Cant</th>
+        <th class="num">P.U</th><th class="num">Importe</th>
+        {% for c in clasif_cols %}<th class="num">{{ c }}{{ clabel.get(c, '') }}</th>{% endfor %}
+        <th class="num">Directos</th><th class="num">Grales</th>
+        <th class="num">Superv.</th><th class="num">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="fila-rubro"><td colspan="{{ ncols }}">SIN GASTOS DEVENGADOS PARA EL PERÍODO</td></tr>
+    </tbody>
+  </table>
+  {% endfor %}
+
+  <table class="tabla">
+    <colgroup>
+      <col style="width:20px"><col style="width:48px"><col style="width:52px"><col style="width:28px"><col style="width:38px">
+      <col style="width:115px"><col style="width:190px"><col style="width:28px"><col style="width:42px">
+      <col style="width:48px"><col style="width:55px">
+      {% for c in clasif_cols %}<col style="width:52px">{% endfor %}
+      <col style="width:50px"><col style="width:50px"><col style="width:50px"><col style="width:55px">
+    </colgroup>
+    <tbody>
+      <tr class="fila-total">
+        <td colspan="10" style="text-align:right">TOTAL GASTO EJECUTADO</td>
+        <td class="num"><b>{{ "{:,.2f}".format(total.total) }}</b></td>
+        {% for c in clasif_cols %}<td class="num"><b>{{ "{:,.2f}".format(total.clasif[c]) }}</b></td>{% endfor %}
+        <td class="num"><b>{{ "{:,.2f}".format(total.directos) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(total.generales) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(total.supervision) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(total.total) }}</b></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

@@ -1,0 +1,83 @@
+{% set es_devengado = g is not none %}
+{% set componente = 'Costo Directo' if tipo == 'OBRERO' else 'Gastos Generales' %}
+<form method="post" class="form-panel" action="{{ url_for('tareo_devengar', mes=mes, anio=anio, tipo=tipo) }}">
+  <input type="hidden" name="modal" value="1">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="mes" value="{{ mes }}">
+  <input type="hidden" name="anio" value="{{ anio }}">
+  <input type="hidden" name="tipo" value="{{ tipo }}">
+  {% if error %}
+  <div class="alert alert-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div>
+  {% endif %}
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="bi bi-currency-dollar"></i> {{ 'Editar devengado' if es_devengado else 'Devengar planilla' }} - {{ 'Personal Obrero' if tipo == 'OBRERO' else 'Personal Técnico' }}</h3>
+    </div>
+    <div class="form-grid form-grid-devengo">
+      <div class="field">
+        <label>Fecha de devengado</label>
+        <input type="date" name="fecha" value="{{ g.fecha.strftime('%Y-%m-%d') if g and g.fecha else '' }}" required>
+      </div>
+      <div class="field">
+        <label>SIAF</label>
+        <input type="number" name="siaf" value="{{ g.siaf if g else '' }}">
+      </div>
+      <div class="field">
+        <label>Nº Nota de Pago</label>
+        <input type="number" name="num_doc" value="{{ g.num_doc if g and g.num_doc else '' }}" min="0" step="1" placeholder="Nº de la nota de pago">
+      </div>
+      <div class="field">
+        <label>Monto de Planilla (S/)</label>
+        <input type="text" class="monto" name="monto" value="{{ g.importe if g and g.importe else '' }}"
+               min="0.01" inputmode="decimal" placeholder="0.00" required autocomplete="off"
+               title="Importe que se reflejará en el Manifiesto de Gastos">
+      </div>
+      <div class="field">
+        <label>Tipo de documento <i class="bi bi-lock-fill lock-ico"></i></label>
+        <input type="text" value="PLLA" readonly title="Documento fijo para la planilla de pago">
+      </div>
+      <div class="field">
+        <label>Componente <i class="bi bi-lock-fill lock-ico"></i></label>
+        <input type="text" value="{{ componente }}" readonly title="Obrero: Costo Directo / Técnico: Gastos Generales">
+      </div>
+      <div class="field full">
+        <label>Nombre / Proveedor</label>
+        <input type="text" name="proveedor" value="{{ g.proveedor if g else '' }}"
+               placeholder="Ej. PLANILLA DE PAGO - PERSONAL {{ 'OBRERO' if tipo == 'OBRERO' else 'TECNICO' }}">
+      </div>
+      <div class="field full">
+        <label>Detalle del gasto <i class="bi bi-lock-fill lock-ico"></i></label>
+        <input type="text" value="PLANILLA DE PAGO CORRESPONDIENTE AL MES DE {{ MESES[mes-1] }} {{ anio }}" readonly>
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <i class="bi bi-info-circle"></i>
+    <div>
+      Clasificador <b>PERSONAL</b>. El <b>Monto de Planilla</b> ingresado se registra en el
+      <b>Manifiesto de Gastos</b> como gasto <b>PLLA</b> (Und PLLA, Cantidad 1, P.U = Monto de Planilla)
+      y se considera en <b>FE-05</b> y <b>FE-06</b>.
+    </div>
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar devengado</button>
+    {% if es_devengado %}
+    <button type="submit" form="formDesdevengar" class="btn btn-red btn-lg" title="Quitar el devengado y eliminar el gasto PLLA"><i class="bi bi-x-circle"></i> Quitar devengado</button>
+    {% endif %}
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</form>
+{% if es_devengado %}
+<form id="formDesdevengar" method="post" action="{{ url_for('tareo_desdevengar') }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="mes" value="{{ mes }}">
+  <input type="hidden" name="anio" value="{{ anio }}">
+  <input type="hidden" name="tipo" value="{{ tipo }}">
+</form>
+{% endif %}
+<script>
+  (function () {
+    var modal = document.getElementById('modal');
+    if (modal) modal.querySelector('.modal-box').classList.add('lg');
+  })();
+</script>

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Movimiento de Almacén{% endblock %}
+{% block heading %}{{ 'Editar movimiento' if m.id else 'Nuevo movimiento' }}{% endblock %}
+{% block subheading %}Entrada o salida de almacén (FE-07 / FE-08){% endblock %}
+
+{% block content %}
+{% include "_almacen_form.html" %}
+{% endblock %}

@@ -1,0 +1,138 @@
+/* ============================================================
+   INFORMACIÓN MENSUAL DE OBRA
+   Hojas de impresión oficiales — estilos comunes
+   (FE-05, FE-06, FE-07, FE-08, Manifiesto, Tareo)
+   Hoja A4 horizontal · 297mm x 210mm
+   ============================================================ */
+
+:root {
+  --azul: #1F4E79;
+  --azul-osc: #14355A;
+  --azul-claro: #2B6CA8;
+  --oro: #C9A227;
+  --verde: #237A48;
+  --bg: #F1F5F9;
+  --texto: #0F172A;
+  --texto2: #64748B;
+  --borde: #C3CCD8;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg);
+  color: var(--texto);
+  font-size: 9pt;
+  line-height: 1.35;
+}
+
+/* ---------- Barra de acciones (solo pantalla) ---------- */
+.toolbar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 18px;
+  background: linear-gradient(90deg, var(--azul-osc), var(--azul));
+  color: #fff;
+}
+.toolbar h2 { margin: 0; font-size: 13pt; font-weight: 700; }
+.toolbar .spacer { flex: 1; }
+.toolbar .nota { font-size: 8pt; opacity: .85; }
+.toolbar button, .toolbar a.volver {
+  font: inherit; font-weight: 700; font-size: 9.5pt;
+  padding: 8px 16px; border-radius: 8px; text-decoration: none; cursor: pointer;
+}
+.toolbar button { border: none; color: #fff; background: var(--verde); box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+.toolbar a.volver { color: #fff; background: rgba(255,255,255,.15); }
+
+/* ---------- Hoja A4 horizontal ---------- */
+.hoja {
+  width: 297mm; min-height: 210mm;
+  margin: 14px auto;
+  background: #fff;
+  padding: 9mm 8mm;
+  box-shadow: 0 4px 24px rgba(15,23,42,.15);
+}
+
+/* ---------- Encabezado oficial ---------- */
+.encabezado { display: flex; gap: 10px; align-items: flex-start; border-bottom: 3px solid var(--azul); padding-bottom: 6px; }
+.logo-box {
+  width: 60px; height: 60px; flex: 0 0 60px;
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-box img { max-width: 56px; max-height: 56px; }
+.logo-box .sin-logo { font-size: 6pt; text-align: center; color: var(--texto2); line-height: 1.2; }
+.enc-cen { flex: 1; text-align: center; }
+.entidad { font-size: 9.5pt; font-weight: 700; color: var(--azul-osc); text-transform: uppercase; letter-spacing: .4px; overflow-wrap: anywhere; }
+.entidad-sub { font-size: 8pt; color: var(--texto2); margin-top: 1px; overflow-wrap: anywhere; }
+.titulo { font-size: 14pt; font-weight: 800; color: var(--azul); letter-spacing: 1px; margin-top: 5px; text-transform: uppercase; overflow-wrap: anywhere; }
+.subtitulo { font-size: 8.5pt; font-weight: 700; color: var(--azul-osc); margin-top: 2px; letter-spacing: .5px; overflow-wrap: anywhere; }
+.enc-der { width: 150px; text-align: right; font-size: 8pt; overflow-wrap: anywhere; }
+.periodo { margin-top: 5px; font-weight: 700; color: var(--azul); font-size: 8.5pt; }
+.num-doc { display: inline-block; border: 1.2px solid var(--azul); padding: 2px 8px; border-radius: 4px; font-weight: 700; color: var(--azul); overflow-wrap: anywhere; }
+
+/* ---------- Datos generales ---------- */
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin: 6px 0 4px; }
+.info-item { display: flex; align-items: stretch; border: .6px solid var(--borde); border-radius: 4px; overflow: hidden; }
+.info-label {
+  flex: 0 0 34%; background: var(--bg); color: var(--azul-osc);
+  font-weight: 700; font-size: 7.2pt; text-transform: uppercase;
+  padding: 4px 8px; border-right: .6px solid var(--borde);
+  display: flex; align-items: center;
+}
+.info-val { flex: 1; min-width: 0; padding: 4px 8px; font-size: 8.5pt; min-height: 18px; overflow-wrap: anywhere; }
+.info-item.info-ancho { grid-column: 1 / -1; }
+
+/* ---------- Responsables ---------- */
+.responsables { display: flex; gap: 6px; margin: 4px 0 4px; }
+.resp-item { flex: 1; display: flex; border: .6px solid var(--borde); border-radius: 4px; overflow: hidden; }
+.resp-label {
+  flex: 0 0 38%; background: var(--azul); color: #fff; font-weight: 700;
+  font-size: 6.8pt; text-transform: uppercase; padding: 4px 8px;
+  display: flex; align-items: center;
+}
+.resp-val { flex: 1; padding: 4px 8px; font-size: 8.5pt; min-height: 18px; overflow-wrap: anywhere; }
+
+/* ---------- Tablas ---------- */
+table.tabla { width: 100%; border-collapse: collapse; table-layout: auto; }
+table.tabla th, table.tabla td { border: .6px solid var(--azul-osc); padding: 3px 4px; font-size: 7.6pt; line-height: 1.4; overflow-wrap: anywhere; }
+table.tabla thead th {
+  background: var(--azul); color: #fff; font-weight: 700; text-align: center;
+  font-size: 7pt; text-transform: uppercase; letter-spacing: .2px; padding: 4.5px 4px;
+}
+table.tabla td.num, table.tabla th.num { text-align: right; }
+table.tabla td.ctr { text-align: center; }
+.fila-rubro td { background: #E3EAF2; color: var(--azul-osc); font-weight: 800; font-size: 8pt; text-transform: uppercase; letter-spacing: .3px; padding: 4px 5px; }
+.fila-sub td { background: var(--bg); font-weight: 700; font-size: 8pt; color: var(--azul-osc); }
+.fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 9pt; }
+
+/* Resumen de tareo en cuadro aparte (solo filas por cargo) */
+.tabla-resumen { margin-top: 4px; }
+.tabla-resumen .fila-resumen td { background: var(--bg); font-weight: 700; font-size: 8pt; }
+.tabla-resumen .fila-resumen .rs { text-align: center; }
+.tabla-resumen .fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 9pt; }
+.tabla-resumen .fila-total .rs { text-align: center; }
+
+/* ---------- Firmas ---------- */
+.firmas { display: flex; justify-content: space-between; gap: 8%; margin-top: 90px; padding: 0 4%; }
+.firma { flex: 1; text-align: center; }
+.firma .linea { border-top: 1.2px solid var(--azul); width: 88%; margin: 0 auto 3px; }
+.firma .nombres { min-height: 14px; line-height: 1.3; font-size: 8.5pt; font-weight: 700; color: var(--texto); overflow-wrap: anywhere; }
+.firma .cargo { font-size: 7.4pt; font-weight: 700; text-transform: uppercase; color: var(--azul-osc); margin-top: 3px; letter-spacing: .3px; }
+.firma .reg { font-size: 7pt; color: var(--texto2); margin-top: 2px; }
+
+/* ---------- Impresión ---------- */
+@media print {
+  .toolbar { display: none; }
+  .hoja { width: auto; min-height: auto; margin: 0; box-shadow: none; padding: 0; }
+  body { background: #fff; }
+  @page { size: A4 landscape; margin: 9mm 8mm 10mm; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table.tabla thead { display: table-header-group; }
+  tr { page-break-inside: avoid; }
+  .fila-rubro, .fila-sub, .fila-total, .row-total { page-break-inside: avoid; }
+  .encabezado, .info-grid, .responsables, .firmas { page-break-inside: avoid; }
+}
