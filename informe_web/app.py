@@ -35,6 +35,7 @@ from models import (db, Proyecto, Presupuesto, Gasto, GastoDetalle,
                     CLASIFICADORES, COMPONENTES, Suscripcion,
                     SuscripcionHistorial, LicenciaUtilizada, PLANES_SUSCRIPCION,
                     sumar_meses)
+import version as _app_version
 from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      suscripcion_vigente, suscripcion_usuario, gastos_mes,
                      total_gastos_mes, kpis,
@@ -450,6 +451,12 @@ def create_app():
     # el navegador solo vuelve a bajar lo que realmente cambia.
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 2592000
     app.jinja_env.finalize = lambda v: "" if v is None else v
+
+    # Version del aplicativo (para el check de actualizaciones).
+    app.config["INFORME_VERSION"] = os.environ.get(
+        "INFORME_VERSION") or _app_version.__version__
+    # Repositorio GitHub para el chequeo de actualizaciones.
+    app.config["INFORME_REPO"] = "jacj01/informe-mensual-obra"
 
     @app.context_processor
     def _csrf_contexto():
@@ -1169,6 +1176,14 @@ def registrar_rutas(app):
                f"Sitemap: {base}/sitemap.xml\n")
         return txt, 200, {"Content-Type": "text/plain; charset=utf-8"}
 
+    @app.route("/api/version")
+    def api_version():
+        """Version y commit del aplicativo, para el check de actualizaciones."""
+        return jsonify({
+            "version": app.config.get("INFORME_VERSION", "1.0.0"),
+            "commit": os.environ.get("INFORME_COMMIT", ""),
+        })
+
     @app.route("/sitemap.xml")
     def sitemap():
         base = request.url_root.rstrip("/")
@@ -1291,7 +1306,8 @@ def registrar_rutas(app):
     @app.before_request
     def verificar_login():
         ep = request.endpoint or ""
-        if ep in ("login", "logout", "static", "robots", "sitemap"):
+        if ep in ("login", "logout", "static", "robots", "sitemap",
+                  "api_version"):
             return None
         # Cierre de sesión por inactividad (respaldo al temporizador del navegador).
         ahora = time.time()
