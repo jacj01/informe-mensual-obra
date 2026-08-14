@@ -54,29 +54,39 @@
       var m = document.querySelector('meta[name="csrf-token"]');
       return m ? m.getAttribute('content') : '';
     };
+    // Formatea el tag de release: "v1.0.1-abc1234" -> "v1.0.1"
+    window._tagLimpio = function (tag) {
+      if (!tag) return '';
+      var m = String(tag).match(/v?([0-9]+\.[0-9]+\.[0-9]+)/);
+      return m ? "v" + m[1] : String(tag);
+    };
     window.buscarActualizacion = function () {
       var txt = document.getElementById('upTxt');
       var btn = document.getElementById('btnUpd');
-      if (txt) txt.textContent = 'Buscando...';
+      if (txt) { txt.textContent = 'Buscando...'; txt.classList.remove('upd-disponible'); }
       fetch('/api/actualizacion', { credentials: 'same-origin' })
         .then(function (r) {
           if (r.status === 403 || r.redirected) throw new Error('No autorizado');
           return r.json();
         })
         .then(function (d) {
-          if (txt) txt.textContent = d.disponible
-            ? ('Actualizaci\u00F3n disponible: ' + (d.tag || ''))
-            : 'Versi\u00F3n actualizada (' + (d.version_actual || '') + ')';
-          if (btn) btn.style.display = d.disponible ? 'inline-block' : 'none';
+          if (d.disponible) {
+            if (txt) { txt.textContent = 'Actualizaci\u00F3n disponible: ' + window._tagLimpio(d.tag); txt.classList.add('upd-disponible'); }
+            if (btn) btn.style.display = 'inline-flex';
+          } else {
+            // misma tipografia que .credit-version (estilo "actualizado")
+            if (txt) { txt.textContent = 'Versi\u00F3n actualizada (' + window._tagLimpio(d.version_actual) + ')'; txt.classList.remove('upd-disponible'); }
+            if (btn) btn.style.display = 'none';
+          }
         })
         .catch(function (e) {
-          if (txt) txt.textContent = 'No se pudo consultar GitHub';
+          if (txt) { txt.textContent = 'No se pudo consultar GitHub'; txt.classList.remove('upd-disponible'); }
           if (btn) btn.style.display = 'none';
         });
     };
     window.actualizarSistema = function () {
       var btn = document.getElementById('btnUpd');
-      if (btn) { btn.disabled = true; btn.textContent = 'Instalando...'; }
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-arrow-down-loading"></i> Instalando...'; }
       fetch('/actualizar', {
         method: 'POST',
         credentials: 'same-origin',
@@ -93,13 +103,13 @@
         })
         .catch(function (e) {
           mostrarToast('error', 'Error al aplicar la actualizaci\u00F3n: ' + e.message);
-          if (btn) { btn.disabled = false; btn.textContent = 'Instalar'; }
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
         });
     };
     document.addEventListener('DOMContentLoaded', window.buscarActualizacion);
   </script>{% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=9">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=10">
 </head>
 <body>
   <aside class="sidebar" id="sidebar">
@@ -175,12 +185,10 @@
         <div class="credit-contact">RUC: 20603860935<br>Cel: 918 358 910<br>Cel: 974 369 366<br>Correo: ingcpa.sac@gmail.com</div>
         <div class="credit-version">Versi&oacute;n {{ version_actual }}</div>
         {% if es_admin_actual() %}
-        <div class="credit-update" id="upChk" style="margin-top:4px;">
-          <span id="upTxt">Buscar actualizaciones</span>
-          <button id="btnUpd" type="button"
-                  onclick="actualizarSistema();"
-                  style="display:none;margin-left:6px;padding:2px 8px;border:1px solid #888;border-radius:4px;cursor:pointer;">
-            Instalar
+        <div class="credit-update" id="upChk">
+          <span class="credit-update-txt" id="upTxt">Buscar actualizaciones</span>
+          <button id="btnUpd" type="button" class="btn-upd" onclick="actualizarSistema();">
+            <i class="bi bi-arrow-down-circle"></i> Instalar
           </button>
         </div>
         {% endif %}
