@@ -2,6 +2,8 @@ name: Build & Release
 
 # CI/CD: verifica sintaxis, empaqueta la app y crea una GitHub Release con el
 # zip para que los clientes se actualicen (auto-update).
+# Excluye datos sensibles (BD, respaldos, logs, uploads y archivos .xlsx)
+# que estan en .gitignore y no viajan por git.
 on:
   push:
     branches: [master]
@@ -31,11 +33,8 @@ jobs:
       - name: Clean sensitive/runtime data
         shell: pwsh
         run: |
-          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue informe_web/instance
-          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "informe_web/Respaldo BD"
-          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue informe_web/__pycache__
-          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue informe_web/static/uploads
-          Remove-Item -Force -ErrorAction SilentlyContinue informe_web/servidor.log informe_web/servidor.pid
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -Path @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/__pycache__", "informe_web/static/uploads")
+          Remove-Item -Force -ErrorAction SilentlyContinue -Path @("informe_web/servidor.log", "informe_web/servidor.pid")
 
       - name: Build package
         shell: pwsh
@@ -49,12 +48,14 @@ jobs:
           echo "ARTIFACT=$zip" >> $env:GITHUB_ENV
           Write-Host "ARTIFACT:$zip VERSION:$ver SHA:$sha"
 
-      - name: Create release (build-only debug)
+      - name: Create GitHub release
         shell: pwsh
-        run: |
-          echo "tag_name: v${{ env.VERSION }}-${{ env.SHA }}"
-          echo "artifact: ${{ env.ARTIFACT }}"
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ env.VERSION }}
           SHA: ${{ env.SHA }}
           ARTIFACT: ${{ env.ARTIFACT }}
+        run: |
+          $tag = "v$env:VERSION-$env:SHA"
+          echo "Creando release $tag con asset $env:ARTIFACT"
+          gh release create "$tag" "$env:ARTIFACT" --title "v$env:VERSION ($env:SHA)" --notes "Versión $env:VERSION (commit $env:SHA). Build automático desde GitHub Actions."
