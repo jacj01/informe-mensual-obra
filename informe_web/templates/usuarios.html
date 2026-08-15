@@ -18,6 +18,11 @@
     <button type="button" class="btn btn-gold btn-lg" onclick="return abrirModal('{{ url_for('usuario_nuevo') }}')">
       <i class="bi bi-person-plus"></i> Nuevo Usuario
     </button>
+    {% if es_super_usuario() %}
+    <button id="btnPub" type="button" class="btn btn-upd btn-pub btn-lg" onclick="publicarNuevaVersion();">
+      <i class="bi bi-upload"></i> Publicar nueva versión
+    </button>
+    {% endif %}
   </div>
 </div>
 
