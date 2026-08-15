@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+from ctypes import windll, wintypes
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -43,18 +44,24 @@ def servidor_sano():
 
 
 def abrir_navegador():
-    # Abre el navegador SIN ventana de consola. `webbrowser.open` reusa el
-    # browser ya abierto (pestaña nueva) y no lanza cmd/explorer como `os.startfile`.
+    # Abre el navegador SIN ventana de consola ni cmd visible.
+    # En Windows se usa ShellExecute("open", URL, None, SW_HIDE): resuelve el
+    # handler del protocolo http:// de forma oculta, evitando el cmd/explorer
+    # que `os.startfile` o `cmd /c start` disparan (especialmente al primer
+    # arranque del browser). Fallback: webbrowser.open (reutiliza instancia).
+    if os.name == "nt":
+        try:
+            res = windll.shell32.ShellExecuteW(
+                None, "open", URL, None, None, 0  # 0 = SW_HIDE (sin ventana)
+            )
+            if res > 32:
+                return
+        except Exception:
+            pass
     try:
         import webbrowser
         webbrowser.open(URL, new=2)
     except Exception:
-        if os.name == "nt":
-            # Fallback 100% oculto: lanza el browser con la ventana de consola suprimida.
-            SW_HIDE = 0
-            subprocess.Popen(["cmd", "/c", "start", "", URL],
-                             creationflags=0x08000000,  # CREATE_NO_WINDOW
-                             shell=False)
         log.exception("No se pudo abrir el navegador")
 
 
