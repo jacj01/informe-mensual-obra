@@ -77,8 +77,10 @@
       </tr>
     </thead>
     <tbody>
-      {% for comp in ['Costo Directo', 'Gastos Generales', 'Gastos de Supervisión', 'Elaboración de Expediente Técnico', 'Liquidación de Obra'] %}
+{% for comp in ['Costo Directo', 'Gastos Generales', 'Gastos de Supervisión', 'Elaboración de Expediente Técnico', 'Liquidación de Obra'] %}
       {% set r = fe06_resumen[comp] %}
+      {% set comp_data = fe06_rows | selectattr('componente', 'equalto', comp) | list %}
+      {% if comp_data %}
       <tr class="row-total">
         <td colspan="2"><strong>{{ comp }}</strong></td>
         <td class="num strong">{{ "{:,.2f}".format(r.et) }}</td>
@@ -97,7 +99,7 @@
         <td class="num">{{ "{:,.2f}".format(r.saldo_et) }}</td>
         {% endif %}
       </tr>
-      {% for sub in fe06_rows if sub.componente == comp %}
+      {% for sub in comp_data %}
       <tr>
         <td>{{ sub.clasificador }}</td>
         <td>{{ sub.detalle }}</td>
@@ -118,6 +120,9 @@
         {% endif %}
       </tr>
       {% endfor %}
+      {% endif %}
+      {% endfor %}
+      {% endif %}
       {% endfor %}
     </tbody>
     <tfoot>
