@@ -16,7 +16,7 @@ DIAS_NOMBRE = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves",
                4: "Viernes", 5: "Sábado", 6: "Domingo"}
 
 COMPONENTES_FE06 = [
-    "Costo Directo", "Gastos Generales", "Gestion de Supervisión",
+    "Costo Directo", "Gastos Generales", "Gastos de Supervisión",
     "Elaboración de Expediente Técnico", "Liquidación de Obra",
 ]
 
@@ -186,12 +186,13 @@ def clasificadores_proyecto():
         (p.clasificador_bienes or "2.6.2.3.99.4"): "BIENES",
         (p.clasificador_servicios or "2.6.2.3.99.5"): "SERVICIOS",
         (p.clasificador_expediente or "2.6.8.1.3.1"): "ELABORACION DE EXPEDIENTE TECNICO",
+        (p.clasificador_liquidacion or "LIQUIDACION"): "COSTO DE LIQUIDACION",
     }
 
 
 def ejecucion_por_componente(anio):
     # Incluye TODOS los componentes presentes en la config de Presupuesto
-    # (Costo Directo, Gastos Generales, Gestion de Supervision,
+    # (Costo Directo, Gastos Generales, Gastos de Supervisión,
     #  Elaboracion de Expediente Tecnico, Liquidacion de Obra).
     comps = [c[0] for c in db.session.query(Presupuesto.componente.distinct())
              if c[0] not in (None, "")]
@@ -532,11 +533,13 @@ def panel_datos(mes, anio=None):
 
     # ---------------- V. RESUMEN GASTO DEVENGADO ----------------
     resumen_dev = []
-    for clas, det in (("2.6.2.3.99.3", "Personal"),
-                      ("2.6.2.3.99.4", "Bienes"),
-                      ("2.6.2.3.99.5", "Servicios"),
-                      ("2.6.8.1.3.1", "Elaboración de Expediente Técnico"),
-                      ("LIQUIDACION", "Liquidación de Obra")):
+    for clas, det in ((p.clasificador_personal or "2.6.2.3.99.3", "Personal"),
+                      (p.clasificador_bienes or "2.6.2.3.99.4", "Bienes"),
+                      (p.clasificador_servicios or "2.6.2.3.99.5", "Servicios"),
+                      (p.clasificador_expediente or "2.6.8.1.3.1",
+                       "Elaboración de Expediente Técnico"),
+                      (p.clasificador_liquidacion or "LIQUIDACION",
+                       "Liquidación de Obra")):
         pin = round(sum((get(c, clas) or {}).get("pim", 0) for c in COMPONENTES_FE06), 2)
         gas = round(sum((get(c, clas) or {}).get("total_anio", 0) for c in COMPONENTES_FE06), 2)
         resumen_dev.append({"clas": clas, "detalle": det, "pin": pin, "gas": gas,
@@ -591,7 +594,7 @@ def panel_datos(mes, anio=None):
     componentes_presupuesto = [
         ("Costo Directo", "Costo Directo"),
         ("Gastos Generales", "Gastos Generales"),
-        ("Gestion de Supervisión", "Gastos de Supervisión"),
+        ("Gastos de Supervisión", "Gastos de Supervisión"),
         ("Elaboración de Expediente Técnico", "Elaboración de Expediente"),
         ("Liquidación de Obra", "Gastos de Liquidación"),
     ]
@@ -605,7 +608,7 @@ def panel_datos(mes, anio=None):
     narrativas = []
     for titulo, comp in (("3. COSTO DIRECTO", "Costo Directo"),
                          ("4. GASTOS GENERALES", "Gastos Generales"),
-                         ("5. GASTOS DE SUPERVISION", "Gestion de Supervisión")):
+                         ("5. GASTOS DE SUPERVISION", "Gastos de Supervisión")):
         ejec_comp = (resumen[comp]["acum_total"] if incluir
                      else resumen[comp]["total_anio"])
         narrativas.append({
@@ -642,9 +645,9 @@ def panel_datos(mes, anio=None):
         {"label": "Gastos Generales", "presupuesto": et_comp["Gastos Generales"],
          "ejecutado": (resumen["Gastos Generales"]["acum_total"] if incluir
                        else resumen["Gastos Generales"]["total_anio"])},
-        {"label": "Gastos de Supervisión", "presupuesto": et_comp["Gestion de Supervisión"],
-         "ejecutado": (resumen["Gestion de Supervisión"]["acum_total"] if incluir
-                       else resumen["Gestion de Supervisión"]["total_anio"])},
+        {"label": "Gastos de Supervisión", "presupuesto": et_comp["Gastos de Supervisión"],
+         "ejecutado": (resumen["Gastos de Supervisión"]["acum_total"] if incluir
+                       else resumen["Gastos de Supervisión"]["total_anio"])},
         {"label": "Expediente Técnico", "presupuesto": et_comp["Elaboración de Expediente Técnico"],
          "ejecutado": (resumen["Elaboración de Expediente Técnico"]["acum_total"] if incluir
                        else resumen["Elaboración de Expediente Técnico"]["total_anio"])},
@@ -760,7 +763,7 @@ def f05_datos(mes, anio):
                 o = d.importe if es_serv else 0.0
                 directos = d.importe if g.componente == "Costo Directo" else 0.0
                 generales = d.importe if g.componente == "Gastos Generales" else 0.0
-                supervision = d.importe if g.componente == "Gestion de Supervisión" else 0.0
+                supervision = d.importe if g.componente == "Gastos de Supervisión" else 0.0
                 por_clasif = {}
                 for c in clasif_cols:
                     por_clasif[c] = d.importe if g.clasificador == c else 0.0

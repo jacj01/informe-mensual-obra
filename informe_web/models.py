@@ -26,7 +26,7 @@ def sumar_meses(fecha, meses):
     return date(anio, mes, dia)
 
 COMPONENTES = [
-    "Costo Directo", "Gastos Generales", "Gestion de Supervisión",
+    "Costo Directo", "Gastos Generales", "Gastos de Supervisión",
     "Elaboración de Expediente Técnico", "Liquidación de Obra",
 ]
 CLASIFICADORES = {
@@ -81,6 +81,7 @@ class Proyecto(db.Model):
     clasificador_bienes = db.Column(db.String(20), default="2.6.2.3.99.4")
     clasificador_servicios = db.Column(db.String(20), default="2.6.2.3.99.5")
     clasificador_expediente = db.Column(db.String(20), default="2.6.8.1.3.1")
+    clasificador_liquidacion = db.Column(db.String(20), default="LIQUIDACION")
     logo_path = db.Column(db.String(500), default="")
     cip_supervisor = db.Column(db.String(50), default="")
     cip_residente = db.Column(db.String(50), default="")

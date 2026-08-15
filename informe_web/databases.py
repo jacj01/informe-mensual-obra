@@ -203,6 +203,28 @@ def _tipo_sql(col):
     return "TEXT"
 
 
+def _renombrar_componente_supervision(eng):
+    """Renombra el componente 'Gestion de Supervisión' a 'Gastos de Supervisión'
+    en los datos existentes de la base del Administrador."""
+    from sqlalchemy import text as _text
+    with eng.connect() as con:
+        for tabla in ("presupuesto", "gasto"):
+            existe = con.execute(
+                _text("SELECT 1 FROM sqlite_master WHERE type='table' AND name=:t"),
+                {"t": tabla}).first()
+            if not existe:
+                continue
+            cols = [r[1] for r in con.execute(
+                _text(f"PRAGMA table_info({tabla})"))]
+            if "componente" not in cols:
+                continue
+            con.execute(
+                _text(
+                    f"UPDATE {tabla} SET componente = 'Gastos de Supervisión' "
+                    "WHERE componente = 'Gestion de Supervisión'"))
+        con.commit()
+
+
 def ensure_tenant(admin_id):
     """Crea (si no existe) la base del Administrador con sus tablas."""
     eng = tenant_engine(admin_id)
@@ -211,6 +233,7 @@ def ensure_tenant(admin_id):
     _migrar_esquema_trabajador(eng)
     _migrar_esquema_proyecto(eng)
     _migrar_esquema_resto(eng)
+    _renombrar_componente_supervision(eng)
     return eng
 
 

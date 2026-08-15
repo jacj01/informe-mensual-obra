@@ -47,9 +47,9 @@ def seed():
         ("Gastos Generales", "2.6.2.3.99.3", "PERSONAL", 0, 0, 0, 0, 0),
         ("Gastos Generales", "2.6.2.3.99.4", "BIENES", 44817.04, 1651, 9602, 0, 0),
         ("Gastos Generales", "2.6.2.3.99.5", "SERVICIOS", 226080.00, 12090, 48120, 102640, 48197),
-        ("Gestion de Supervisión", "2.6.2.3.99.3", "PERSONAL", 0, 0, 0, 0, 0),
-        ("Gestion de Supervisión", "2.6.2.3.99.4", "BIENES", 1597.50, 0, 194.50, 0, 0),
-        ("Gestion de Supervisión", "2.6.2.3.99.5", "SERVICIOS", 90000.00, 2500, 11250, 3416.66, 12500),
+        ("Gastos de Supervisión", "2.6.2.3.99.3", "PERSONAL", 0, 0, 0, 0, 0),
+        ("Gastos de Supervisión", "2.6.2.3.99.4", "BIENES", 1597.50, 0, 194.50, 0, 0),
+        ("Gastos de Supervisión", "2.6.2.3.99.5", "SERVICIOS", 90000.00, 2500, 11250, 3416.66, 12500),
         ("Elaboración de Expediente Técnico", "2.6.8.1.3.1",
          "ELABORACION DE EXPEDIENTE TECNICO", 25000.00, 25000, 0, 0, 0),
         ("Liquidación de Obra", "LIQUIDACION", "COSTO DE LIQUIDACION", 7037.43, 0, 0, 0, 0),
@@ -100,7 +100,7 @@ def seed():
          "2.6.2.3.99.5", "Gastos Generales"),
         (3, (2026, 4, 18), 157, "O/S", 57, "BRICEÑO CALLALLI ELIO",
          "SERVICIO DE SUPERVISION DE OBRA - ENERO/FEBRERO", "SERV", 1, 7500,
-         "2.6.2.3.99.5", "Gestion de Supervisión"),
+         "2.6.2.3.99.5", "Gastos de Supervisión"),
     ]
     for o, f, s, t, n, prov, det, u, ca, pu, cl, co in abr:
         db.session.add(gasto(o, f, s, t, n, prov, det, u, ca, pu, cl, co, 4))

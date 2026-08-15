@@ -267,9 +267,13 @@
         <label>Clasificador para ELABORACIÓN DE EXPEDIENTE TÉCNICO</label>
         <input type="text" name="clasificador_expediente" value="{{ p.clasificador_expediente or '2.6.8.1.3.1' }}">
       </div>
+      <div class="field">
+        <label>Clasificador para LIQUIDACIÓN DE OBRA</label>
+        <input type="text" name="clasificador_liquidacion" value="{{ p.clasificador_liquidacion or 'LIQUIDACION' }}">
+      </div>
       <div class="field full">
         <div class="field-hint">Estos códigos se usan en el <b>Ingreso de O/C o O/S</b> y en los
-        formatos financieros para identificar PERSONAL, BIENES, SERVICIOS y ELABORACIÓN DE EXPEDIENTE TÉCNICO.</div>
+        formatos financieros para identificar PERSONAL, BIENES, SERVICIOS, ELABORACIÓN DE EXPEDIENTE TÉCNICO y LIQUIDACIÓN DE OBRA.</div>
       </div>
     </div>
   </div>

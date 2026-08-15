@@ -102,7 +102,8 @@ def migrar_schema():
         conn.commit()
 
         for col in ["clasificador_personal", "clasificador_bienes",
-                    "clasificador_servicios", "clasificador_expediente"]:
+                    "clasificador_servicios", "clasificador_expediente",
+                    "clasificador_liquidacion"]:
             if col not in cols:
                 conn.execute(text(
                     f"ALTER TABLE proyecto ADD COLUMN {col} VARCHAR(20) DEFAULT ''"))
@@ -134,6 +135,18 @@ def migrar_schema():
         conn.execute(text(
             "UPDATE proyecto SET clasificador_expediente = '2.6.8.1.3.1' "
             "WHERE clasificador_expediente IS NULL OR clasificador_expediente = ''"))
+        conn.execute(text(
+            "UPDATE proyecto SET clasificador_liquidacion = 'LIQUIDACION' "
+            "WHERE clasificador_liquidacion IS NULL OR clasificador_liquidacion = ''"))
+        conn.commit()
+
+        # Migración de datos: renombra componente anterior
+        conn.execute(text(
+            "UPDATE presupuesto SET componente = 'Gastos de Supervisión' "
+            "WHERE componente = 'Gestion de Supervisión'"))
+        conn.execute(text(
+            "UPDATE gasto SET componente = 'Gastos de Supervisión' "
+            "WHERE componente = 'Gestion de Supervisión'"))
         conn.commit()
 
         # Migracion: devengado en gastos. Los registros existentes se consideran
@@ -270,13 +283,13 @@ def migrar_schema():
             conn.commit()
 
         # Configuracion presupuestal: filas PERSONAL para Gastos Generales y
-        # Gestion de Supervisión (se agregan si aun no existen).
+        # Gastos de Supervisión (se agregan si aun no existen).
         pcols = [r[1] for r in conn.execute(text("PRAGMA table_info(presupuesto)"))]
         if pcols:
             personal = conn.execute(text(
                 "SELECT clasificador_personal FROM proyecto LIMIT 1")).scalar()
             cod_personal = personal or "2.6.2.3.99.3"
-            for comp in ["Gastos Generales", "Gestion de Supervisión"]:
+            for comp in ["Gastos Generales", "Gastos de Supervisión"]:
                 ex = conn.execute(text(
                     "SELECT COUNT(*) FROM presupuesto "
                     "WHERE componente = :c AND detalle = 'PERSONAL'"),
@@ -1423,11 +1436,7 @@ def registrar_rutas(app):
 
     def lista_clasificadores(p):
         """Opciones (codigo, nombre) para el select de clasificador."""
-        out = []
-        for code, label in clasificadores_proyecto().items():
-            out.append((code, label))
-        out.append(("LIQUIDACION", CLASIFICADORES.get("LIQUIDACION", "LIQUIDACION")))
-        return out
+        return list(clasificadores_proyecto().items())
 
     def clasificadores_oc(p):
         """Opciones para O/C y O/S: solo Bienes, Servicios y Expediente Tecnico."""
@@ -1968,19 +1977,23 @@ def registrar_rutas(app):
                 "BIENES": p.clasificador_bienes,
                 "SERVICIOS": p.clasificador_servicios,
                 "ELABORACION DE EXPEDIENTE TECNICO": p.clasificador_expediente,
+                "COSTO DE LIQUIDACION": p.clasificador_liquidacion,
             }
             for campo in ["clasificador_personal", "clasificador_bienes",
-                          "clasificador_servicios", "clasificador_expediente"]:
+                          "clasificador_servicios", "clasificador_expediente",
+                          "clasificador_liquidacion"]:
                 setattr(p, campo, request.form.get(campo, "").strip().upper())
             p.clasificador_personal = p.clasificador_personal or "2.6.2.3.99.3"
             p.clasificador_bienes = p.clasificador_bienes or "2.6.2.3.99.4"
             p.clasificador_servicios = p.clasificador_servicios or "2.6.2.3.99.5"
             p.clasificador_expediente = p.clasificador_expediente or "2.6.8.1.3.1"
+            p.clasificador_liquidacion = p.clasificador_liquidacion or "LIQUIDACION"
             clas_nuevo = {
                 "PERSONAL": p.clasificador_personal,
                 "BIENES": p.clasificador_bienes,
                 "SERVICIOS": p.clasificador_servicios,
                 "ELABORACION DE EXPEDIENTE TECNICO": p.clasificador_expediente,
+                "COSTO DE LIQUIDACION": p.clasificador_liquidacion,
             }
             for detalle, nuevo in clas_nuevo.items():
                 previo = clas_prev.get(detalle)
@@ -3187,7 +3200,7 @@ def registrar_rutas(app):
         }
 
         # Filas financieras agrupadas por rubro (componente) y clasificador
-        orden_comp = ["Costo Directo", "Gastos Generales", "Gestion de Supervisión",
+        orden_comp = ["Costo Directo", "Gastos Generales", "Gastos de Supervisión",
                       "Elaboración de Expediente Técnico", "Liquidación de Obra"]
         grupos = {}
         for g in gastos_mes(mes, anio, devengado=True):
