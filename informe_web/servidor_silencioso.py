@@ -43,12 +43,18 @@ def servidor_sano():
 
 
 def abrir_navegador():
+    # Abre el navegador SIN ventana de consola. `webbrowser.open` reusa el
+    # browser ya abierto (pestaña nueva) y no lanza cmd/explorer como `os.startfile`.
     try:
-        if os.name == "nt":
-            os.startfile(URL)
-        else:
-            subprocess.Popen(["xdg-open", URL])
+        import webbrowser
+        webbrowser.open(URL, new=2)
     except Exception:
+        if os.name == "nt":
+            # Fallback 100% oculto: lanza el browser con la ventana de consola suprimida.
+            SW_HIDE = 0
+            subprocess.Popen(["cmd", "/c", "start", "", URL],
+                             creationflags=0x08000000,  # CREATE_NO_WINDOW
+                             shell=False)
         log.exception("No se pudo abrir el navegador")
 
 
