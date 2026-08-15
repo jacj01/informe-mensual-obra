@@ -9,9 +9,10 @@
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
 <style>
-  /* La tabla ocupa SIEMPRE el 100% del ancho de la hoja (nunca la desborda).
-     Con table-layout:auto las columnas se ajustan al contenido dentro de ese ancho. */
-  table.tabla { margin-top: 3px; table-layout: auto; width: 100%; }
+  /* Layout FIJO: todas las tablas de la hoja usan los MISMOS anchos de columna
+     (colgroup de 1062px = ancho util de la hoja A4 horizontal).
+     Asi las columnas quedan perfectamente cuadradas y alineadas en todas las secciones. */
+  table.tabla { margin-top: 3px; table-layout: fixed; width: 100%; }
   table.tabla th, table.tabla td {
     padding: 2.5px 3px; line-height: 1.35;
     overflow-wrap: normal; word-break: normal;
@@ -19,6 +20,8 @@
   /* Columnas numericas/cortas: sin salto de linea para mantener la tabla compacta */
   table.tabla td.num, table.tabla th.num { white-space: nowrap; }
   table.tabla td.ctr, table.tabla th.ctr { white-space: nowrap; }
+  /* Cabeceras de clasificador: fuente compacta para que el codigo quepa en una linea */
+  table.tabla thead th.clasif { font-size: 6.2pt; letter-spacing: -.2px; padding: 4px 2px; }
 </style>
 </head>
 <body>
@@ -56,26 +59,22 @@
     <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
   </div>
 
-  {% set pers = p.clasificador_personal or '2.6.2.3.99.3' %}
-  {% set bien = p.clasificador_bienes or '2.6.2.3.99.4' %}
-  {% set serv = p.clasificador_servicios or '2.6.2.3.99.5' %}
-  {% set clabel = {pers: ' (PERSONAL)', bien: ' (BIENES)', serv: ' (SERVICIOS)'} %}
   {% set ncols = 11 + clasif_cols|length + 4 %}
   {% for sec in secciones %}
   <table class="tabla">
     <colgroup>
-      <col style="min-width:16px"><col style="min-width:38px"><col style="min-width:52px"><col style="min-width:26px"><col style="min-width:32px">
-      <col style="min-width:110px"><col style="min-width:140px"><col style="min-width:24px"><col style="min-width:36px">
-      <col style="min-width:42px"><col style="min-width:50px">
-      {% for c in clasif_cols %}<col style="min-width:48px">{% endfor %}
-      <col style="min-width:44px"><col style="min-width:44px"><col style="min-width:48px"><col style="min-width:50px">
+      <col style="width:16px"><col style="width:40px"><col style="width:58px"><col style="width:26px"><col style="width:30px">
+      <col style="width:152px"><col style="width:192px"><col style="width:32px"><col style="width:34px">
+      <col style="width:48px"><col style="width:58px">
+      {% for c in clasif_cols %}<col style="width:58px">{% endfor %}
+      <col style="width:50px"><col style="width:48px"><col style="width:44px"><col style="width:60px">
     </colgroup>
     <thead>
       <tr>
         <th>N°</th><th>SIAF</th><th>Fecha</th><th>Tipo</th><th>N°</th>
         <th>Proveedor</th><th>Detalle</th><th>Und</th><th class="num">Cant</th>
         <th class="num">P.U</th><th class="num">Importe</th>
-        {% for c in clasif_cols %}<th class="num">{{ c }}{{ clabel.get(c, '') }}</th>{% endfor %}
+        {% for c in clasif_cols %}<th class="num clasif">{{ c }}</th>{% endfor %}
         <th class="num">Directos</th><th class="num">Grales</th>
         <th class="num">Superv.</th><th class="num">Total</th>
       </tr>
@@ -116,18 +115,18 @@
   {% else %}
   <table class="tabla">
     <colgroup>
-      <col style="min-width:16px"><col style="min-width:38px"><col style="min-width:52px"><col style="min-width:26px"><col style="min-width:32px">
-      <col style="min-width:110px"><col style="min-width:140px"><col style="min-width:24px"><col style="min-width:36px">
-      <col style="min-width:42px"><col style="min-width:50px">
-      {% for c in clasif_cols %}<col style="min-width:48px">{% endfor %}
-      <col style="min-width:44px"><col style="min-width:44px"><col style="min-width:48px"><col style="min-width:50px">
+      <col style="width:16px"><col style="width:40px"><col style="width:58px"><col style="width:26px"><col style="width:30px">
+      <col style="width:152px"><col style="width:192px"><col style="width:32px"><col style="width:34px">
+      <col style="width:48px"><col style="width:58px">
+      {% for c in clasif_cols %}<col style="width:58px">{% endfor %}
+      <col style="width:50px"><col style="width:48px"><col style="width:44px"><col style="width:60px">
     </colgroup>
     <thead>
       <tr>
         <th>N°</th><th>SIAF</th><th>Fecha</th><th>Tipo</th><th>N°</th>
         <th>Proveedor</th><th>Detalle</th><th>Und</th><th class="num">Cant</th>
         <th class="num">P.U</th><th class="num">Importe</th>
-        {% for c in clasif_cols %}<th class="num">{{ c }}{{ clabel.get(c, '') }}</th>{% endfor %}
+        {% for c in clasif_cols %}<th class="num clasif">{{ c }}</th>{% endfor %}
         <th class="num">Directos</th><th class="num">Grales</th>
         <th class="num">Superv.</th><th class="num">Total</th>
       </tr>
@@ -140,11 +139,11 @@
 
   <table class="tabla">
     <colgroup>
-      <col style="min-width:16px"><col style="min-width:38px"><col style="min-width:52px"><col style="min-width:26px"><col style="min-width:32px">
-      <col style="min-width:110px"><col style="min-width:140px"><col style="min-width:24px"><col style="min-width:36px">
-      <col style="min-width:42px"><col style="min-width:50px">
-      {% for c in clasif_cols %}<col style="min-width:48px">{% endfor %}
-      <col style="min-width:44px"><col style="min-width:44px"><col style="min-width:48px"><col style="min-width:50px">
+      <col style="width:16px"><col style="width:40px"><col style="width:58px"><col style="width:26px"><col style="width:30px">
+      <col style="width:152px"><col style="width:192px"><col style="width:32px"><col style="width:34px">
+      <col style="width:48px"><col style="width:58px">
+      {% for c in clasif_cols %}<col style="width:58px">{% endfor %}
+      <col style="width:50px"><col style="width:48px"><col style="width:44px"><col style="width:60px">
     </colgroup>
     <tbody>
       <tr class="fila-total">
@@ -161,4 +160,6 @@
 </div>
 </body>
 </html>
+
+
 
