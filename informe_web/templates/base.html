@@ -136,32 +136,64 @@
         });
     };
     // Publicar nueva version (SOLO Super Usuario): bump + commit + push + workflow_dispatch
+    // 1) Abrir modal con inputs (version + mensaje)
+    // 2) Al confirmar -> confirmPopup (SI/NO) -> si acepta, fetch POST /api/actualizar-publicar
+    window.abrirModalPublicar = function () {
+      var m = document.getElementById('modalPub');
+      if (!m) return;
+      m.classList.add('active');
+      document.getElementById('pubVer').value = "";
+      document.getElementById('pubMsj').value = "";
+      document.getElementById('pubVer').focus();
+    };
+    window.cerrarModalPublicar = function () {
+      var m = document.getElementById('modalPub');
+      if (m) m.classList.remove('active');
+    };
     window.publicarNuevaVersion = function () {
-      var ver = prompt("Nueva versión (formato X.Y.Z, ej 1.0.2):", "");
-      if (!ver) return;
-      if (!/^\d+\.\d+\.\d+$/.test(ver.trim())) {
+      window.abrirModalPublicar();
+    };
+    window._enviarPublicar = function () {
+      var ver = (document.getElementById('pubVer').value || "").trim();
+      if (!ver) { mostrarToast('error', 'Ingrese la nueva version (ej 1.0.2).'); return; }
+      if (!/^\d+\.\d+\.\d+$/.test(ver)) {
         mostrarToast('error', 'Formato invalido. Use X.Y.Z (ej 1.0.2).');
-        return false;
+        return;
       }
-      var msj = prompt("Mensaje opcional (Enter para dejar vacio):", "") || "";
-      fetch('/api/actualizar-publicar', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json',
-                   'X-CSRF-Token': window._csrfToken(),
-                   'X-Requested-With': 'XMLHttpRequest' },
-        body: JSON.stringify({ version: ver.trim(), mensaje: msj })
-      })
-        .then(function (r) { return r.json().catch(function () { return {}; }); })
-        .then(function (d) {
-          if (d.ok) {
-            mostrarToast('success', 'Publicado ' + (d.tag || '') + '. La release se creara en GitHub en breve. El servidor se reiniciara.');
-            setTimeout(function () { location.reload(); }, 3500);
-          } else {
-            mostrarToast('error', d.error || 'No se pudo publicar');
-          }
+      var msj = (document.getElementById('pubMsj').value || "").trim();
+      window.cerrarModalPublicar();
+      confirmarPopup({
+        titulo: 'Publicar nueva version ' + ver,
+        mensaje: 'Se creara el release v' + ver + ' en GitHub, se hara commit + push y se disparara el workflow de build. El servidor se reiniciara al terminar. <strong>Estas de acuerdo con la publicacion?</strong>',
+        colorOk: 'btn-upd',
+        icono: 'info'
+      }).then(function (acepto) {
+        if (!acepto) return;
+        var btn = document.getElementById('btnPub');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-upload"></i> Publicando...'; }
+        fetch('/api/actualizar-publicar', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json',
+                     'X-CSRF-Token': window._csrfToken(),
+                     'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ version: ver, mensaje: msj })
         })
-        .catch(function (e) { mostrarToast('error', 'Error publicando: ' + e.message); });
+          .then(function (r) { return r.json().catch(function () { return {}; }); })
+          .then(function (d) {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+            if (d.ok) {
+              mostrarToast('success', 'Publicado ' + (d.tag || '') + '. La release se creara en GitHub en breve. El servidor se reiniciara.');
+              setTimeout(function () { location.reload(); }, 3500);
+            } else {
+              mostrarToast('error', d.error || 'No se pudo publicar');
+            }
+          })
+          .catch(function (e) {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+            mostrarToast('error', 'Error publicando: ' + e.message);
+          });
+      });
     };
     // Chequear SOLO al iniciar (dashboard); en otras paginas solo renderiza el cache
     document.addEventListener('DOMContentLoaded', function () { window.buscarActualizacion(); });
@@ -707,5 +739,46 @@
     })();
   </script>
   {% block scripts %}{% endblock %}
+
+  <!-- Modal: Publicar nueva version (inputs + confirmacion SI/NO) -->
+  <div id="modalPub" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalPubTitle">
+    <div class="modal-pub" role="document">
+      <div class="modal-head">
+        <h3 id="modalPubTitle"><i class="bi bi-upload"></i> Publicar nueva versi&oacute;n</h3>
+        <button type="button" class="modal-close" aria-label="Cerrar" onclick="window.cerrarModalPublicar();">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="pubVer">Versi&oacute;n <small>(formato X.Y.Z, ej 1.0.2)</small></label>
+          <input id="pubVer" type="text" placeholder="1.0.3" maxlength="32">
+        </div>
+        <div class="form-group">
+          <label for="pubMsj">Mensaje opcional <small>(para el tag de release)</small></label>
+          <input id="pubMsj" type="text" placeholder="Ej: correccion de reportes" maxlength="200">
+        </div>
+        <p class="modal-help">Al confirmar se har&aacute; <strong>git commit + push</strong> y se disparar&aacute; el workflow de GitHub que construye y publica el release. El servidor se reiniciar&aacute; al terminar.</p>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" onclick="window.cerrarModalPublicar();">Cancelar</button>
+        <button type="button" class="btn btn-upd" onclick="window._enviarPublicar();">Publicar y confirmar</button>
+      </div>
+    </div>
+  </div>
+  <style>
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.52); display:none; align-items:center; justify-content:center; z-index:9000; }
+    .modal-overlay.active { display:flex !important; }
+    .modal-pub { background:#fff; border-radius:10px; width:92%; max-width:460px; box-shadow:0 18px 40px rgba(0,0,0,.22); color:#333; }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid #eee; }
+    .modal-head h3 { margin:0; font-size:18px; font-weight:600; color:#1f2937; }
+    .modal-close { background:none; border:0; font-size:24px; color:#888; cursor:pointer; line-height:1; padding:0 4px; }
+    .modal-body { padding:18px 20px; }
+    .modal-body .form-group { margin-bottom:14px; }
+    .modal-body .form-group label { display:block; font-size:13px; font-weight:600; color:#4b5563; margin-bottom:5px; }
+    .modal-body .form-group small { color:#9ca3af; font-weight:400; }
+    .modal-body .form-group input { width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px; }
+    .modal-help { font-size:12px; color:#6b7280; margin:10px 0 0; line-height:1.4; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:12px 20px; border-top:1px solid #eee; background:#fafafa; border-radius:0 0 10px 10px; }
+    .btn-ghost { background:#f3f4f6; color:#374151; }
+  </style>
 </body>
 </html>
