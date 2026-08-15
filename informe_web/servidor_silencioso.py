@@ -44,16 +44,26 @@ def servidor_sano():
 
 
 def abrir_navegador():
-    # Abre el navegador SIN ventana de consola ni cmd visible.
-    # En Windows se usa ShellExecute("open", URL, None, SW_HIDE): resuelve el
-    # handler del protocolo http:// de forma oculta, evitando el cmd/explorer
-    # que `os.startfile` o `cmd /c start` disparan (especialmente al primer
-    # arranque del browser). Fallback: webbrowser.open (reutiliza instancia).
+    # Abre el navegador sin ventana de consola cmd visible.
+    # Estrategia (Windows): reusar la instancia del browser ya abierta enviandole
+    # la URL como nueva pestaña (--new-tab). Si el browser ya corre, NO se lanza
+    # un proceso nuevo -> no aparece cmd/explorer ni la consola lenta del launcher
+    # del browser (caso tipico de Edge/Chrome al primer arranque).
+    # Si no hay instancia corriendo, se usa ShellExecuteW con SW_HIDE (oculto).
     if os.name == "nt":
         try:
-            res = windll.shell32.ShellExecuteW(
-                None, "open", URL, None, None, 0  # 0 = SW_HIDE (sin ventana)
-            )
+            import subprocess as _sp
+            for exe in ("msedge.exe", "chrome.exe", "firefox.exe"):
+                cmd = _sp.run(["tasklist", "/FI", "IMAGENAME eq " + exe, "/FO", "CSV", "/NH"],
+                              capture_output=True, text=True, timeout=5)
+                if exe in (cmd.stdout or ""):
+                    args = [exe, "--new-tab", URL] if exe != "firefox.exe" else [exe, URL]
+                    _sp.Popen(args, creationflags=0x08000000)  # CREATE_NO_WINDOW
+                    return
+        except Exception:
+            pass
+        try:
+            res = windll.shell32.ShellExecuteW(None, "open", URL, None, None, 0)
             if res > 32:
                 return
         except Exception:
