@@ -8,27 +8,18 @@
 <title>FE-05 Ejecucion Mensual - {{ MESES[mes-1] }} {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
-  <style>
-    table.tabla { margin-top: 3px; table-layout: auto; width: max-content; min-width: 100%; }
-    table.tabla th, table.tabla td {
-      padding: 2.5px 3px; line-height: 1.35;
-      overflow-wrap: normal; word-break: normal; white-space: normal;
-    }
-    /* No partir palabras: el texto fluye en espacios, no en medio de la palabra */
-    table.tabla td, table.tabla th { word-break: keep-all; }
-    /* Columnas cortas y numericas: sin salto de linea para mantener la tabla compacta */
-    table.tabla td:nth-child(1), table.tabla th:nth-child(1),
-    table.tabla td:nth-child(2), table.tabla th:nth-child(2),
-    table.tabla td:nth-child(3), table.tabla th:nth-child(3),
-    table.tabla td:nth-child(4), table.tabla th:nth-child(4),
-    table.tabla td:nth-child(5), table.tabla th:nth-child(5),
-    table.tabla td:nth-child(8), table.tabla th:nth-child(8),
-    table.tabla td:nth-child(9), table.tabla th:nth-child(9),
-    table.tabla td:nth-child(10), table.tabla th:nth-child(10),
-    table.tabla td:nth-child(11), table.tabla th:nth-child(11),
-    table.tabla td.num, table.tabla th.num { white-space: nowrap; }
-    .hoja { overflow-x: auto; }
-  </style>
+<style>
+  /* La tabla ocupa SIEMPRE el 100% del ancho de la hoja (nunca la desborda).
+     Con table-layout:auto las columnas se ajustan al contenido dentro de ese ancho. */
+  table.tabla { margin-top: 3px; table-layout: auto; width: 100%; }
+  table.tabla th, table.tabla td {
+    padding: 2.5px 3px; line-height: 1.35;
+    overflow-wrap: normal; word-break: normal;
+  }
+  /* Columnas numericas/cortas: sin salto de linea para mantener la tabla compacta */
+  table.tabla td.num, table.tabla th.num { white-space: nowrap; }
+  table.tabla td.ctr, table.tabla th.ctr { white-space: nowrap; }
+</style>
 </head>
 <body>
 <div class="toolbar">
@@ -73,10 +64,11 @@
   {% for sec in secciones %}
   <table class="tabla">
     <colgroup>
-      <col><col><col><col><col><col style="min-width:110px"><col style="min-width:150px"><col><col>
-      <col><col>
-      {% for c in clasif_cols %}<col>{% endfor %}
-      <col><col><col><col>
+      <col style="min-width:16px"><col style="min-width:38px"><col style="min-width:52px"><col style="min-width:26px"><col style="min-width:32px">
+      <col style="min-width:110px"><col style="min-width:140px"><col style="min-width:24px"><col style="min-width:36px">
+      <col style="min-width:42px"><col style="min-width:50px">
+      {% for c in clasif_cols %}<col style="min-width:48px">{% endfor %}
+      <col style="min-width:44px"><col style="min-width:44px"><col style="min-width:48px"><col style="min-width:50px">
     </colgroup>
     <thead>
       <tr>
@@ -124,11 +116,11 @@
   {% else %}
   <table class="tabla">
     <colgroup>
-      <col style="width:20px"><col style="width:48px"><col style="width:52px"><col style="width:28px"><col style="width:38px">
-      <col style="width:115px"><col style="width:190px"><col style="width:28px"><col style="width:42px">
-      <col style="width:48px"><col style="width:55px">
-      {% for c in clasif_cols %}<col style="width:52px">{% endfor %}
-      <col style="width:50px"><col style="width:50px"><col style="width:50px"><col style="width:55px">
+      <col style="min-width:16px"><col style="min-width:38px"><col style="min-width:52px"><col style="min-width:26px"><col style="min-width:32px">
+      <col style="min-width:110px"><col style="min-width:140px"><col style="min-width:24px"><col style="min-width:36px">
+      <col style="min-width:42px"><col style="min-width:50px">
+      {% for c in clasif_cols %}<col style="min-width:48px">{% endfor %}
+      <col style="min-width:44px"><col style="min-width:44px"><col style="min-width:48px"><col style="min-width:50px">
     </colgroup>
     <thead>
       <tr>
@@ -148,11 +140,11 @@
 
   <table class="tabla">
     <colgroup>
-      <col style="width:20px"><col style="width:48px"><col style="width:52px"><col style="width:28px"><col style="width:38px">
-      <col style="width:115px"><col style="width:190px"><col style="width:28px"><col style="width:42px">
-      <col style="width:48px"><col style="width:55px">
-      {% for c in clasif_cols %}<col style="width:52px">{% endfor %}
-      <col style="width:50px"><col style="width:50px"><col style="width:50px"><col style="width:55px">
+      <col style="min-width:16px"><col style="min-width:38px"><col style="min-width:52px"><col style="min-width:26px"><col style="min-width:32px">
+      <col style="min-width:110px"><col style="min-width:140px"><col style="min-width:24px"><col style="min-width:36px">
+      <col style="min-width:42px"><col style="min-width:50px">
+      {% for c in clasif_cols %}<col style="min-width:48px">{% endfor %}
+      <col style="min-width:44px"><col style="min-width:44px"><col style="min-width:48px"><col style="min-width:50px">
     </colgroup>
     <tbody>
       <tr class="fila-total">
@@ -169,3 +161,4 @@
 </div>
 </body>
 </html>
+
