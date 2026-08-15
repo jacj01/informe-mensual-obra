@@ -27,6 +27,7 @@ informe_web/*.bak_*
 opencode.json
 skills-lock.json
 Auditoria_QA/
+.playwright-mcp/
 
 # Entorno
 .env

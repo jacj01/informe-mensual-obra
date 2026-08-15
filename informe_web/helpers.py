@@ -190,15 +190,19 @@ def clasificadores_proyecto():
 
 
 def ejecucion_por_componente(anio):
-    out = {"Costo Directo": 0.0, "Gastos Generales": 0.0, "Gestion de Supervisión": 0.0}
+    # Incluye TODOS los componentes presentes en la config de Presupuesto
+    # (Costo Directo, Gastos Generales, Gestion de Supervision,
+    #  Elaboracion de Expediente Tecnico, Liquidacion de Obra).
+    comps = [c[0] for c in db.session.query(Presupuesto.componente.distinct())
+             if c[0] not in (None, "")]
+    out = {c: 0.0 for c in comps}
     rows = (db.session.query(Gasto.componente,
                              db.func.sum(GastoDetalle.cantidad * GastoDetalle.precio_unitario))
             .join(GastoDetalle, GastoDetalle.gasto_id == Gasto.id)
             .filter(Gasto.anio == anio, Gasto.devengado == True)
             .group_by(Gasto.componente).all())
     for comp, total in rows:
-        if comp in out:
-            out[comp] = round(total or 0, 2)
+        out[comp] = round(total or 0, 2)
     return out
 
 
@@ -496,21 +500,21 @@ def panel_datos(mes, anio=None):
     ]
 
     # ---------------- III. DEVENGADO MENSUAL / IV. ACUMULADO ----------------
-    grupos3 = [
-        ("Costo Directo", "Costo Directo", "2.6.2.3.99.3", "Personal"),
-        ("Costo Directo", "Costo Directo", "2.6.2.3.99.4", "Bienes"),
-        ("Costo Directo", "Costo Directo", "2.6.2.3.99.5", "Servicios"),
-        ("Gastos Generales", "Gastos Generales", "2.6.2.3.99.3", "Personal"),
-        ("Gastos Generales", "Gastos Generales", "2.6.2.3.99.4", "Bienes"),
-        ("Gastos Generales", "Gastos Generales", "2.6.2.3.99.5", "Servicios"),
-        ("Gestion de Supervisión", "Gastos de Supervisión", "2.6.2.3.99.3", "Personal"),
-        ("Gestion de Supervisión", "Gastos de Supervisión", "2.6.2.3.99.4", "Bienes"),
-        ("Gestion de Supervisión", "Gastos de Supervisión", "2.6.2.3.99.5", "Servicios"),
-    ]
+    # Construido desde la config real de Presupuesto: incluye los 5 componentes
+    # con SUS propios clasificadores (p.ej. Elaboracion de Expediente = 2.6.8.1.3.1,
+    # Liquidacion de Obra = LIQUIDACION), no solo Personal/Bienes/Servicios.
+    _orden_det = {"PERSONAL": 0, "BIENES": 1, "SERVICIOS": 2,
+                  "ELABORACION DE EXPEDIENTE TECNICO": 3, "COSTO DE LIQUIDACION": 4}
+    grupos3 = []
+    for comp in COMPONENTES_FE06:
+        configs = sorted(Presupuesto.query.filter_by(componente=comp).all(),
+                         key=lambda c: _orden_det.get((c.detalle or "").upper(), 99))
+        for cfg in configs:
+            grupos3.append((comp, cfg.clasificador, cfg.detalle or cfg.clasificador))
 
     def filas_dev(grupos):
         out = []
-        for comp, _label, clas, det in grupos:
+        for comp, clas, det in grupos:
             r = get(comp, clas) or {}
             out.append({
                 "clas": r.get("clasificador", clas),
@@ -520,22 +524,21 @@ def panel_datos(mes, anio=None):
             })
         return out
 
-    dev_mensual = [
-        {"grupo": "Costo Directo", "filas": filas_dev(grupos3[:3])},
-        {"grupo": "Gastos Generales", "filas": filas_dev(grupos3[3:6])},
-        {"grupo": "Gastos de Supervisión", "filas": filas_dev(grupos3[6:9])},
-    ]
+    dev_mensual = [{"grupo": comp,
+                    "filas": filas_dev([g for g in grupos3 if g[0] == comp])}
+                   for comp in COMPONENTES_FE06]
     dev_mensual_total = [round(sum(r["mensual"][m - 1] for r in rows), 2) for m in meses_col]
     dev_acum_total = round(sum(r["total_anio"] for r in rows), 2)
 
     # ---------------- V. RESUMEN GASTO DEVENGADO ----------------
-    comps5 = ["Costo Directo", "Gastos Generales", "Gestion de Supervisión"]
     resumen_dev = []
     for clas, det in (("2.6.2.3.99.3", "Personal"),
                       ("2.6.2.3.99.4", "Bienes"),
-                      ("2.6.2.3.99.5", "Servicios")):
-        pin = round(sum((get(c, clas) or {}).get("pim", 0) for c in comps5), 2)
-        gas = round(sum((get(c, clas) or {}).get("total_anio", 0) for c in comps5), 2)
+                      ("2.6.2.3.99.5", "Servicios"),
+                      ("2.6.8.1.3.1", "Elaboración de Expediente Técnico"),
+                      ("LIQUIDACION", "Liquidación de Obra")):
+        pin = round(sum((get(c, clas) or {}).get("pim", 0) for c in COMPONENTES_FE06), 2)
+        gas = round(sum((get(c, clas) or {}).get("total_anio", 0) for c in COMPONENTES_FE06), 2)
         resumen_dev.append({"clas": clas, "detalle": det, "pin": pin, "gas": gas,
                             "pct": round(gas / pin * 100, 2) if pin else 0.0})
     pin5 = round(sum(f["pin"] for f in resumen_dev), 2)
