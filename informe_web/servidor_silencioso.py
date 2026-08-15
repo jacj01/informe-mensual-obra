@@ -85,7 +85,8 @@ def detener_anterior():
         if old and old != os.getpid():
             try:
                 subprocess.run(["taskkill", "/PID", str(old), "/F"],
-                               capture_output=True, check=False)
+                               capture_output=True, check=False,
+                               creationflags=0x08000000)
                 log.info("Instancia anterior detenida (PID %s)", old)
             except Exception:
                 pass

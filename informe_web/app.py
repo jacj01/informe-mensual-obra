@@ -1224,7 +1224,8 @@ def registrar_rutas(app):
                 return tuple(int(x) for x in m.group(1).split(".")) if m else (0, 0, 0)
             cmd = ["gh", "-R", repo, "release", "view", "--json",
                    "tagName,name,publishedAt,assets"]
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=15,
+                                 creationflags=0x08000000)  # CREATE_NO_WINDOW: evita cmd visible al consultar release
             if out.returncode != 0:
                 raise RuntimeError((out.stderr or out.stdout).strip()[:200])
             data = json.loads(out.stdout)
@@ -1301,14 +1302,18 @@ def registrar_rutas(app):
                 msg = "Release v%s (%s)" % (ver, msj.replace("\n", " ")[:140])
             env = dict(os.environ)
             subprocess.run(["git", "-C", root, "add", "-A"], env=env,
-                           check=True, capture_output=True, text=True)
+                           check=True, capture_output=True, text=True,
+                           creationflags=0x08000000)
             subprocess.run(["git", "-C", root, "commit", "-m", msg], env=env,
-                           check=True, capture_output=True, text=True)
+                           check=True, capture_output=True, text=True,
+                           creationflags=0x08000000)
             push = subprocess.run(["git", "-C", root, "push", "origin", "master"],
-                                  env=env, capture_output=True, text=True)
+                                  env=env, capture_output=True, text=True,
+                                  creationflags=0x08000000)
             # 3) disparar workflow_dispatch (ya no se dispara por push)
             run = subprocess.run(["gh", "workflow", "run", "Build & Release"],
-                                 cwd=root, env=env, capture_output=True, text=True)
+                                 cwd=root, env=env, capture_output=True, text=True,
+                                 creationflags=0x08000000)
             workflow_ok = run.returncode == 0
             return jsonify({
                 "ok": True,
