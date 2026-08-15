@@ -1488,7 +1488,8 @@ def registrar_rutas(app):
                 return redirect(url_for("usuarios"))
             if ep not in ("usuarios", "usuario_nuevo", "usuario_editar",
                           "usuario_eliminar", "respaldo", "suscripcion",
-                          "suscripcion_renovar", "suscripcion_pausar"):
+                          "suscripcion_renovar", "suscripcion_pausar",
+                          "actualizar", "api_actualizacion", "publicar_nueva_version"):
                 flash("La cuenta principal gestiona cuentas y licencia; "
                       "esta sección corresponde a los datos de un proyecto.",
                       "error")
