@@ -278,25 +278,27 @@ def fe06_rows():
             for g in gastos:
                 mensual[g.mes - 1] = round(mensual[g.mes - 1] + g.importe, 2)
             total_anio = round(sum(mensual), 2)
-            acum_total = round((cfg.ejec2023 or 0) + (cfg.ejec2024 or 0) +
-                               (cfg.ejec2025 or 0) + total_anio, 2)
-            rows.append({
-                "componente": comp,
-                "clasificador": cfg.clasificador,
-                "detalle": cfg.detalle,
-                "et": cfg.et or 0,
-                "e2023": cfg.ejec2023 or 0,
-                "e2024": cfg.ejec2024 or 0,
-                "e2025": cfg.ejec2025 or 0,
-                "pim": cfg.pim2026 or 0,
-                "mensual": mensual,
-                "total_anio": total_anio,
-                "porc_pim": (total_anio / cfg.pim2026 * 100) if cfg.pim2026 else 0,
-                "saldo_pim": round((cfg.pim2026 or 0) - total_anio, 2),
-                "acum_total": acum_total,
-                "porc_et": (acum_total / cfg.et * 100) if cfg.et else 0,
-                "saldo_et": round((cfg.et or 0) - acum_total, 2),
-            })
+            # Solo incluir fila si hay gasto ejecutado (total anual > 0)
+            if total_anio > 0:
+                acum_total = round((cfg.ejec2023 or 0) + (cfg.ejec2024 or 0) +
+                                   (cfg.ejec2025 or 0) + total_anio, 2)
+                rows.append({
+                    "componente": comp,
+                    "clasificador": cfg.clasificador,
+                    "detalle": cfg.detalle,
+                    "et": cfg.et or 0,
+                    "e2023": cfg.ejec2023 or 0,
+                    "e2024": cfg.ejec2024 or 0,
+                    "e2025": cfg.ejec2025 or 0,
+                    "pim": cfg.pim2026 or 0,
+                    "mensual": mensual,
+                    "total_anio": total_anio,
+                    "porc_pim": (total_anio / cfg.pim2026 * 100) if cfg.pim2026 else 0,
+                    "saldo_pim": round((cfg.pim2026 or 0) - total_anio, 2),
+                    "acum_total": acum_total,
+                    "porc_et": (acum_total / cfg.et * 100) if cfg.et else 0,
+                    "saldo_et": round((cfg.et or 0) - acum_total, 2),
+                })
     return rows
 
 
