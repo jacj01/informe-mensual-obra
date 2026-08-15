@@ -50,19 +50,52 @@
   </script>
   {% if es_admin_actual() %}<script>
     // --- Gestor de actualizaciones (solo admin/super) ---
+    // La revision se hace SOLO al iniciar el aplicativo (dashboard "/"), no en
+    // cada navegacion. El resultado se cachea en sessionStorage; en el resto de
+    // paginas se muestra el estado cacheado sin volver a llamar a la API.
+    var _CLAVE_CACHE = 'informe_upd_cache';
     window._csrfToken = function () {
       var m = document.querySelector('meta[name="csrf-token"]');
       return m ? m.getAttribute('content') : '';
     };
-    // Formatea el tag de release: "v1.0.1-abc1234" -> "v1.0.1"
+    // Formatea el tag: "v1.0.1-abc1234" -> "v1.0.1"
     window._tagLimpio = function (tag) {
       if (!tag) return '';
       var m = String(tag).match(/v?([0-9]+\.[0-9]+\.[0-9]+)/);
-      return m ? "v" + m[1] : String(tag);
+      return m ? 'v' + m[1] : String(tag);
     };
+    window._esDashboard = function () {
+      return window.location.pathname.replace(/\/$/, '') === '';
+    };
+    // Render robusto (try/catch interno: nunca rompe la cadena .then/.catch)
+    window._renderUpdate = function (d) {
+      try {
+        var txt = document.getElementById('upTxt');
+        var btn = document.getElementById('btnUpd');
+        if (!txt) return;
+        if (d && d.disponible) {
+          txt.textContent = 'Actualizaci\u00F3n disponible: ' + window._tagLimpio(d.tag || '');
+          txt.classList.add('upd-disponible');
+          if (btn) btn.style.display = 'inline-flex';
+        } else {
+          var ver = (d && d.version_actual) ? window._tagLimpio(d.version_actual) : '';
+          txt.textContent = ver ? ('Versi\u00F3n actualizada (' + ver + ')') : 'Versi\u00F3n actualizada';
+          txt.classList.remove('upd-disponible');
+          if (btn) btn.style.display = 'none';
+        }
+      } catch (e) { /* no interrumpir UI */ }
+    };
+    // Muestra el estado cacheado SIN llamar a la API (usado en sub-paginas)
+    window._renderCache = function () {
+      var c = sessionStorage.getItem(_CLAVE_CACHE);
+      if (c) { try { window._renderUpdate(JSON.parse(c)); } catch (e) {} }
+    };
+    // Chequeo con llamada a la API: solo en dashboard
     window.buscarActualizacion = function () {
       var txt = document.getElementById('upTxt');
-      var btn = document.getElementById('btnUpd');
+      if (!window._esDashboard()) { window._renderCache(); return; }
+      var cached = sessionStorage.getItem(_CLAVE_CACHE);
+      if (cached) { try { window._renderUpdate(JSON.parse(cached)); } catch (e) {} }
       if (txt) { txt.textContent = 'Buscando...'; txt.classList.remove('upd-disponible'); }
       fetch('/api/actualizacion', { credentials: 'same-origin' })
         .then(function (r) {
@@ -70,17 +103,12 @@
           return r.json();
         })
         .then(function (d) {
-          if (d.disponible) {
-            if (txt) { txt.textContent = 'Actualizaci\u00F3n disponible: ' + window._tagLimpio(d.tag); txt.classList.add('upd-disponible'); }
-            if (btn) btn.style.display = 'inline-flex';
-          } else {
-            // misma tipografia que .credit-version (estilo "actualizado")
-            if (txt) { txt.textContent = 'Versi\u00F3n actualizada (' + window._tagLimpio(d.version_actual) + ')'; txt.classList.remove('upd-disponible'); }
-            if (btn) btn.style.display = 'none';
-          }
+          sessionStorage.setItem(_CLAVE_CACHE, JSON.stringify(d));
+          window._renderUpdate(d);
         })
-        .catch(function (e) {
+        .catch(function () {
           if (txt) { txt.textContent = 'No se pudo consultar GitHub'; txt.classList.remove('upd-disponible'); }
+          var btn = document.getElementById('btnUpd');
           if (btn) btn.style.display = 'none';
         });
     };
@@ -98,6 +126,7 @@
           return r.json().catch(function () { return {}; });
         })
         .then(function (d) {
+          sessionStorage.removeItem(_CLAVE_CACHE);
           mostrarToast('info', d.mensaje || d.msg || 'Actualizaci\u00F3n aplicada. El servidor se reiniciar\u00E1.');
           setTimeout(function () { location.reload(); }, 3500);
         })
@@ -106,7 +135,8 @@
           if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
         });
     };
-    document.addEventListener('DOMContentLoaded', window.buscarActualizacion);
+    // Chequear SOLO al iniciar (dashboard); en otras paginas solo renderiza el cache
+    document.addEventListener('DOMContentLoaded', function () { window.buscarActualizacion(); });
   </script>{% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=10">

@@ -1197,38 +1197,45 @@ def registrar_rutas(app):
 
     @app.route("/api/actualizacion")
     def api_actualizacion():
-        """Consulta la release mas reciente publicada en GitHub.
+        """Consulta la release mas reciente publicada en GitHub y decide si hay
+        una version NUEVA disponible (remota > local).
         Solo Administradores y el Super Usuario pueden consultar.
 
         El repo es privado, asi que la consulta usa 'gh' (token almacenado en el
-        keyring del equipo). Si 'gh' no esta autenticado instala un fallback sin
-        error grave. No descarga nada; devuelve metadata para que el cliente decida."""
+        keyring del equipo). Si 'gh' falla instala un fallback informativo sin
+        romper la UI. No descarga nada; devuelve metadata para que el cliente decida."""
         if not es_admin_actual():
             return jsonify({"error": "No autorizado"}), 403
         repo = app.config.get("INFORME_REPO", "jacj01/informe-mensual-obra")
+        local_v = app.config.get("INFORME_VERSION", "1.0.0")
         try:
-            import subprocess
+            import subprocess, re
+            def _vt(s):
+                m = re.search(r"v?(\d+\.\d+\.\d+)", s or "")
+                return tuple(int(x) for x in m.group(1).split(".")) if m else (0, 0, 0)
             cmd = ["gh", "-R", repo, "release", "view", "--json",
                    "tagName,name,publishedAt,assets"]
             out = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             if out.returncode != 0:
                 raise RuntimeError((out.stderr or out.stdout).strip()[:200])
             data = json.loads(out.stdout)
+            tag = data.get("tagName", "")
             asset = next((a for a in data.get("assets", [])
                           if a.get("name", "").endswith(".zip")), None)
+            hay_nueva = _vt(tag) > _vt(local_v)
             return jsonify({
-                "disponible": True,
-                "tag": data.get("tagName", ""),
+                "disponible": bool(hay_nueva),
+                "tag": tag,
                 "nombre": data.get("name", ""),
                 "publicada": data.get("publishedAt", ""),
                 "asset": asset.get("name") if asset else None,
                 "url": asset.get("url") if asset else None,
-                "version_actual": app.config.get("INFORME_VERSION", "1.0.0"),
+                "version_actual": local_v,
             })
         except Exception as e:
             # Fallback informativo sin interrumpir la UI.
             return jsonify({"disponible": False, "error": str(e),
-                            "version_actual": app.config.get("INFORME_VERSION", "1.0.0")}), 502
+                             "version_actual": local_v}), 502
 
     @app.route("/actualizar", methods=["POST"])
     def aplicar_actualizacion():
@@ -1240,11 +1247,19 @@ def registrar_rutas(app):
             import subprocess
             root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             ps1 = os.path.join(root, "actualizar.ps1")
-            # Lanza el updater en segundo plano (no bloquea la peticion)
-            subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy",
-                              "Bypass", "-File", ps1, "-Instalar"],
+            # Lanza el updater como proceso INDEPENDIENTE y OCULTO:
+            #  - -WindowStyle Hidden: la ventana de powershell no aparece jamas.
+            #  - DETACHED_PROCESS: sobrevive al Stop-Process del server que lo disparo
+            #    (no es un hijo que muera al matar al padre).
+            #  - CREATE_NO_WINDOW + DEVNULL: nada de IO a la consola del server.
+            subprocess.Popen(["powershell.exe", "-NoProfile", "-WindowStyle", "Hidden",
+                              "-ExecutionPolicy", "Bypass", "-File", ps1, "-Instalar"],
                              cwd=root,
-                             creationflags=0x08000000)
+                             creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                             stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL,
+                             close_fds=True)
             return jsonify({"ok": True, "msg": "Actualizacion iniciada; el servidor se reiniciara en breve."})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
