@@ -135,6 +135,34 @@
           if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
         });
     };
+    // Publicar nueva version (SOLO Super Usuario): bump + commit + push + workflow_dispatch
+    window.publicarNuevaVersion = function () {
+      var ver = prompt("Nueva versión (formato X.Y.Z, ej 1.0.2):", "");
+      if (!ver) return;
+      if (!/^\d+\.\d+\.\d+$/.test(ver.trim())) {
+        mostrarToast('error', 'Formato invalido. Use X.Y.Z (ej 1.0.2).');
+        return false;
+      }
+      var msj = prompt("Mensaje opcional (Enter para dejar vacio):", "") || "";
+      fetch('/api/actualizar-publicar', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json',
+                   'X-CSRF-Token': window._csrfToken(),
+                   'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ version: ver.trim(), mensaje: msj })
+      })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (d) {
+          if (d.ok) {
+            mostrarToast('success', 'Publicado ' + (d.tag || '') + '. La release se creara en GitHub en breve. El servidor se reiniciara.');
+            setTimeout(function () { location.reload(); }, 3500);
+          } else {
+            mostrarToast('error', d.error || 'No se pudo publicar');
+          }
+        })
+        .catch(function (e) { mostrarToast('error', 'Error publicando: ' + e.message); });
+    };
     // Chequear SOLO al iniciar (dashboard); en otras paginas solo renderiza el cache
     document.addEventListener('DOMContentLoaded', function () { window.buscarActualizacion(); });
   </script>{% endif %}
@@ -219,6 +247,13 @@
           <span class="credit-update-txt" id="upTxt">Buscar actualizaciones</span>
           <button id="btnUpd" type="button" class="btn-upd" onclick="actualizarSistema();">
             <i class="bi bi-arrow-down-circle"></i> Instalar
+          </button>
+        </div>
+        {% endif %}
+        {% if es_super_usuario() %}
+        <div class="credit-publish" id="pubChk">
+          <button id="btnPub" type="button" class="btn-upd btn-pub" onclick="publicarNuevaVersion();">
+            <i class="bi bi-upload"></i> Publicar nueva versión
           </button>
         </div>
         {% endif %}

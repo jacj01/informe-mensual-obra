@@ -467,7 +467,8 @@ def create_app():
             session["_csrf"] = token
         return {"csrf_token": token,
                 "version_actual": app.config.get("INFORME_VERSION", "1.0.0"),
-                "es_admin_actual": es_admin_actual}
+                "es_admin_actual": es_admin_actual,
+                "es_super_usuario": es_super_usuario}
 
     @app.after_request
     def cabeceras_seguridad(resp):
@@ -699,6 +700,14 @@ def es_admin_actual():
         return False
     return u.rol in ROLES_TOTALES
 
+
+def es_super_usuario():
+    """True SOLO para el Super Usuario (rol exclusivo). Usado para operaciones
+    de publicacion/release, que requieren el maximo de privilegios."""
+    u = usuario_actual()
+    if not u:
+        return False
+    return u.rol == ROL_SUPER
 
 
 # ----------------------------------------------------------------------------
@@ -1263,6 +1272,55 @@ def registrar_rutas(app):
             return jsonify({"ok": True, "msg": "Actualizacion iniciada; el servidor se reiniciara en breve."})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
+
+    @app.route("/api/actualizar-publicar", methods=["POST"])
+    def publicar_nueva_version():
+        """Publica una nueva release en GitHub: bump de version.py, commit, push y
+        dispara el workflow_dispatch del release. SOLO el Super Usuario."""
+        if not es_super_usuario():
+            return jsonify({"error": "No autorizado: se requiere Super Usuario"}), 403
+        import re
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        payload = request.get_json(silent=True) or {}
+        ver = (payload.get("version") or "").strip()
+        if not re.match(r"^\d+\.\d+\.\d+$", ver):
+            return jsonify({"ok": False, "error": "version invalida; use formato X.Y.Z"}), 400
+        try:
+            import subprocess
+            # 1) bump version.py
+            vpath = os.path.join(root, "informe_web", "version.py")
+            txt = open(vpath, encoding="utf-8").read()
+            txt2 = re.sub(r'__version__\s*=\s*"[^"]*"', '__version__  = "%s"' % ver, txt)
+            if txt2 == txt:
+                return jsonify({"ok": False, "error": "no se encontro __version__ en version.py"}), 500
+            open(vpath, "w", encoding="utf-8").write(txt2)
+            # 2) commit + push
+            msg = ("Release v%s" % ver)
+            msj = (payload.get("mensaje") or "").strip()
+            if msj:
+                msg = "Release v%s (%s)" % (ver, msj.replace("\n", " ")[:140])
+            env = dict(os.environ)
+            subprocess.run(["git", "-C", root, "add", "-A"], env=env,
+                           check=True, capture_output=True, text=True)
+            subprocess.run(["git", "-C", root, "commit", "-m", msg], env=env,
+                           check=True, capture_output=True, text=True)
+            push = subprocess.run(["git", "-C", root, "push", "origin", "master"],
+                                  env=env, capture_output=True, text=True)
+            # 3) disparar workflow_dispatch (ya no se dispara por push)
+            run = subprocess.run(["gh", "workflow", "run", "Build & Release"],
+                                 cwd=root, env=env, capture_output=True, text=True)
+            workflow_ok = run.returncode == 0
+            return jsonify({
+                "ok": True,
+                "tag": "v%s" % ver,
+                "mensaje": msg,
+                "push_ok": push.returncode == 0,
+                "workflow_run": workflow_ok,
+                "run_msg": (run.stderr or "").strip()[:200],
+            })
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
 
     @app.route("/sitemap.xml")
     def sitemap():

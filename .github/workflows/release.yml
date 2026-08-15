@@ -5,8 +5,6 @@ name: Build & Release
 # Excluye datos sensibles (BD, respaldos, logs, uploads y archivos .xlsx)
 # que estan en .gitignore y no viajan por git.
 on:
-  push:
-    branches: [master]
   workflow_dispatch:
 
 permissions:
