@@ -257,45 +257,85 @@ def kpis(anio=None, mes=None):
 
 
 def fe06_rows():
-    """Filas para el formato FE-06 con calculo de ejecucion 2026 desde gastos."""
-    anio = get_proyecto().anio
+    """Filas para el formato FE-06 con calculo de ejecucion 2026 desde gastos.
+
+    Genera EXPLICITAMENTE las filas PERSONAL, BIENES, SERVICIOS (y
+    LIQUIDACION para Liquidacion de Obra) para cada componente, usando los
+    clasificadores definidos en Datos del Proyecto (con fallback a los
+    codigos base 2.6.2.3.99.x). Asi se garantiza que aparecen todas las
+    filas siempre, incluso con montos cero, y el total de Expediente Tecnico
+    cuadra con el Presupuesto Total del proyecto."""
+    p = get_proyecto()
+    anio = p.anio
+    clas_personal = p.clasificador_personal or "2.6.2.3.99.3"
+    clas_bienes = p.clasificador_bienes or "2.6.2.3.99.4"
+    clas_servicios = p.clasificador_servicios or "2.6.2.3.99.5"
+    clas_liquidacion = p.clasificador_liquidacion or "LIQUIDACION"
+    clas_expediente = p.clasificador_expediente or "2.6.8.1.3.1"
+
+    # Para cada componente, ¿qué clasificadores+dets deben aparecer?
+    CLAS_DEFECTO = [
+        ("Costo Directo", clas_personal, "PERSONAL"),
+        ("Costo Directo", clas_bienes, "BIENES"),
+        ("Costo Directo", clas_servicios, "SERVICIOS"),
+        ("Gastos Generales", clas_personal, "PERSONAL"),
+        ("Gastos Generales", clas_bienes, "BIENES"),
+        ("Gastos Generales", clas_servicios, "SERVICIOS"),
+        ("Gastos de Supervisión", clas_personal, "PERSONAL"),
+        ("Gastos de Supervisión", clas_bienes, "BIENES"),
+        ("Gastos de Supervisión", clas_servicios, "SERVICIOS"),
+        ("Elaboración de Expediente Técnico", clas_expediente, "ELABORACION DE EXPEDIENTE TECNICO"),
+        ("Liquidación de Obra", clas_liquidacion, "COSTO DE LIQUIDACION"),
+    ]
+
     orden_detalle = {"PERSONAL": 0, "BIENES": 1, "SERVICIOS": 2,
                      "ELABORACION DE EXPEDIENTE TECNICO": 3,
                      "COSTO DE LIQUIDACION": 4}
+
+    # Cache de configs de Presupuesto por (componente, detalle)
+    cfg_cache = {}
+    for comp in COMPONENTES_FE06:
+        for cfg in Presupuesto.query.filter_by(componente=comp).all():
+            cfg_cache[(comp, cfg.detalle)] = cfg
+
     rows = []
     for comp in COMPONENTES_FE06:
-        configs = sorted(Presupuesto.query.filter_by(componente=comp).all(),
-                         key=lambda c: orden_detalle.get(c.detalle, 99))
-        for cfg in configs:
-            if cfg.clasificador == "LIQUIDACION":
-                clasif = "LIQUIDACION"
-            else:
-                clasif = cfg.clasificador
+        clasificadores_comp = [(clas, det) for _comp, clas, det in CLAS_DEFECTO
+                               if _comp == comp]
+        for clasif, detalle in clasificadores_comp:
+            # Usar el clasificador tal cual estaba en el proyecto (no el fallback)
+            # si el clasificador fue customizado; sino usar el codigo base.
+            clasif_real = clasif
+            cfg = cfg_cache.get((comp, detalle))
+            et = cfg.et or 0 if cfg else 0
+            e2023 = cfg.ejec2023 or 0 if cfg else 0
+            e2024 = cfg.ejec2024 or 0 if cfg else 0
+            e2025 = cfg.ejec2025 or 0 if cfg else 0
+            pim = cfg.pim2026 or 0 if cfg else 0
             mensual = [0.0] * 12
             gastos = Gasto.query.filter(Gasto.anio == anio, Gasto.componente == comp,
-                                        Gasto.clasificador == clasif,
+                                        Gasto.clasificador == clasif_real,
                                         Gasto.devengado == True).all()
             for g in gastos:
                 mensual[g.mes - 1] = round(mensual[g.mes - 1] + g.importe, 2)
             total_anio = round(sum(mensual), 2)
-            acum_total = round((cfg.ejec2023 or 0) + (cfg.ejec2024 or 0) +
-                               (cfg.ejec2025 or 0) + total_anio, 2)
+            acum_total = round(e2023 + e2024 + e2025 + total_anio, 2)
             rows.append({
                 "componente": comp,
-                "clasificador": cfg.clasificador,
-                "detalle": cfg.detalle,
-                "et": cfg.et or 0,
-                "e2023": cfg.ejec2023 or 0,
-                "e2024": cfg.ejec2024 or 0,
-                "e2025": cfg.ejec2025 or 0,
-                "pim": cfg.pim2026 or 0,
+                "clasificador": clasif_real,
+                "detalle": detalle,
+                "et": et,
+                "e2023": e2023,
+                "e2024": e2024,
+                "e2025": e2025,
+                "pim": pim,
                 "mensual": mensual,
                 "total_anio": total_anio,
-                "porc_pim": (total_anio / cfg.pim2026 * 100) if cfg.pim2026 else 0,
-                "saldo_pim": round((cfg.pim2026 or 0) - total_anio, 2),
+                "porc_pim": (total_anio / pim * 100) if pim else 0,
+                "saldo_pim": round(pim - total_anio, 2),
                 "acum_total": acum_total,
-                "porc_et": (acum_total / cfg.et * 100) if cfg.et else 0,
-                "saldo_et": round((cfg.et or 0) - acum_total, 2),
+                "porc_et": (acum_total / et * 100) if et else 0,
+                "saldo_et": round(et - acum_total, 2),
             })
     return rows
 
