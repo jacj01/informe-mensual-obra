@@ -564,7 +564,6 @@ def panel_datos(mes, anio=None):
                                          ("2025", "0017", "2.3")):
             filas = [{"clas": clas, "detalle": det, "monto": sum_key(f"e{anio_txt}", clas)}
                      for clas, det in CLAS_ORDER]
-            filas = [f for f in filas if f["monto"] > 0]
             ejec_anuales.append({
                 "num": num, "anio": anio_txt, "meta": meta_hist,
                 "titulo": (f"{num}. RESUMEN DE EJECUCION PRESUPUESTAL AL MES DE "
@@ -577,19 +576,16 @@ def panel_datos(mes, anio=None):
     for anio_txt in (("2023", "2024", "2025") if incluir else ()):
         for clas, det in CLAS_ORDER:
             monto = sum_key(f"e{anio_txt}", clas)
-            if monto > 0:
-                gen.append({"clas": clas, "detalle": det, "monto": monto, "anio": anio_txt})
+            gen.append({"clas": clas, "detalle": det, "monto": monto, "anio": anio_txt})
     for clas, det in CLAS_ORDER:
         monto = sum_key("total_anio", clas)
-        if monto > 0:
-            gen.append({"clas": clas, "detalle": det, "monto": monto, "anio": str(anio)})
+        gen.append({"clas": clas, "detalle": det, "monto": monto, "anio": str(anio)})
 
     resumen_general = []
     for clas, det in CLAS_ORDER:
         monto = round(sum((r["acum_total"] if incluir else r["total_anio"]) or 0
                           for r in rows if r["clasificador"] == clas), 2)
-        if monto > 0:
-            resumen_general.append({"clas": clas, "detalle": det, "monto": monto})
+        resumen_general.append({"clas": clas, "detalle": det, "monto": monto})
 
     componentes_presupuesto = [
         ("Costo Directo", "Costo Directo"),
