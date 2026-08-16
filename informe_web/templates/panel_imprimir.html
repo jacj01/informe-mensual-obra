@@ -270,7 +270,7 @@
     </thead>
     <tbody>
       {% for grupo in d.dev_mensual %}
-      {% set filas_activas = grupo.filas | selectattr('valores|sum', 'gt', 0) | list %}
+      {% set filas_activas = grupo.filas | selectattr('acum', 'gt', 0) | list %}
       {% if filas_activas %}
       <tr class="fila-sub"><td colspan="{{ 2 + d.meses_col|length }}">{{ grupo.grupo }}</td></tr>
       {% for f in filas_activas %}
