@@ -96,35 +96,72 @@
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-head"><h3><i class="bi bi-2-circle"></i> Presupuesto (S/.)</h3></div>
-    <div class="form-grid form-grid-cabecera">
-      <div class="field">
-        <label>Presupuesto total</label>
-        <input type="text" inputmode="decimal" class="monto" name="presupuesto_total" value="{{ p.presupuesto_total }}" autocomplete="off">
-      </div>
-      <div class="field">
-        <label>Costo directo</label>
-        <input type="text" inputmode="decimal" class="monto" name="costo_directo" value="{{ p.costo_directo }}" autocomplete="off">
-      </div>
-      <div class="field">
-        <label>Gastos generales</label>
-        <input type="text" inputmode="decimal" class="monto" name="gastos_generales" value="{{ p.gastos_generales }}" autocomplete="off">
-      </div>
-      <div class="field">
-        <label>Gastos de supervisión</label>
-        <input type="text" inputmode="decimal" class="monto" name="gastos_supervision" value="{{ p.gastos_supervision }}" autocomplete="off">
-      </div>
-      <div class="field span2">
-        <label>Elaboración de expediente</label>
-        <input type="text" inputmode="decimal" class="monto" name="elaboracion_expediente" value="{{ p.elaboracion_expediente }}" autocomplete="off">
-      </div>
-      <div class="field span2">
-        <label>Liquidación de obra</label>
-        <input type="text" inputmode="decimal" class="monto" name="liquidacion_obra" value="{{ p.liquidacion_obra }}" autocomplete="off">
-      </div>
-    </div>
-  </div>
+   <div class="card">
+     <div class="card-head"><h3><i class="bi bi-2-circle"></i> Presupuesto (S/.)</h3></div>
+     <div class="presup-grid">
+        {% set componentes = presupuesto|map(attribute='componente')|unique|list %}
+        <!-- EXPEDIENTE TÉCNICO -->
+        <div class="presup-grupo" data-grupo="et">
+          <div class="presup-grupo-titulo"><i class="bi bi-file-earmark-text"></i> Expediente Técnico</div>
+          {% set ns_idx = namespace(n=0) %}
+          {% for comp in componentes %}
+          <div class="presup-bloque">
+            <div class="presup-bloque-head">
+              <span class="presup-bloque-nombre">{{ comp }}</span>
+              <span class="presup-bloque-total" data-sub="{{ comp }}">S/ 0.00</span>
+            </div>
+            {% for f in presupuesto|selectattr('componente', 'equalto', comp) %}
+           <div class="presup-fila">
+             <span class="presup-det">{{ f.etiqueta }}</span>
+             <input type="text" inputmode="decimal" class="monto presup-input pres-et"
+                    name="pres_et_{{ ns_idx.n }}" value="{{ '{:,.2f}'.format(f.et or 0) }}"
+                    data-comp="{{ comp }}" autocomplete="off">
+           </div>
+           {% set ns_idx.n = ns_idx.n + 1 %}
+           {% endfor %}
+         </div>
+         {% endfor %}
+         <div class="presup-total-card">
+           <span class="presup-total-lbl"><i class="bi bi-cash-stack"></i> Total Expediente Técnico</span>
+           <span class="presup-total-val" data-total>S/ 0.00</span>
+         </div>
+       </div>
+       <!-- PIM (AÑO) -->
+       <div class="presup-grupo" data-grupo="pim">
+         <div class="presup-grupo-titulo"><i class="bi bi-calendar3"></i> PIM {{ p.anio }}</div>
+          {% set ns_idx2 = namespace(n=0) %}
+          {% for comp in componentes %}
+          <div class="presup-bloque">
+            <div class="presup-bloque-head">
+              <span class="presup-bloque-nombre">{{ comp }}</span>
+              <span class="presup-bloque-total" data-sub="{{ comp }}">S/ 0.00</span>
+            </div>
+            {% for f in presupuesto|selectattr('componente', 'equalto', comp) %}
+           <div class="presup-fila">
+             <span class="presup-det">{{ f.etiqueta }}</span>
+             <input type="text" inputmode="decimal" class="monto presup-input pres-pim"
+                    name="pres_pim_{{ ns_idx2.n }}" value="{{ '{:,.2f}'.format(f.pim or 0) }}"
+                    data-comp="{{ comp }}" autocomplete="off">
+           </div>
+           {% set ns_idx2.n = ns_idx2.n + 1 %}
+           {% endfor %}
+         </div>
+         {% endfor %}
+         <div class="presup-total-card">
+           <span class="presup-total-lbl"><i class="bi bi-cash-stack"></i> Total PIM {{ p.anio }}</span>
+           <span class="presup-total-val" data-total>S/ 0.00</span>
+         </div>
+       </div>
+     </div>
+      <div class="field-hint" style="margin-top: 10px;">Los montos actualizan la columna <b>Exp. Técnico</b> y <b>PIM {{ p.anio }}</b> de la FE-06 "Presupuesto vs ejecutado" y los totales del Resumen Financiero. El <b>Presupuesto total</b> se calcula automáticamente como la suma de todas las filas.</div>
+     <!-- Campos ocultos: los totales se recalcularan en el handler -->
+     <input type="hidden" name="presupuesto_total" value="">
+     <input type="hidden" name="costo_directo" value="">
+     <input type="hidden" name="gastos_generales" value="">
+     <input type="hidden" name="gastos_supervision" value="">
+     <input type="hidden" name="elaboracion_expediente" value="">
+     <input type="hidden" name="liquidacion_obra" value="">
+   </div>
 
   <div class="card">
     <div class="card-head"><h3><i class="bi bi-3-circle"></i> Equipo de gestión</h3></div>
@@ -395,8 +432,37 @@
     actualizarNuevoFinal();
   }
 
+  function recalcularPresupuesto() {
+    document.querySelectorAll('.presup-grupo').forEach(function (grupo) {
+      var subs = {};
+      var total = 0;
+      grupo.querySelectorAll('input.presup-input').forEach(function (inp) {
+        var comp = inp.getAttribute('data-comp');
+        var val = parseFloat(String(inp.value).replace(/[^0-9.\-]/g, '')) || 0;
+        subs[comp] = (subs[comp] || 0) + val;
+        total += val;
+      });
+      grupo.querySelectorAll('[data-sub]').forEach(function (el) {
+        var v = subs[el.getAttribute('data-sub')] || 0;
+        el.textContent = 'S/ ' + v.toLocaleString('en-US',
+          { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      });
+      var t = grupo.querySelector('[data-total]');
+      if (t) {
+        t.textContent = 'S/ ' + total.toLocaleString('en-US',
+          { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     actualizarAdicional();
+    recalcularPresupuesto();
+    document.querySelectorAll('.presup-input').forEach(function (inp) {
+      inp.addEventListener('input', recalcularPresupuesto);
+      inp.addEventListener('change', recalcularPresupuesto);
+      inp.addEventListener('focusout', recalcularPresupuesto);
+    });
     var inicio = document.getElementById('fecha_inicio');
     var fin = document.getElementById('fecha_fin');
     var dias = document.getElementById('dias_ejecucion');

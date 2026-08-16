@@ -169,8 +169,8 @@
           <tr><td>GASTO EJECUTADO 2024</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.e2024) }}</td></tr>
           <tr><td>GASTO EJECUTADO 2025</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.e2025) }}</td></tr>
           {% endif %}
-          <tr><td>GASTO EJECUTADO AL MES DE {{ MESES[mes-1] }} {{ anio }}</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.ejec_anio) }}</td></tr>
-          <tr><td><strong>SALDO {{ anio }}</strong></td><td class="num strong">{{ "{:,.2f}".format(fe06_sintesis.saldo_proyecto) }}</td></tr>
+          <tr><td>GASTO EJECUTADO {% if p.incluir_anios_anteriores %}AL MES DE {{ MESES[mes-1] }} {{ anio }}{% else %}{{ anio }}{% endif %}</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.ejec_anio) }}</td></tr>
+          <tr><td><strong>{% if p.incluir_anios_anteriores %}SALDO {{ anio }}{% else %}SALDO A NIVEL DE EXPEDIENTE TECNICO{% endif %}</strong></td><td class="num strong">{{ "{:,.2f}".format(fe06_sintesis.saldo_proyecto) }}</td></tr>
         </tbody>
       </table>
     </div>

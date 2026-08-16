@@ -40,12 +40,13 @@ from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      suscripcion_vigente, suscripcion_usuario, gastos_mes,
                      total_gastos_mes, kpis,
                      ejecucion_por_mes, ejecucion_por_componente, fe06_rows,
-                     fe06_resumen, f05_datos, almacen_items, almacen_diario,
+                     fe06_resumen, fe06_sintesis, f05_datos, almacen_items, almacen_diario,
                      saldo_insumo, almacen_valorizado,
                      meses_con_ejecucion, meses_visibles, ampliacion_presupuestal,
                      mes_inicio_manifiesto, clasificadores_proyecto,
                      calendario_mes, resumen_tareo, panel_cuadro1, panel_datos,
-                     actividades_mes)
+                     actividades_mes,
+                     presupuesto_filas, PRESUPUESTO_DETALLE, detalle_clasificador)
 from planilla import (tabla_civil, calcular_obrero, calcular_tecnico,
                       TABLA_CIVIL_POR_ANIO)
 from seed import seed
@@ -1988,13 +1989,39 @@ def registrar_rutas(app):
                            "colegiatura_admin", "dni_responsable_almacen",
                            "asistente_tecnico", "dni_cip_asistente"]:
                 setattr(p, campo, request.form.get(campo, "").strip().upper())
-            for campo in ["presupuesto_total", "costo_directo", "gastos_generales",
-                          "gastos_supervision", "elaboracion_expediente", "liquidacion_obra",
-                          "monto_ampliacion"]:
+            try:
+                setattr(p, "monto_ampliacion",
+                        float(request.form.get("monto_ampliacion", 0) or 0))
+            except ValueError:
+                pass
+            # Guardar presupuesto desglosado (et y pim) por componente/detalle
+            for i, (comp, det) in enumerate(PRESUPUESTO_DETALLE):
                 try:
-                    setattr(p, campo, float(request.form.get(campo, 0) or 0))
+                    et_val = float(request.form.get('pres_et_%d' % i, 0) or 0)
+                    pim_val = float(request.form.get('pres_pim_%d' % i, 0) or 0)
                 except ValueError:
-                    pass
+                    et_val = pim_val = 0
+                cfg = Presupuesto.query.filter_by(componente=comp, detalle=det).first()
+                if cfg:
+                    cfg.et = et_val
+                    cfg.pim2026 = pim_val
+                else:
+                    clasif = detalle_clasificador(det)
+                    db.session.add(Presupuesto(componente=comp, clasificador=clasif,
+                                               detalle=det, et=et_val, pim2026=pim_val))
+            db.session.flush()
+            # Recalcular totales del proyecto desde Presupuesto
+            from collections import defaultdict
+            et_comp = defaultdict(float)
+            for cfg in Presupuesto.query.filter(
+                    Presupuesto.componente.in_(COMPONENTES_FE06)).all():
+                et_comp[cfg.componente] = round(et_comp[cfg.componente] + (cfg.et or 0), 2)
+            p.costo_directo = round(et_comp.get("Costo Directo", 0), 2)
+            p.gastos_generales = round(et_comp.get("Gastos Generales", 0), 2)
+            p.gastos_supervision = round(et_comp.get("Gastos de Supervisión", 0), 2)
+            p.elaboracion_expediente = round(et_comp.get("Elaboración de Expediente Técnico", 0), 2)
+            p.liquidacion_obra = round(et_comp.get("Liquidación de Obra", 0), 2)
+            p.presupuesto_total = round(sum(et_comp.values()), 2)
             for campo in ["fecha_inicio", "fecha_fin", "nuevo_final_obra",
                           "fecha_aprobacion"]:
                 setattr(p, campo, parse_fecha(request.form.get(campo)))
@@ -2063,7 +2090,8 @@ def registrar_rutas(app):
         rubros = leer_lista(os.path.join(base, "Rubro.txt"))
         fuentes = leer_lista(os.path.join(base, "Recursos.txt"))
         return render_template("cabecera.html", p=p, MESES=MESES,
-                               rubros=rubros, fuentes=fuentes)
+                               rubros=rubros, fuentes=fuentes,
+                               presupuesto=presupuesto_filas())
 
     @app.route("/cabecera/subir-logo", methods=["POST"])
     def subir_logo():
@@ -3132,20 +3160,7 @@ def registrar_rutas(app):
         resumen = fe06_resumen(rows)
         fe06_totales_mensual = [round(sum(r["mensual"][i] for r in resumen.values()), 2)
                                 for i in range(12)]
-        sintesis = {
-            "et": round(sum(r["et"] for r in resumen.values()), 2),
-            "e2023": round(sum(r["e2023"] for r in resumen.values()), 2),
-            "e2024": round(sum(r["e2024"] for r in resumen.values()), 2),
-            "e2025": round(sum(r["e2025"] for r in resumen.values()), 2),
-            "pim": round(sum(r["pim"] for r in resumen.values()) +
-                        ampliacion_presupuestal(), 2),
-            "ejec_anio": round(sum(r["total_anio"] for r in resumen.values()), 2),
-            "acum_total": round(sum(r["acum_total"] for r in resumen.values()), 2),
-            "mes_actual": fe06_totales_mensual[mes - 1],
-            "ampliacion": ampliacion_presupuestal(),
-        }
-        sintesis["saldo_pim"] = round(sintesis["pim"] - sintesis["ejec_anio"], 2)
-        sintesis["saldo_proyecto"] = round(sintesis["et"] - sintesis["acum_total"], 2)
+        sintesis = fe06_sintesis(mes, anio)
         return render_template("formatos.html", p=p, mes=mes, anio=anio, MESES=MESES,
                                secciones=secciones, f05_total=total,
                                clasif_cols=clasif_cols,
@@ -3372,20 +3387,7 @@ def registrar_rutas(app):
         resumen = fe06_resumen(rows)
         fe06_totales_mensual = [round(sum(r["mensual"][i] for r in resumen.values()), 2)
                                 for i in range(12)]
-        sintesis = {
-            "et": round(sum(r["et"] for r in resumen.values()), 2),
-            "e2023": round(sum(r["e2023"] for r in resumen.values()), 2),
-            "e2024": round(sum(r["e2024"] for r in resumen.values()), 2),
-            "e2025": round(sum(r["e2025"] for r in resumen.values()), 2),
-            "pim": round(sum(r["pim"] for r in resumen.values()) +
-                         ampliacion_presupuestal(), 2),
-            "ejec_anio": round(sum(r["total_anio"] for r in resumen.values()), 2),
-            "acum_total": round(sum(r["acum_total"] for r in resumen.values()), 2),
-            "mes_actual": fe06_totales_mensual[mes - 1],
-            "ampliacion": ampliacion_presupuestal(),
-        }
-        sintesis["saldo_pim"] = round(sintesis["pim"] - sintesis["ejec_anio"], 2)
-        sintesis["saldo_proyecto"] = round(sintesis["et"] - sintesis["acum_total"], 2)
+        sintesis = fe06_sintesis(mes, anio)
         return render_template("fe06_imprimir.html", p=p, mes=mes, anio=anio,
                                MESES=MESES, fe06_rows=rows, fe06_resumen=resumen,
                                fe06_totales_mensual=fe06_totales_mensual,

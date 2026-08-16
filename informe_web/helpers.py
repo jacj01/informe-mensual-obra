@@ -20,6 +20,56 @@ COMPONENTES_FE06 = [
     "Elaboración de Expediente Técnico", "Liquidación de Obra",
 ]
 
+# Filas de ingreso de presupuesto (et y pim) en la cabecera.
+# (componente, detalle) — el detalle determina el clasificador via el proyecto.
+PRESUPUESTO_DETALLE = [
+    ("Costo Directo", "PERSONAL"),
+    ("Costo Directo", "BIENES"),
+    ("Costo Directo", "SERVICIOS"),
+    ("Gastos Generales", "PERSONAL"),
+    ("Gastos Generales", "BIENES"),
+    ("Gastos Generales", "SERVICIOS"),
+    ("Gastos de Supervisión", "PERSONAL"),
+    ("Gastos de Supervisión", "BIENES"),
+    ("Gastos de Supervisión", "SERVICIOS"),
+    ("Elaboración de Expediente Técnico", "ELABORACION DE EXPEDIENTE TECNICO"),
+    ("Liquidación de Obra", "COSTO DE LIQUIDACION"),
+]
+
+# Mapea detalle -> campo del clasificador en Proyecto.
+DET_CLAS_FLD = {
+    "PERSONAL": "clasificador_personal",
+    "BIENES": "clasificador_bienes",
+    "SERVICIOS": "clasificador_servicios",
+    "ELABORACION DE EXPEDIENTE TECNICO": "clasificador_expediente",
+    "COSTO DE LIQUIDACION": "clasificador_liquidacion",
+}
+
+DET_ETIQUETA = {
+    "PERSONAL": "PERSONAL",
+    "BIENES": "BIENES",
+    "SERVICIOS": "SERVICIOS",
+    "ELABORACION DE EXPEDIENTE TECNICO": "ELABORACIÓN",
+    "COSTO DE LIQUIDACION": "LIQUIDACIÓN",
+}
+
+
+def presupuesto_filas():
+    """Datos de presupuesto (et, pim) por componente/detalle para la cabecera.
+    Lee de Presupuesto; si falta, devuelve 0.0 (no crea rows)."""
+    cfg = {(p.componente, p.detalle): p for p in Presupuesto.query.all()}
+    out = []
+    for comp, det in PRESUPUESTO_DETALLE:
+        c = cfg.get((comp, det))
+        out.append({
+            "componente": comp,
+            "detalle": det,
+            "etiqueta": DET_ETIQUETA.get(det, det),
+            "et": round(c.et or 0, 2) if c else 0.0,
+            "pim": round(c.pim2026 or 0, 2) if c else 0.0,
+        })
+    return out
+
 # Actividades por defecto de la seccion II del Resumen Financiero (PANEL).
 ACTIVIDADES_DEFECTO = [
     "Elaboración de requerimiento de bienes y servicios.",
@@ -162,6 +212,25 @@ def mes_inicio_obra():
     registrada en Datos del Proyecto; 1 (enero) si no esta definida."""
     f = get_proyecto().fecha_inicio
     return f.month if f else 1
+
+
+# Fallback de clasificadores-base (usado al crear Presupuesto nuevo)
+_CLAS_FALLBACK = {
+    "PERSONAL": "2.6.2.3.99.3",
+    "BIENES": "2.6.2.3.99.4",
+    "SERVICIOS": "2.6.2.3.99.5",
+    "ELABORACION DE EXPEDIENTE TECNICO": "2.6.8.1.3.1",
+    "COSTO DE LIQUIDACION": "LIQUIDACION",
+}
+
+
+def detalle_clasificador(detalle):
+    """Codigo de clasificador del proyecto para un detalle (PERSONAL/BIENES/...)."""
+    p = get_proyecto()
+    fld = DET_CLAS_FLD.get(detalle)
+    if fld:
+        return getattr(p, fld) or _CLAS_FALLBACK.get(detalle, "")
+    return ""
 
 
 def meses_visibles(anio, mes):
@@ -358,6 +427,38 @@ def fe06_resumen(rows):
             "saldo_et": round(sum(r["saldo_et"] for r in items), 2),
         }
     return resumen
+
+
+def fe06_sintesis(mes, anio=None):
+    """Síntesis para FE-06 (Resumen a Nivel PIM y a Nivel de Expediente).
+
+    El saldo a nivel de expediente respeta la configuración presupuestal:
+    si los años anteriores están incluidos se resta su ejecución final
+    (2023+2024+2025); si no, solo se resta el ejecutado del año en curso.
+    """
+    p = get_proyecto()
+    anio = anio or p.anio
+    resumen = fe06_resumen(fe06_rows())
+    totales_mensual = [round(sum(r["mensual"][i] for r in resumen.values()), 2)
+                       for i in range(12)]
+    s = {
+        "et": round(sum(r["et"] for r in resumen.values()), 2),
+        "e2023": round(sum(r["e2023"] for r in resumen.values()), 2),
+        "e2024": round(sum(r["e2024"] for r in resumen.values()), 2),
+        "e2025": round(sum(r["e2025"] for r in resumen.values()), 2),
+        "pim": round(sum(r["pim"] for r in resumen.values()) +
+                    ampliacion_presupuestal(), 2),
+        "ejec_anio": round(sum(r["total_anio"] for r in resumen.values()), 2),
+        "acum_total": round(sum(r["acum_total"] for r in resumen.values()), 2),
+        "mes_actual": totales_mensual[mes - 1],
+        "ampliacion": ampliacion_presupuestal(),
+    }
+    s["saldo_pim"] = round(s["pim"] - s["ejec_anio"], 2)
+    if p.incluir_anios_anteriores:
+        s["saldo_proyecto"] = round(s["et"] - s["acum_total"], 2)
+    else:
+        s["saldo_proyecto"] = round(s["et"] - s["ejec_anio"], 2)
+    return s
 
 
 def panel_cuadro1(anio=None):
