@@ -133,18 +133,17 @@
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d.fase === 'inactivo') {
+            // Server reinicio y limpio el estado -> verificar si ya responde
             clearTimeout(_pollTimer);
+            window._esperarServerYRecargar();
             return;
           }
           window._mostrarBarra(d.porcentaje || 0, d.mensaje || d.fase);
           if (d.fase === 'listo') {
             clearTimeout(_pollTimer);
-            clearInterval(_pollTimer);
-            // Esperar a que el server este arriba, luego recargar
             window._esperarServerYRecargar();
           } else if (d.fase === 'rollback' || (d.error && d.porcentaje === 100)) {
             clearTimeout(_pollTimer);
-            clearInterval(_pollTimer);
             var txt = document.getElementById('upTxt');
             if (txt) { txt.textContent = 'Error en la actualizacion (rollback aplicado)'; txt.classList.remove('upd-disponible'); }
             mostrarToast('error', 'La actualizacion fallo; se restauro la version anterior.');
@@ -154,28 +153,31 @@
           }
         })
         .catch(function () {
+          // Server caido durante update: reintentar (volvera al subir)
           clearTimeout(_pollTimer);
+          _pollTimer = setTimeout(window._pollProgreso, 2000);
         });
     };
     // Polling hasta que el server responda /api/version (server listo)
     window._esperarServerYRecargar = function () {
       var intentos = 0;
-      var max = 60;
-      mostrarToast('success', 'Actualizacion completada. Reanudando...');
+      var max = 120;
+      var txt = document.getElementById('upTxt');
+      if (txt) { txt.textContent = 'Servidor reiniciando...'; txt.classList.remove('upd-disponible'); }
+      mostrarToast('info', 'Actualizacion completada. Reanudando servidor...');
       var check = function () {
         intentos++;
         fetch('/api/version', { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function () {
-            // Server arriba; forzar reload limpio
             sessionStorage.removeItem(_CLAVE_CACHE);
-            location.replace('/');
+            mostrarToast('success', 'Servidor listo. Recargando...');
+            setTimeout(function () { location.replace('/'); }, 1000);
           })
           .catch(function () {
             if (intentos < max) {
               setTimeout(check, 3000);
             } else {
-              var txt = document.getElementById('upTxt');
               if (txt) { txt.textContent = 'Actualizacion completada. Recarga manual.'; }
               mostrarToast('warning', 'Servidor tardando en iniciar. Recargue manualmente.');
               window._ocultarBarra();
@@ -281,7 +283,7 @@
     document.addEventListener('DOMContentLoaded', function () { window.buscarActualizacion(); });
   </script>{% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=10">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version_actual }}">
 </head>
 <body>
   <aside class="sidebar" id="sidebar">
