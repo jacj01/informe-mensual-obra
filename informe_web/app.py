@@ -1188,6 +1188,14 @@ def restaurar_respaldo(nombre):
         migrar_schema()
         migrar_suscripcion()
         _migrar_a_multidb()
+        # Limpiar estado de actualizacion previa si existe (no es un progreso activo)
+        _estado = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "actualizar.estado")
+        if os.path.exists(_estado):
+            try:
+                os.remove(_estado)
+            except Exception:
+                pass
         bind_session(_bd.master_engine)
     return pre
 
@@ -1286,6 +1294,24 @@ def registrar_rutas(app):
             return jsonify({"ok": True, "msg": "Actualizacion iniciada; el servidor se reiniciara en breve."})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
+
+    @app.route("/api/actualizacion/progreso")
+    def progreso_actualizacion():
+        """Lee el archivo de progreso escrito por actualizar.ps1.
+        Solo Administradores y el Super Usuario."""
+        if not es_admin_actual():
+            return jsonify({"error": "No autorizado"}), 403
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        pf = os.path.join(root, "actualizar.estado")
+        if not os.path.exists(pf):
+            return jsonify({"fase": "inactivo", "porcentaje": 0, "mensaje": ""})
+        try:
+            import json as _json
+            with open(pf, encoding="utf-8") as fh:
+                data = _json.load(fh)
+            return jsonify(data)
+        except Exception:
+            return jsonify({"fase": "inactivo", "porcentaje": 0, "mensaje": ""})
 
     @app.route("/api/actualizar-publicar", methods=["POST"])
     def publicar_nueva_version():

@@ -54,6 +54,7 @@
     // cada navegacion. El resultado se cachea en sessionStorage; en el resto de
     // paginas se muestra el estado cacheado sin volver a llamar a la API.
     var _CLAVE_CACHE = 'informe_upd_cache';
+    var _pollTimer = null;
     window._csrfToken = function () {
       var m = document.querySelector('meta[name="csrf-token"]');
       return m ? m.getAttribute('content') : '';
@@ -66,6 +67,20 @@
     };
     window._esDashboard = function () {
       return window.location.pathname.replace(/\/$/, '') === '';
+    };
+    // Muestra la barra de progreso con fase/porcentaje/mensaje
+    window._mostrarBarra = function (pct, msg) {
+      var barra = document.getElementById('updProg');
+      var fill = document.getElementById('updFill');
+      var txt = document.getElementById('updMsg');
+      if (!barra || !fill || !txt) return;
+      barra.style.display = 'block';
+      fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+      txt.textContent = msg || '';
+    };
+    window._ocultarBarra = function () {
+      var barra = document.getElementById('updProg');
+      if (barra) barra.style.display = 'none';
     };
     // Render robusto (try/catch interno: nunca rompe la cadena .then/.catch)
     window._renderUpdate = function (d) {
@@ -112,9 +127,69 @@
           if (btn) btn.style.display = 'none';
         });
     };
+    // Polling del progreso de actualizacion
+    window._pollProgreso = function () {
+      fetch('/api/actualizacion/progreso', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.fase === 'inactivo') {
+            clearTimeout(_pollTimer);
+            return;
+          }
+          window._mostrarBarra(d.porcentaje || 0, d.mensaje || d.fase);
+          if (d.fase === 'listo') {
+            clearTimeout(_pollTimer);
+            clearInterval(_pollTimer);
+            // Esperar a que el server este arriba, luego recargar
+            window._esperarServerYRecargar();
+          } else if (d.fase === 'rollback' || (d.error && d.porcentaje === 100)) {
+            clearTimeout(_pollTimer);
+            clearInterval(_pollTimer);
+            var txt = document.getElementById('upTxt');
+            if (txt) { txt.textContent = 'Error en la actualizacion (rollback aplicado)'; txt.classList.remove('upd-disponible'); }
+            mostrarToast('error', 'La actualizacion fallo; se restauro la version anterior.');
+            window._ocultarBarra();
+          } else {
+            _pollTimer = setTimeout(window._pollProgreso, 1500);
+          }
+        })
+        .catch(function () {
+          clearTimeout(_pollTimer);
+        });
+    };
+    // Polling hasta que el server responda /api/version (server listo)
+    window._esperarServerYRecargar = function () {
+      var intentos = 0;
+      var max = 60;
+      mostrarToast('success', 'Actualizacion completada. Reanudando...');
+      var check = function () {
+        intentos++;
+        fetch('/api/version', { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function () {
+            // Server arriba; forzar reload limpio
+            sessionStorage.removeItem(_CLAVE_CACHE);
+            location.replace('/');
+          })
+          .catch(function () {
+            if (intentos < max) {
+              setTimeout(check, 3000);
+            } else {
+              var txt = document.getElementById('upTxt');
+              if (txt) { txt.textContent = 'Actualizacion completada. Recarga manual.'; }
+              mostrarToast('warning', 'Servidor tardando en iniciar. Recargue manualmente.');
+              window._ocultarBarra();
+            }
+          });
+      };
+      check();
+    };
     window.actualizarSistema = function () {
       var btn = document.getElementById('btnUpd');
+      var txt = document.getElementById('upTxt');
       if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-arrow-down-loading"></i> Instalando...'; }
+      if (txt) { txt.textContent = 'Instalando...'; txt.classList.remove('upd-disponible'); }
+      window._mostrarBarra(0, 'Iniciando actualizacion...');
       fetch('/actualizar', {
         method: 'POST',
         credentials: 'same-origin',
@@ -126,13 +201,20 @@
           return r.json().catch(function () { return {}; });
         })
         .then(function (d) {
-          sessionStorage.removeItem(_CLAVE_CACHE);
-          mostrarToast('info', d.mensaje || d.msg || 'Actualizaci\u00F3n aplicada. El servidor se reiniciar\u00E1.');
-          setTimeout(function () { location.reload(); }, 3500);
+          if (btn) { btn.disabled = true; btn.style.display = 'none'; }
+          if (d.ok) {
+            // Iniciar polling de progreso
+            _pollTimer = setTimeout(window._pollProgreso, 1500);
+          } else {
+            mostrarToast('error', d.error || 'No se pudo aplicar la actualizacion');
+            if (btn) { btn.disabled = false; btn.style.display = 'inline-flex'; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
+            window._ocultarBarra();
+          }
         })
         .catch(function (e) {
           mostrarToast('error', 'Error al aplicar la actualizaci\u00F3n: ' + e.message);
           if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
+          window._ocultarBarra();
         });
     };
     // Publicar nueva version (SOLO Super Usuario): bump + commit + push + workflow_dispatch
@@ -280,6 +362,10 @@
           <button id="btnUpd" type="button" class="btn-upd" onclick="actualizarSistema();">
             <i class="bi bi-arrow-down-circle"></i> Instalar
           </button>
+          <div class="upd-progress" id="updProg" style="display:none;">
+            <div class="upd-progress-bar" id="updBar"><div class="upd-progress-fill" id="updFill"></div></div>
+            <span class="upd-progress-txt" id="updMsg"></span>
+          </div>
         </div>
         {% endif %}
       </div>

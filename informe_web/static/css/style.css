@@ -157,6 +157,20 @@ body {
 }
 .btn-upd:hover { opacity: .88; }
 .btn-upd:disabled { opacity: .55; cursor: wait; }
+/* Barra de progreso de actualizacion */
+.upd-progress { margin-top: 6px; width: 100%; }
+.upd-progress-bar {
+  position: relative; height: 8px; width: 100%; background: rgba(255,255,255,.12);
+  border-radius: 4px; overflow: hidden;
+}
+.upd-progress-fill {
+  height: 100%; width: 0%; background: linear-gradient(90deg, var(--oro), #a9871e);
+  border-radius: 4px; transition: width .4s ease;
+}
+.upd-progress-txt {
+  font-size: 9px; font-weight: 600; color: rgba(255,255,255,.7);
+  margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 /* Boton de publish (Super Usuario): accion de creacion de release -> mas llamativo */
 .btn-pub {
   color: var(--azul-osc);

@@ -24,6 +24,12 @@ $Raiz      = $PSScriptRoot
 $fuenteVer = Join-Path $Raiz "informe_web\version.py"
 $bakDir    = Join-Path $Raiz "actualizar.bak"
 $tmpDir    = Join-Path $env:TEMP ("informe_update_" + [System.Guid]::NewGuid().Guid.Substring(0,8))
+$progFile  = Join-Path $Raiz "actualizar.estado"
+
+function Escribir-Progreso([string]$fase, [int]$porcentaje, [string]$mensaje = "") {
+    $obj = @{ fase = $fase; porcentaje = $porcentaje; mensaje = $mensaje; ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") }
+    $obj | ConvertTo-Json -Compress | Set-Content -Path $progFile -Encoding UTF8
+}
 
 function Version-Local {
     $txt = Get-Content $fuenteVer -Raw
@@ -64,10 +70,12 @@ if (-not $Instalar) {
 }
 
 Write-Host "Aplicando actualizacion a $tag ..."
+Escribir-Progreso "descargando" 5 "Descargando $tag de GitHub..."
 
 # 8) Descargar paquete (gh usa tu token del keyring: funciona en repo privado)
 New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 Write-Host "Descargando $tag ..."
+Escribir-Progreso "descargando" 20 "Descargando $tag..."
 gh release download "$tag" -R $OwnerRepo --pattern "*.zip" --dir $tmpDir
 
 $zipPath = (Get-ChildItem $tmpDir -Filter "*.zip" | Select-Object -First 1).FullName
@@ -77,11 +85,12 @@ if (-not $zipPath) { Write-Error "No se encontro el asset zip descargado"; exit 
 Expand-Archive -LiteralPath $zipPath -DestinationPath $tmpDir -Force
 
 # Preservar la base de datos / respaldos / uploads / logs del usuario (no viajan en el zip)
-$preservar = @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/static/uploads",
+$preservation = @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/static/uploads",
                "informe_web\servidor.log", "informe_web\servidor.pid")
 
 # 8.1) Detener el servidor ANTES de mover informe_web; si no, los .py/.pyc abiertos
 #      impiden el Move-Item ("proceso en uso"). El updater corre detached, sobrevive.
+Escribir-Progreso "instalando" 35 "Deteniendo servidor..."
 $pidfile = Join-Path $Raiz "informe_web\servidor.pid"
 $matado = $false
 if (Test-Path $pidfile) {
@@ -106,9 +115,11 @@ if ($matado) {
 if (Test-Path $bakDir) { Remove-Item -Recurse -Force $bakDir }
 New-Item -ItemType Directory -Force -Path $bakDir | Out-Null   # Move-Item needs parent dir
 Start-Sleep -Seconds 2   # dejar que los handles del server detenido se liberen
+Escribir-Progreso "instalando" 50 "Respaldando instalacion actual..."
 Move-Item -LiteralPath (Join-Path $Raiz "informe_web") -Destination (Join-Path $bakDir "informe_web")
 
 # Copiar la nueva informe_web
+Escribir-Progreso "instalando" 70 "Instalando nueva version..."
 Copy-Item -Recurse -Force (Join-Path $tmpDir "informe_web") -Destination (Join-Path $Raiz "informe_web") -ErrorAction Stop
 
 # Restaurar los datos preservados (si existian en el backup, copiarlos de vuelta)
@@ -127,6 +138,7 @@ Copy-Item -Force (Join-Path $tmpDir "Logo.png") -Destination $Raiz -ErrorAction 
 
 # 9) Verificar; rollback si falla
 Write-Host "Verificando sintaxis de la nueva version ..."
+Escribir-Progreso "verificando" 80 "Verificando sintaxis de la nueva version..."
 $ok = $true
 try {
     & "C:\Python314\python.exe" -m py_compile "$Raiz/informe_web/app.py" 2>$null
@@ -141,8 +153,10 @@ if ($ok) {
         -ArgumentList "servidor_silencioso.py" `
         -WorkingDirectory "$Raiz/informe_web"
     Write-Host "Servidor iniciado con la nueva version ($tag)."
+    Escribir-Progreso "listo" 100 "Actualizacion completada. Servidor iniciado."
 } else {
     Write-Warning "Fallo la verificacion: haciendo rollback a la version anterior."
+    Escribir-Progreso "rollback" 100 "Error: fallo la verificacion. Haciendo rollback."
     Remove-Item -Recurse -Force (Join-Path $Raiz "informe_web") -ErrorAction SilentlyContinue
     Move-Item -LiteralPath (Join-Path $bakDir "informe_web") -Destination (Join-Path $Raiz "informe_web")
     Write-Host "Rollback completado. Sistema sin cambios."
