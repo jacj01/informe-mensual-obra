@@ -62,6 +62,38 @@
 </div>
 
 <div class="card">
+  <div class="card-head"><h3><i class="bi bi-upload"></i> Restaurar desde archivo</h3></div>
+  <form method="post" enctype="multipart/form-data"
+        data-confirm="¿Restaurar la base de datos desde un archivo externo? Se guardará una copia automática del estado actual antes de restaurar."
+        data-confirm-title="Restaurar desde archivo" data-confirm-btn="Restaurar">
+    <input type="hidden" name="accion" value="cargar">
+    <div class="form-grid">
+      <div class="field full">
+        <label for="archivo_db" class="btn btn-outline" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+          <input type="file" name="archivo_db" id="archivo_db" accept=".db,.sqlite" required style="display:none">
+          <i class="bi bi-folder2-open"></i> <span id="file-name-label">Elegir archivo</span>
+        </label>
+        <span class="file-upload-name" id="file-name" style="margin-left:10px;font-size:13px;color:var(--texto2);font-style:italic">Ningún archivo seleccionado</span>
+        <script>
+          document.getElementById('archivo_db').addEventListener('change', function() {
+            var n = this.files[0] ? this.files[0].name : 'Ningún archivo seleccionado';
+            document.getElementById('file-name').textContent = n;
+          });
+        </script>
+        <div class="field-hint">Solo archivos de base de datos SQLite (.db). Se copiará a la carpeta de respaldos y se restaurará automáticamente.</div>
+      </div>
+    </div>
+    <div class="note" style="margin-bottom:16px">
+      <i class="bi bi-folder"></i>
+      <strong>Carpeta de respaldos:</strong> <code>{{ carpeta }}</code>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button type="submit" class="btn btn-outline"><i class="bi bi-arrow-counterclockwise"></i> Cargar y restaurar</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
   <div class="card-head"><h3><i class="bi bi-clock-history"></i> Respaldos guardados</h3></div>
   {% if respaldos %}
   <div class="table-scroll">
@@ -98,4 +130,13 @@
   <div class="empty">Todavía no hay respaldos. Haga clic en "Crear respaldo ahora".</div>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('archivo_db').addEventListener('change', function() {
+  var name = this.files[0] ? this.files[0].name : 'Ningún archivo seleccionado';
+  document.getElementById('file-name').textContent = name;
+});
+</script>
 {% endblock %}

@@ -187,7 +187,7 @@
     </form>
     {% endif %}
     <form method="get" class="filters" style="display:inline-flex;gap:8px;align-items:center">
-      <select name="mes" onchange="this.form.submit()">
+      <select name="mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
@@ -245,10 +245,10 @@
     });
     fetch('{{ url_for('tareo_guardar') }}', { method: 'POST', body: fd })
       .then(function (r) {
-        if (r.redirected) { window.location.href = r.url; return; }
-        window.location.reload();
+        if (r.redirected) { window.redirigirManteniendoScroll(r.url); return; }
+        window.recargarManteniendoScroll();
       })
-      .catch(function () { window.location.reload(); });
+      .catch(function () { window.recargarManteniendoScroll(); });
   }
 
   function programarGuardado(card) {

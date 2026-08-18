@@ -20,10 +20,16 @@
       </div>
       <div class="field">
         <label>Rol</label>
-        <select name="rol" id="rol">
+        <select name="rol" id="rol" {{ 'disabled' if es_cuenta_propia and not es_super }}>
           <option value="Usuario" {{ 'selected' if u.rol == 'Usuario' }}>Usuario</option>
+          {% if es_super or (es_cuenta_propia and u.rol in ('Administrador', 'Super Usuario')) %}
           <option value="Administrador" {{ 'selected' if u.rol in ('Administrador', 'Super Usuario') }}>Administrador</option>
+          {% endif %}
         </select>
+        {% if es_cuenta_propia and not es_super %}
+        <input type="hidden" name="rol" value="{{ u.rol }}">
+        <div class="field-hint">No puede cambiar su propio rol. Solo el Administrador (Cuenta Principal) puede hacerlo.</div>
+        {% endif %}
       </div>
       <div class="field">
         <label>Contraseña {{ '(opcional)' if es_edicion }}</label>

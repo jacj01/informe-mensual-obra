@@ -20,8 +20,10 @@
   /* Columnas numericas/cortas: sin salto de linea para mantener la tabla compacta */
   table.tabla td.num, table.tabla th.num { white-space: nowrap; }
   table.tabla td.ctr, table.tabla th.ctr { white-space: nowrap; }
-  /* Cabeceras de clasificador: fuente compacta para que el codigo quepa en una linea */
-  table.tabla thead th.clasif { font-size: 6.2pt; letter-spacing: -.2px; padding: 4px 2px; }
+  /* Cabeceras de clasificador: fuente compacta para que el codigo quepa.
+     white-space normal + overflow-wrap para que con muchos clasificadores
+     el codigo envuelva dentro del ancho disponible sin desbordar la celda. */
+  table.tabla thead th.clasif { font-size: 6.2pt; letter-spacing: -.2px; padding: 4px 2px; white-space: normal; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -60,14 +62,20 @@
   </div>
 
   {% set ncols = 11 + clasif_cols|length + 4 %}
+  {# Ancho util de la hoja A4 horizontal: 1062px.
+     Ancho de las columnas fijas (11 base + 4 de la derecha): 818px.
+     Lo restante se reparte por igual entre los clasificadores presentes,
+     de modo que la tabla SIEMPRE sume <= 1062px (sin desbordar la hoja). #}
+  {% set fijos_fe05 = 16 + 40 + 56 + 24 + 28 + 130 + 168 + 30 + 32 + 46 + 56 + 48 + 46 + 42 + 56 %}
+  {% set ancho_clasif = ((1062 - fijos_fe05) / clasif_cols|length) | int if clasif_cols else 58 %}
   {% for sec in secciones %}
   <table class="tabla">
     <colgroup>
-      <col style="width:16px"><col style="width:40px"><col style="width:58px"><col style="width:26px"><col style="width:30px">
-      <col style="width:152px"><col style="width:192px"><col style="width:32px"><col style="width:34px">
-      <col style="width:48px"><col style="width:58px">
-      {% for c in clasif_cols %}<col style="width:58px">{% endfor %}
-      <col style="width:50px"><col style="width:48px"><col style="width:44px"><col style="width:60px">
+      <col style="width:16px"><col style="width:40px"><col style="width:56px"><col style="width:24px"><col style="width:28px">
+      <col style="width:130px"><col style="width:168px"><col style="width:30px"><col style="width:32px">
+      <col style="width:46px"><col style="width:56px">
+      {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
+      <col style="width:48px"><col style="width:46px"><col style="width:42px"><col style="width:56px">
     </colgroup>
     <thead>
       <tr>
@@ -115,22 +123,12 @@
   {% else %}
   <table class="tabla">
     <colgroup>
-      <col style="width:16px"><col style="width:40px"><col style="width:58px"><col style="width:26px"><col style="width:30px">
-      <col style="width:152px"><col style="width:192px"><col style="width:32px"><col style="width:34px">
-      <col style="width:48px"><col style="width:58px">
-      {% for c in clasif_cols %}<col style="width:58px">{% endfor %}
-      <col style="width:50px"><col style="width:48px"><col style="width:44px"><col style="width:60px">
+      <col style="width:16px"><col style="width:40px"><col style="width:56px"><col style="width:24px"><col style="width:28px">
+      <col style="width:130px"><col style="width:168px"><col style="width:30px"><col style="width:32px">
+      <col style="width:46px"><col style="width:56px">
+      {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
+      <col style="width:48px"><col style="width:46px"><col style="width:42px"><col style="width:56px">
     </colgroup>
-    <thead>
-      <tr>
-        <th>N°</th><th>SIAF</th><th>Fecha</th><th>Tipo</th><th>N°</th>
-        <th>Proveedor</th><th>Detalle</th><th>Und</th><th class="num">Cant</th>
-        <th class="num">P.U</th><th class="num">Importe</th>
-        {% for c in clasif_cols %}<th class="num clasif">{{ c }}</th>{% endfor %}
-        <th class="num">Directos</th><th class="num">Grales</th>
-        <th class="num">Superv.</th><th class="num">Total</th>
-      </tr>
-    </thead>
     <tbody>
       <tr class="fila-rubro"><td colspan="{{ ncols }}">SIN GASTOS DEVENGADOS PARA EL PERÍODO</td></tr>
     </tbody>
@@ -139,11 +137,11 @@
 
   <table class="tabla">
     <colgroup>
-      <col style="width:16px"><col style="width:40px"><col style="width:58px"><col style="width:26px"><col style="width:30px">
-      <col style="width:152px"><col style="width:192px"><col style="width:32px"><col style="width:34px">
-      <col style="width:48px"><col style="width:58px">
-      {% for c in clasif_cols %}<col style="width:58px">{% endfor %}
-      <col style="width:50px"><col style="width:48px"><col style="width:44px"><col style="width:60px">
+      <col style="width:16px"><col style="width:40px"><col style="width:56px"><col style="width:24px"><col style="width:28px">
+      <col style="width:130px"><col style="width:168px"><col style="width:30px"><col style="width:32px">
+      <col style="width:46px"><col style="width:56px">
+      {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
+      <col style="width:48px"><col style="width:46px"><col style="width:42px"><col style="width:56px">
     </colgroup>
     <tbody>
       <tr class="fila-total">

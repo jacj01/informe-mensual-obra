@@ -29,7 +29,7 @@
       {% if not s.activa %}PAUSADA{% elif not s.vigente %}VENCIDA{% elif s.dias_restantes <= 15 %}POR VENCER{% else %}VIGENTE{% endif %}
     </span>
     {% if not s.activa %}
-    <span class="field-hint">El aplicativo está bloqueado para todos excepto el Super Usuario.</span>
+    <span class="field-hint">El aplicativo está bloqueado para todos excepto el Administrador.</span>
     {% elif not s.vigente %}
     <span class="field-hint">La suscripción venció el {{ s.fecha_fin.strftime('%d/%m/%Y') }}. Renueve para desbloquear el aplicativo.</span>
     {% else %}
@@ -122,7 +122,7 @@
   <div class="card-head"><h3><i class="bi bi-sliders"></i> Estado del aplicativo</h3></div>
   {% if s and s.activa %}
   <form method="post" action="{{ url_for('suscripcion_pausar') }}" class="inline"
-        data-confirm="¿Pausar la suscripción? Todo el aplicativo quedará bloqueado (excepto el Super Usuario)."
+        data-confirm="¿Pausar la suscripción? Todo el aplicativo quedará bloqueado (excepto el Administrador)."
         data-confirm-title="Pausar suscripción" data-confirm-btn="Pausar" data-confirm-color="btn-red">
     <button type="submit" class="btn btn-red"><i class="bi bi-pause-circle"></i> Pausar suscripción</button>
   </form>
@@ -170,8 +170,8 @@
 <div class="note">
   <i class="bi bi-info-circle"></i>
   <div>
-    Solo el <b>Super Usuario</b> administra la suscripción. Cuando vence o se pausa,
-    el aplicativo bloquea el acceso de <b>todos</b> los usuarios excepto el Super Usuario,
+    Solo el <b>Administrador (Cuenta Principal)</b> administra la suscripción. Cuando vence o se pausa,
+    el aplicativo bloquea el acceso de <b>todos</b> los usuarios excepto el Administrador (Cuenta Principal),
     que siempre puede ingresar para renovar. Antes de vencer (15 días) se muestra un aviso.
   </div>
 </div>

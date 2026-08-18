@@ -3,6 +3,7 @@ import calendar
 import re
 from datetime import date, timedelta
 
+from flask import g
 from models import (Proyecto, Presupuesto, Gasto, GastoDetalle,
                     AlmacenMovimiento, ActividadEjecutada, Trabajador,
                     Suscripcion, db)
@@ -57,7 +58,7 @@ DET_ETIQUETA = {
 def presupuesto_filas():
     """Datos de presupuesto (et, pim) por componente/detalle para la cabecera.
     Lee de Presupuesto; si falta, devuelve 0.0 (no crea rows)."""
-    cfg = {(p.componente, p.detalle): p for p in Presupuesto.query.all()}
+    cfg = {(p.componente, p.detalle): p for p in _all_presupuestos()}
     out = []
     for comp, det in PRESUPUESTO_DETALLE:
         c = cfg.get((comp, det))
@@ -86,7 +87,11 @@ ACTIVIDADES_DEFECTO = [
 
 
 def get_proyecto():
-    """Devuelve el Proyecto en uso; lo crea en cero si la base aún no tiene."""
+    """Devuelve el Proyecto en uso; lo crea en cero si la base aún no tiene.
+    Se cachea por request en flask.g para evitar queries repetidas."""
+    p = getattr(g, "_proyecto", None)
+    if p is not None:
+        return p
     p = Proyecto.query.first()
     if p is None:
         p = Proyecto()
@@ -94,7 +99,39 @@ def get_proyecto():
         p.mes_actual = date.today().month
         db.session.add(p)
         db.session.commit()
+    g._proyecto = p
     return p
+
+
+def _all_presupuestos():
+    """Presupuesto.query.all() cacheado por request."""
+    rows = getattr(g, "_presupuestos", None)
+    if rows is not None:
+        return rows
+    rows = Presupuesto.query.all()
+    g._presupuestos = rows
+    return rows
+
+
+def _all_gastos_anio(anio):
+    """Gasto + GastoDetalle de un año, cacheado por request.
+    Devuelve lista de tuplas (componente, clasificador, mes, importe)."""
+    cache_key = f"_gastos_{anio}"
+    cached = getattr(g, cache_key, None)
+    if cached is not None:
+        return cached
+    rows = (db.session.query(
+                Gasto.componente,
+                Gasto.clasificador,
+                Gasto.mes,
+                db.func.sum(GastoDetalle.cantidad * GastoDetalle.precio_unitario))
+            .join(GastoDetalle, GastoDetalle.gasto_id == Gasto.id)
+            .filter(Gasto.anio == anio, Gasto.devengado == True)
+            .group_by(Gasto.componente, Gasto.clasificador, Gasto.mes)
+            .all())
+    g._gastos_cache = getattr(g, "_gastos_cache", {})
+    g._gastos_cache[cache_key] = rows
+    return rows
 
 
 def get_suscripcion():
@@ -242,9 +279,10 @@ def meses_visibles(anio, mes):
 
 
 def incluir_anios():
-    """True si se deben mostrar los anos anteriores (2023-2025)."""
+    """True si se deben mostrar los anos anteriores."""
     p = get_proyecto()
-    return p.incluir_anios_anteriores if p.incluir_anios_anteriores is not None else True
+    num = p.num_anios_anteriores if p.num_anios_anteriores is not None else 3
+    return num > 0
 
 
 def clasificadores_proyecto():
@@ -286,24 +324,32 @@ def ampliacion_presupuestal():
 
 def pim_total():
     """PIM efectivo del ano actual incluyendo la ampliacion presupuestal si existe."""
-    return round(sum(p.pim2026 or 0 for p in Presupuesto.query.all())
+    return round(sum(p.pim2026 or 0 for p in _all_presupuestos())
                  + ampliacion_presupuestal(), 2)
 
 
 def et_total():
     """Presupuesto total segun Expediente Tecnico (suma de configuraciones)."""
-    return round(sum(p.et or 0 for p in Presupuesto.query.all()), 2)
+    return round(sum(p.et or 0 for p in _all_presupuestos()), 2)
 
 
 def ejecutado_anio(anio):
-    return round(sum(g.importe for g in
-                     Gasto.query.filter(Gasto.anio == anio, Gasto.devengado == True).all()), 2)
+    return round(sum(total or 0 for _, _, _, total in _all_gastos_anio(anio)), 2)
 
 
 def ejecutado_acumulado_anterior():
-    """Ejecucion 2023 + 2024 + 2025 desde la configuracion presupuestal."""
-    rows = Presupuesto.query.all()
-    return round(sum((p.ejec2023 or 0) + (p.ejec2024 or 0) + (p.ejec2025 or 0) for p in rows), 2)
+    """Ejecucion de los años anteriores desde la configuracion presupuestal.
+    Solo suma las columnas correspondientes a los años activos (num_anios_anteriores)."""
+    p = get_proyecto()
+    num = p.num_anios_anteriores if p.num_anios_anteriores is not None else 3
+    num = max(0, min(3, num))
+    rows = _all_presupuestos()
+    total = 0.0
+    for i in range(1, num + 1):
+        yr = p.anio - i
+        col = f"ejec{yr}"
+        total += sum(getattr(row, col, 0) or 0 for row in rows)
+    return round(total, 2)
 
 
 def kpis(anio=None, mes=None):
@@ -313,15 +359,16 @@ def kpis(anio=None, mes=None):
     pim = pim_total()
     ejec = ejecutado_anio(anio)
     anterior = ejecutado_acumulado_anterior()
+    et = et_total()
     return {
         "pim": pim,
         "ejecutado_anio": ejec,
         "porc_anio": (ejec / pim * 100) if pim else 0,
         "saldo_anio": round(pim - ejec, 2),
         "gasto_mes": total_gastos_mes(mes, anio, devengado=True),
-        "presupuesto_total": et_total(),
+        "presupuesto_total": et,
         "acumulado_total": round(ejec + anterior, 2),
-        "saldo_proyecto": round(et_total() - (ejec + anterior), 2),
+        "saldo_proyecto": round(et - (ejec + anterior), 2),
     }
 
 
@@ -361,19 +408,26 @@ def fe06_rows():
                      "ELABORACION DE EXPEDIENTE TECNICO": 3,
                      "COSTO DE LIQUIDACION": 4}
 
-    # Cache de configs de Presupuesto por (componente, detalle)
+    # Cache de configs de Presupuesto por (componente, detalle) — 1 sola query
     cfg_cache = {}
-    for comp in COMPONENTES_FE06:
-        for cfg in Presupuesto.query.filter_by(componente=comp).all():
-            cfg_cache[(comp, cfg.detalle)] = cfg
+    for cfg in _all_presupuestos():
+        if cfg.componente:
+            cfg_cache[(cfg.componente, cfg.detalle)] = cfg
+
+    # UNA sola query de gastos en vez de 11 individuales
+    gastos_data = _all_gastos_anio(anio)
+    gastos_map = {}  # (componente, clasificador) -> [importe, ...]
+    for comp, clasif, mes, total in gastos_data:
+        key = (comp, clasif)
+        if key not in gastos_map:
+            gastos_map[key] = [0.0] * 12
+        gastos_map[key][mes - 1] = round(gastos_map[key][mes - 1] + (total or 0), 2)
 
     rows = []
     for comp in COMPONENTES_FE06:
         clasificadores_comp = [(clas, det) for _comp, clas, det in CLAS_DEFECTO
                                if _comp == comp]
         for clasif, detalle in clasificadores_comp:
-            # Usar el clasificador tal cual estaba en el proyecto (no el fallback)
-            # si el clasificador fue customizado; sino usar el codigo base.
             clasif_real = clasif
             cfg = cfg_cache.get((comp, detalle))
             et = cfg.et or 0 if cfg else 0
@@ -381,12 +435,7 @@ def fe06_rows():
             e2024 = cfg.ejec2024 or 0 if cfg else 0
             e2025 = cfg.ejec2025 or 0 if cfg else 0
             pim = cfg.pim2026 or 0 if cfg else 0
-            mensual = [0.0] * 12
-            gastos = Gasto.query.filter(Gasto.anio == anio, Gasto.componente == comp,
-                                        Gasto.clasificador == clasif_real,
-                                        Gasto.devengado == True).all()
-            for g in gastos:
-                mensual[g.mes - 1] = round(mensual[g.mes - 1] + g.importe, 2)
+            mensual = gastos_map.get((comp, clasif_real), [0.0] * 12)
             total_anio = round(sum(mensual), 2)
             acum_total = round(e2023 + e2024 + e2025 + total_anio, 2)
             rows.append({
@@ -454,7 +503,7 @@ def fe06_sintesis(mes, anio=None):
         "ampliacion": ampliacion_presupuestal(),
     }
     s["saldo_pim"] = round(s["pim"] - s["ejec_anio"], 2)
-    if p.incluir_anios_anteriores:
+    if incluir_anios():
         s["saldo_proyecto"] = round(s["et"] - s["acum_total"], 2)
     else:
         s["saldo_proyecto"] = round(s["et"] - s["ejec_anio"], 2)
@@ -565,7 +614,9 @@ def panel_datos(mes, anio=None):
     replica fiel en HTML: todos los cuadros, titulos, textos y calculos."""
     p = get_proyecto()
     anio = anio or p.anio
-    incluir = incluir_anios()
+    num_anios = p.num_anios_anteriores if p.num_anios_anteriores is not None else 3
+    num_anios = max(0, min(3, num_anios))
+    incluir = num_anios > 0
     rows = fe06_rows()
     resumen = fe06_resumen(rows)
     meses_col = list(range(1, mes + 1))
@@ -601,17 +652,20 @@ def panel_datos(mes, anio=None):
     meta_num = int(m.group(1)) if m else 0
 
     # ---------------- I. RESUMEN DE LA EJECUCION PRESUPUESTAL ----------------
+    meta_map = {
+        1: p.meta_ejec2025 or 0 if p.num_anios_anteriores else 0,
+    }
     resumen_i = [{"concepto": "Presupuesto total", "monto": et, "meta": 0}]
     if incluir:
-        resumen_i.append({"concepto": "Avance Acumulado gastos devengado 2023",
-                          "monto": tot["e2023"], "meta": 46})
-        resumen_i.append({"concepto": "Avance Acumulado gastos devengado 2024",
-                          "monto": tot["e2024"], "meta": 29})
-        resumen_i.append({"concepto": "Avance Acumulado gastos devengado 2025",
-                          "monto": tot["e2025"], "meta": 17})
+        for i in range(num_anios, 0, -1):
+            yr = anio - i
+            meta_val = getattr(p, f"meta_ejec{yr}", 0) or 0
+            meta_int = int(meta_val) if meta_val else 0
+            resumen_i.append({"concepto": f"Avance Acumulado gastos devengado {yr}",
+                              "monto": tot.get(f"e{yr}", 0), "meta": meta_int})
     resumen_i.append({"concepto": f"Avance Acumulado gastos devengado {anio}",
                       "monto": ejec_anio, "meta": meta_num})
-    resumen_i.append({"concepto": (f"Gasto acumulado desde 2023 hasta {anio}"
+    resumen_i.append({"concepto": (f"Gasto acumulado desde {anio - num_anios} hasta {anio}"
                                    if incluir else f"Gasto acumulado hasta {anio}"),
                       "monto": acum_total, "meta": 0})
     resumen_i.append({"concepto": f"Saldo al {anio} (Ppto - Acumulado)",
@@ -649,7 +703,7 @@ def panel_datos(mes, anio=None):
                   "ELABORACION DE EXPEDIENTE TECNICO": 3, "COSTO DE LIQUIDACION": 4}
     grupos3 = []
     for comp in COMPONENTES_FE06:
-        configs = sorted(Presupuesto.query.filter_by(componente=comp).all(),
+        configs = sorted([p for p in _all_presupuestos() if p.componente == comp],
                          key=lambda c: _orden_det.get((c.detalle or "").upper(), 99))
         for cfg in configs:
             grupos3.append((comp, cfg.clasificador, cfg.detalle or cfg.clasificador))
@@ -700,24 +754,31 @@ def panel_datos(mes, anio=None):
 
     ejec_anuales = []
     if incluir:
-        for anio_txt, meta_hist, num in (("2023", "0046", "2.1"),
-                                         ("2024", "0029", "2.2"),
-                                         ("2025", "0017", "2.3")):
-            filas = [{"clas": clas, "detalle": det, "monto": sum_key(f"e{anio_txt}", clas)}
+        sub_nums = ["2.1", "2.2", "2.3"]
+        for i in range(num_anios):
+            yr = anio - i - 1
+            yr_txt = str(yr)
+            meta_val = getattr(p, f"meta_ejec{yr}", 0) or 0
+            meta_hist = f"{int(meta_val):03d}" if meta_val else "000"
+            sub = sub_nums[i] if i < len(sub_nums) else f"2.{i + 1}"
+            filas = [{"clas": clas, "detalle": det, "monto": sum_key(f"e{yr_txt}", clas)}
                      for clas, det in CLAS_ORDER]
             ejec_anuales.append({
-                "num": num, "anio": anio_txt, "meta": meta_hist,
-                "titulo": (f"{num}. RESUMEN DE EJECUCION PRESUPUESTAL AL MES DE "
-                           f"DICIEMBRE DEL AÑO {anio_txt}"),
+                "num": sub, "anio": yr_txt, "meta": meta_hist,
+                "titulo": (f"{sub}. RESUMEN DE EJECUCION PRESUPUESTAL AL MES DE "
+                           f"DICIEMBRE DEL AÑO {yr_txt}"),
                 "filas": filas,
-                "total": round(sum(resumen[c][f"e{anio_txt}"] for c in resumen), 2),
+                "total": round(sum(resumen[c][f"e{yr_txt}"] for c in resumen), 2),
             })
 
     gen = []
-    for anio_txt in (("2023", "2024", "2025") if incluir else ()):
-        for clas, det in CLAS_ORDER:
-            monto = sum_key(f"e{anio_txt}", clas)
-            gen.append({"clas": clas, "detalle": det, "monto": monto, "anio": anio_txt})
+    if incluir:
+        for i in range(num_anios):
+            yr = anio - i - 1
+            yr_txt = str(yr)
+            for clas, det in CLAS_ORDER:
+                monto = sum_key(f"e{yr_txt}", clas)
+                gen.append({"clas": clas, "detalle": det, "monto": monto, "anio": yr_txt})
     for clas, det in CLAS_ORDER:
         monto = sum_key("total_anio", clas)
         gen.append({"clas": clas, "detalle": det, "monto": monto, "anio": str(anio)})
@@ -800,6 +861,7 @@ def panel_datos(mes, anio=None):
         "periodo": f"{MESES[mes-1]} - {anio}",
         "meta_num": meta_num,
         "incluir_anios": incluir,
+        "num_anios": num_anios,
         "ubicacion": (f"DISTRITO: {p.distrito or ''}; PROVINCIA: {p.provincia or ''}; "
                       f"DEPARTAMENTO: {p.departamento or ''}."),
         "presupuesto_et": et,
@@ -982,6 +1044,39 @@ def saldo_insumo(descripcion, excluir_id=None):
     for mv in q.all():
         saldo += (mv.cantidad or 0) if mv.tipo == "E" else -(mv.cantidad or 0)
     return round(saldo, 2)
+
+
+def oc_para_material(descripcion):
+    """Busca todas las O/C que contienen un material.
+
+    Retorna una lista de dicts con:
+      oc_num, siaf, proveedor, oc_id
+    Solo incluye O/C activas (mes/anio <= mes actual del proyecto).
+    El saldo de almacén se calcula por separado.
+    """
+    desc_upper = (descripcion or "").strip().upper()
+    if not desc_upper:
+        return []
+    dets = (GastoDetalle.query
+            .filter(db.func.upper(GastoDetalle.detalle) == desc_upper)
+            .all())
+    results = []
+    vistos = set()
+    for d in dets:
+        gasto = db.session.get(Gasto, d.gasto_id)
+        if not gasto or gasto.tipo_doc != "O/C":
+            continue
+        oc_key = gasto.num_doc
+        if oc_key in vistos:
+            continue
+        vistos.add(oc_key)
+        results.append({
+            "oc_num": str(gasto.num_doc),
+            "oc_id": gasto.id,
+            "siaf": gasto.siaf or "",
+            "proveedor": gasto.proveedor or "",
+        })
+    return results
 
 
 def almacen_valorizado(mes, anio):

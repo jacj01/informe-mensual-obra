@@ -10,7 +10,7 @@
   <div class="card-head">
     <h3><i class="bi bi-bag-plus"></i> Registrar orden (proveedor)</h3>
     <form method="get" class="filters">
-      <select name="mes" onchange="this.form.submit()">
+      <select name="mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
@@ -103,33 +103,32 @@
           <div class="prov-name-row">
             <div class="prov-name">{{ g.proveedor }}</div>
             {% if bloqueada %}<span class="badge badge-orange" title="Mes cerrado: no se puede modificar">MES CERRADO</span>{% endif %}
-            <form method="post" action="{{ url_for('orden_devengar', orden_id=g.id) }}" class="dev-form">
-              <label class="dev-label {{ 'on' if g.devengado }}">
-                <input type="checkbox" name="devengado" {{ 'checked' if g.devengado }}
-                       {{ 'disabled' if dev_bloqueada }} onchange="this.form.submit()">
-                DEVENGADO
-              </label>
-            </form>
           </div>
           <div class="prov-meta">
-            <span>{{ g.tipo_doc }} N° {{ g.num_doc }}</span>
+            <span class="badge badge-blue">{{ g.tipo_doc }} N° {{ g.num_doc }}</span>
+            <span class="badge badge-blue">{{ g.clasificador }}</span>
+            <span>{{ g.fecha.strftime("%d/%m/%Y") if g.fecha else '' }}</span>
+            <span class="badge badge-green">{{ g.componente }}</span>
+            {% if g.siaf %}<span>SIAF {{ g.siaf }}</span>{% endif %}
             {% if g.mes != mes %}
-            <i class="bi bi-dot"></i>
             <span class="badge badge-orange">PENDIENTE {{ MESES[g.mes-1] }}</span>
             {% endif %}
-            <i class="bi bi-dot"></i>
-            <span>SIAF {{ g.siaf }}</span>
-            <i class="bi bi-dot"></i>
-            <span>{{ g.fecha.strftime("%d/%m/%Y") if g.fecha else '' }}</span>
-            <i class="bi bi-dot"></i>
-            <span class="badge badge-blue">{{ g.clasificador }} - {{ cls_nombres.get(g.clasificador, g.clasificador) }}</span>
-            <i class="bi bi-dot"></i>
-            <span class="badge badge-green">{{ g.componente }}</span>
           </div>
         </div>
       </div>
       <div class="prov-right">
         <span class="prov-total">S/ {{ "{:,.2f}".format(g.importe) }}</span>
+        <form method="post" action="{{ url_for('orden_devengar', orden_id=g.id) }}" class="dev-form" data-dev-id="{{ g.id }}">
+          <label class="dev-label {{ 'on' if g.devengado }}">
+            <input type="checkbox" name="devengado" {{ 'checked' if g.devengado }}
+                   {{ 'disabled' if dev_bloqueada }}
+                   onchange="handleDevengado(this, {{ g.id }}, {{ 'true' if g.devengado else 'false' }})">
+            DEVENGADO
+          </label>
+          {% if g.devengado and g.nota_pago %}
+          <span class="dev-detalle" title="Nota de Pago / Fecha de Devengado" style="font-size:10px;color:var(--texto2);margin-left:4px">NP: {{ g.nota_pago }}{{ ' | ' + g.fecha_devengado.strftime('%d/%m/%Y') if g.fecha_devengado else '' }}</span>
+          {% endif %}
+        </form>
         {% if not bloqueada and not dev_activa %}
         <a class="btn btn-green btn-sm" href="{{ url_for('orden_material_nuevo', orden_id=g.id) }}" onclick="return abrirModal(this.href)" title="{{ 'Ingresar servicio' if g.tipo_doc == 'O/S' else 'Ingresar materiales' }}"><i class="bi bi-plus-lg"></i> {{ 'Ingresar Servicio' if g.tipo_doc == 'O/S' else 'Ingresar materiales' }}</a>
         {% endif %}
@@ -146,6 +145,15 @@
     </div>
     <div class="table-scroll">
     <table class="table table-prov">
+      <colgroup>
+        <col style="width:32px">
+        <col style="width:52%">
+        <col style="width:50px">
+        <col style="width:60px">
+        <col style="width:70px">
+        <col style="width:80px">
+        <col style="width:36px">
+      </colgroup>
       <thead>
         <tr>
           <th>#</th><th>Detalle</th><th>Und Med</th>
@@ -213,8 +221,124 @@ function filtrarOrdenes() {
   });
 }
 
-// Órdenes o materiales bloqueados (mes pasado, devengado o con ingresos en almacén):
-// se avisa y no se envía el borrado
+function handleDevengado(checkbox, ordenId, yaEstabaActivo) {
+  if (checkbox.checked) {
+    mostrarModalDevengado(ordenId);
+  } else {
+    mostrarConfirmacionDesdevengar(ordenId);
+  }
+}
+
+function mostrarModalDevengado(ordenId) {
+  var existing = document.getElementById('modal-devengado');
+  if (existing) existing.remove();
+  var today = new Date().toISOString().split('T')[0];
+  var html = '<div id="modal-devengado" class="modal" style="display:flex">' +
+    '<div class="modal-bg" onclick="cerrarModalDevengado(false)"></div>' +
+    '<div class="modal-box" style="max-width:440px">' +
+    '<div class="modal-head"><h3><i class="bi bi-check-circle"></i> Registrar Devengado</h3>' +
+    '<button class="modal-close" onclick="cerrarModalDevengado(false)">&times;</button></div>' +
+    '<div style="padding:18px 20px">' +
+    '<p style="margin:0 0 14px;font-size:13px;color:var(--texto2)">Ingrese los datos del devengado para esta orden:</p>' +
+    '<div class="form-grid" style="grid-template-columns:1fr">' +
+    '<div class="field"><label>N° Nota de Pago</label>' +
+    '<input type="text" id="dev-nota-pago" placeholder="Ej.: NP-2026-001" style="width:100%"></div>' +
+    '<div class="field"><label>Fecha de Devengado</label>' +
+    '<input type="date" id="dev-fecha" value="' + today + '" style="width:100%"></div>' +
+    '</div></div>' +
+    '<div class="modal-foot">' +
+    '<button class="btn btn-primary" onclick="confirmarDevengado(' + ordenId + ')"><i class="bi bi-check2-circle"></i> Aceptar</button>' +
+    '<button class="btn btn-outline" onclick="cerrarModalDevengado(false)">Cancelar</button>' +
+    '</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmarDevengado(ordenId) {
+  var nota = document.getElementById('dev-nota-pago').value.trim();
+  var fecha = document.getElementById('dev-fecha').value;
+  if (!nota) {
+    mostrarToast('error', 'Ingrese el número de Nota de Pago.');
+    return;
+  }
+  if (!fecha) {
+    mostrarToast('error', 'Ingrese la fecha de devengado.');
+    return;
+  }
+  var form = document.querySelector('form[data-dev-id="' + ordenId + '"]');
+  if (!form) return;
+  var inputNota = document.createElement('input');
+  inputNota.type = 'hidden';
+  inputNota.name = 'nota_pago';
+  inputNota.value = nota;
+  form.appendChild(inputNota);
+  var inputFecha = document.createElement('input');
+  inputFecha.type = 'hidden';
+  inputFecha.name = 'fecha_devengado';
+  inputFecha.value = fecha;
+  form.appendChild(inputFecha);
+  var cb = form.querySelector('input[type="checkbox"]');
+  if (cb) cb.checked = true;
+  guardarScrollY();
+  form.submit();
+}
+
+function cerrarModalDevengado(acepto) {
+  var m = document.getElementById('modal-devengado');
+  if (m) m.remove();
+  if (!acepto) {
+    document.querySelectorAll('.dev-form').forEach(function(f) {
+      var cb = f.querySelector('input[type="checkbox"]');
+      if (cb && cb.dataset.ignoring) { cb.checked = false; delete cb.dataset.ignoring; }
+    });
+  }
+}
+
+function mostrarConfirmacionDesdevengar(ordenId) {
+  var form = document.querySelector('form[data-dev-id="' + ordenId + '"]');
+  var cb = form ? form.querySelector('input[type="checkbox"]') : null;
+  if (!cb) return;
+  cb.dataset.ignoring = '1';
+  cb.checked = true;
+  var existing = document.getElementById('modal-desdevengar');
+  if (existing) existing.remove();
+  var html = '<div id="modal-desdevengar" class="modal" style="display:flex">' +
+    '<div class="modal-bg" onclick="cerrarModalDesdevengar(false, ' + ordenId + ')"></div>' +
+    '<div class="modal-box" style="max-width:420px">' +
+    '<div class="modal-head"><h3><i class="bi bi-exclamation-triangle"></i> Quitar Devengado</h3>' +
+    '<button class="modal-close" onclick="cerrarModalDesdevengar(false, ' + ordenId + ')">&times;</button></div>' +
+    '<div style="padding:18px 20px">' +
+    '<p style="margin:0;font-size:13.5px;color:var(--texto)">¿Está seguro de quitar el estado de <b>DEVENGADO</b> de esta orden?</p>' +
+    '<p style="margin:8px 0 0;font-size:12px;color:var(--texto2)">Se eliminarán los datos de Nota de Pago y fecha asociados.</p>' +
+    '</div>' +
+    '<div class="modal-foot">' +
+    '<button class="btn btn-red" onclick="confirmarDesdevengar(' + ordenId + ')"><i class="bi bi-x-circle"></i> Sí, quitar devengado</button>' +
+    '<button class="btn btn-outline" onclick="cerrarModalDesdevengar(false, ' + ordenId + ')">Cancelar</button>' +
+    '</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function cerrarModalDesdevengar(acepto, ordenId) {
+  var m = document.getElementById('modal-desdevengar');
+  if (m) m.remove();
+  if (!acepto) {
+    var form = document.querySelector('form[data-dev-id="' + ordenId + '"]');
+    var cb = form ? form.querySelector('input[type="checkbox"]') : null;
+    if (cb) { cb.checked = true; delete cb.dataset.ignoring; }
+  }
+}
+
+function confirmarDesdevengar(ordenId) {
+  var m = document.getElementById('modal-desdevengar');
+  if (m) m.remove();
+  var form = document.querySelector('form[data-dev-id="' + ordenId + '"]');
+  if (!form) return;
+  var cb = form.querySelector('input[type="checkbox"]');
+  if (cb) { cb.checked = false; delete cb.dataset.ignoring; }
+  guardarScrollY();
+  form.submit();
+}
+
+// Bloqueo de borrado para ordenes/materiales bloqueados
 document.addEventListener('submit', function (e) {
   var f = e.target;
   if (f && f.tagName === 'FORM' && f.dataset.bloqueo) {

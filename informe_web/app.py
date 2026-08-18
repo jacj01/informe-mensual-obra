@@ -41,7 +41,7 @@ from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      total_gastos_mes, kpis,
                      ejecucion_por_mes, ejecucion_por_componente, fe06_rows,
                      fe06_resumen, fe06_sintesis, f05_datos, almacen_items, almacen_diario,
-                     saldo_insumo, almacen_valorizado,
+                     saldo_insumo, almacen_valorizado, oc_para_material,
                      meses_con_ejecucion, meses_visibles, ampliacion_presupuestal,
                      mes_inicio_manifiesto, clasificadores_proyecto,
                      calendario_mes, resumen_tareo, panel_cuadro1, panel_datos,
@@ -141,6 +141,21 @@ def migrar_schema():
             "WHERE clasificador_liquidacion IS NULL OR clasificador_liquidacion = ''"))
         conn.commit()
 
+        # Migracion: num_anios_anteriores y metas por año
+        if "num_anios_anteriores" not in cols:
+            conn.execute(text(
+                "ALTER TABLE proyecto ADD COLUMN num_anios_anteriores INTEGER DEFAULT 3"))
+        if "meta_ejec2023" not in cols:
+            conn.execute(text(
+                "ALTER TABLE proyecto ADD COLUMN meta_ejec2023 FLOAT DEFAULT 0"))
+        if "meta_ejec2024" not in cols:
+            conn.execute(text(
+                "ALTER TABLE proyecto ADD COLUMN meta_ejec2024 FLOAT DEFAULT 0"))
+        if "meta_ejec2025" not in cols:
+            conn.execute(text(
+                "ALTER TABLE proyecto ADD COLUMN meta_ejec2025 FLOAT DEFAULT 0"))
+        conn.commit()
+
         # Migración de datos: renombra componente anterior
         conn.execute(text(
             "UPDATE presupuesto SET componente = 'Gastos de Supervisión' "
@@ -157,6 +172,14 @@ def migrar_schema():
             conn.execute(text(
                 "ALTER TABLE gasto ADD COLUMN devengado BOOLEAN DEFAULT 0"))
             conn.execute(text("UPDATE gasto SET devengado = 1"))
+            conn.commit()
+        if "nota_pago" not in gcols:
+            conn.execute(text(
+                "ALTER TABLE gasto ADD COLUMN nota_pago VARCHAR(100) DEFAULT ''"))
+            conn.commit()
+        if "fecha_devengado" not in gcols:
+            conn.execute(text(
+                "ALTER TABLE gasto ADD COLUMN fecha_devengado DATE"))
             conn.commit()
 
         # Migracion: devengado por trabajador. El estado de devengado de la
@@ -281,6 +304,10 @@ def migrar_schema():
         if "pecosa_guia" not in acols:
             conn.execute(text(
                 "ALTER TABLE almacen_movimiento ADD COLUMN pecosa_guia VARCHAR(50) DEFAULT ''"))
+            conn.commit()
+        if "numero_siaf" not in acols:
+            conn.execute(text(
+                "ALTER TABLE almacen_movimiento ADD COLUMN numero_siaf VARCHAR(50) DEFAULT ''"))
             conn.commit()
 
         # Configuracion presupuestal: filas PERSONAL para Gastos Generales y
@@ -1201,6 +1228,61 @@ def restaurar_respaldo(nombre):
     return pre
 
 
+def _publicar_thread(root, ver, msj, estado):
+    """Hilo de fondo que ejecuta bump + commit + push + workflow_dispatch de una
+    nueva version, reportando el avance al archivo publicar.estado."""
+    import re
+    import subprocess
+
+    def prog(fase, pct, mensaje):
+        try:
+            with open(estado, "w", encoding="utf-8") as fh:
+                json.dump({"fase": fase, "porcentaje": pct, "mensaje": mensaje,
+                           "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, fh)
+        except Exception:
+            pass
+
+    try:
+        prog("publicando", 10, "Iniciando publicación de v%s..." % ver)
+        # 1) bump version.py
+        vpath = os.path.join(root, "informe_web", "version.py")
+        txt = open(vpath, encoding="utf-8").read()
+        txt2 = re.sub(r'__version__\s*=\s*"[^"]*"', '__version__  = "%s"' % ver, txt)
+        if txt2 == txt:
+            raise RuntimeError("no se encontró __version__ en version.py")
+        prog("publicando", 25, "Actualizando versión a v%s..." % ver)
+        open(vpath, "w", encoding="utf-8").write(txt2)
+        # 2) commit + push
+        msg = ("Release v%s" % ver) if not msj else \
+            ("Release v%s (%s)" % (ver, msj.replace("\n", " ")[:140]))
+        env = dict(os.environ)
+        prog("publicando", 40, "Preparando commit...")
+        subprocess.run(["git", "-C", root, "add", "-A"], env=env,
+                       check=True, capture_output=True, text=True,
+                       creationflags=0x08000000)
+        subprocess.run(["git", "-C", root, "commit", "-m", msg], env=env,
+                       check=True, capture_output=True, text=True,
+                       creationflags=0x08000000)
+        prog("publicando", 60, "Subiendo a GitHub (push)...")
+        push = subprocess.run(["git", "-C", root, "push", "origin", "master"],
+                              env=env, capture_output=True, text=True,
+                              creationflags=0x08000000)
+        if push.returncode != 0:
+            raise RuntimeError("git push falló: %s" %
+                               (push.stderr or push.stdout or "").strip()[:200])
+        # 3) disparar workflow_dispatch (la release se construye en GitHub Actions)
+        prog("publicando", 80, "Disparando build de release...")
+        run = subprocess.run(["gh", "workflow", "run", "Build & Release"],
+                             cwd=root, env=env, capture_output=True, text=True,
+                             creationflags=0x08000000)
+        if run.returncode != 0:
+            raise RuntimeError("workflow no disparado: %s" %
+                               (run.stderr or "").strip()[:200])
+        prog("listo", 100, "Nueva versión v%s publicada." % ver)
+    except Exception as e:
+        prog("error", 100, str(e))
+
+
 def registrar_rutas(app):
     """Registra todas las rutas del aplicativo."""
     @app.route("/robots.txt")
@@ -1307,17 +1389,19 @@ def registrar_rutas(app):
         if not os.path.exists(pf):
             return jsonify({"fase": "inactivo", "porcentaje": 0, "mensaje": ""})
         try:
-            import json as _json
-            with open(pf, encoding="utf-8") as fh:
-                data = _json.load(fh)
+            # actualizar.ps1 escribe con PowerShell 5.1 (BOM UTF-8): usar utf-8-sig
+            with open(pf, encoding="utf-8-sig") as fh:
+                data = json.load(fh)
             return jsonify(data)
         except Exception:
             return jsonify({"fase": "inactivo", "porcentaje": 0, "mensaje": ""})
 
     @app.route("/api/actualizar-publicar", methods=["POST"])
     def publicar_nueva_version():
-        """Publica una nueva release en GitHub: bump de version.py, commit, push y
-        dispara el workflow_dispatch del release. SOLO el Super Usuario."""
+        """Dispara la publicacion de una nueva release en GitHub: bump de
+        version.py, commit, push y workflow_dispatch del release.
+        Corre en un hilo de fondo que reporta avance a /api/actualizar-publicar/progreso.
+        SOLO el Super Usuario."""
         if not es_super_usuario():
             return jsonify({"error": "No autorizado: se requiere Super Usuario"}), 403
         import re
@@ -1326,45 +1410,43 @@ def registrar_rutas(app):
         ver = (payload.get("version") or "").strip()
         if not re.match(r"^\d+\.\d+\.\d+$", ver):
             return jsonify({"ok": False, "error": "version invalida; use formato X.Y.Z"}), 400
+        estado = os.path.join(root, "publicar.estado")
+        # Si ya hay una publicacion en curso (no antigua), no duplicar.
+        if os.path.exists(estado):
+            try:
+                with open(estado, encoding="utf-8-sig") as fh:
+                    prev = json.load(fh)
+                if prev.get("fase") == "publicando":
+                    try:
+                        ts = datetime.strptime(prev.get("ts", ""), "%Y-%m-%d %H:%M:%S")
+                        fresco = (datetime.now() - ts).total_seconds() < 600
+                    except Exception:
+                        fresco = True
+                    if fresco:
+                        return jsonify({"ok": False,
+                                        "error": "Ya hay una publicación en curso. Espere a que termine."}), 409
+            except Exception:
+                pass
+        msj = (payload.get("mensaje") or "").strip()
+        threading.Thread(target=_publicar_thread, args=(root, ver, msj, estado),
+                         daemon=True).start()
+        return jsonify({"ok": True, "msg": "Publicación iniciada; avance en la barra de progreso."})
+
+    @app.route("/api/actualizar-publicar/progreso")
+    def progreso_publicacion():
+        """Lee el archivo de progreso escrito por el hilo de publicacion.
+        SOLO el Super Usuario."""
+        if not es_super_usuario():
+            return jsonify({"error": "No autorizado"}), 403
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        pf = os.path.join(root, "publicar.estado")
+        if not os.path.exists(pf):
+            return jsonify({"fase": "inactivo", "porcentaje": 0, "mensaje": ""})
         try:
-            import subprocess
-            # 1) bump version.py
-            vpath = os.path.join(root, "informe_web", "version.py")
-            txt = open(vpath, encoding="utf-8").read()
-            txt2 = re.sub(r'__version__\s*=\s*"[^"]*"', '__version__  = "%s"' % ver, txt)
-            if txt2 == txt:
-                return jsonify({"ok": False, "error": "no se encontro __version__ en version.py"}), 500
-            open(vpath, "w", encoding="utf-8").write(txt2)
-            # 2) commit + push
-            msg = ("Release v%s" % ver)
-            msj = (payload.get("mensaje") or "").strip()
-            if msj:
-                msg = "Release v%s (%s)" % (ver, msj.replace("\n", " ")[:140])
-            env = dict(os.environ)
-            subprocess.run(["git", "-C", root, "add", "-A"], env=env,
-                           check=True, capture_output=True, text=True,
-                           creationflags=0x08000000)
-            subprocess.run(["git", "-C", root, "commit", "-m", msg], env=env,
-                           check=True, capture_output=True, text=True,
-                           creationflags=0x08000000)
-            push = subprocess.run(["git", "-C", root, "push", "origin", "master"],
-                                  env=env, capture_output=True, text=True,
-                                  creationflags=0x08000000)
-            # 3) disparar workflow_dispatch (ya no se dispara por push)
-            run = subprocess.run(["gh", "workflow", "run", "Build & Release"],
-                                 cwd=root, env=env, capture_output=True, text=True,
-                                 creationflags=0x08000000)
-            workflow_ok = run.returncode == 0
-            return jsonify({
-                "ok": True,
-                "tag": "v%s" % ver,
-                "mensaje": msg,
-                "push_ok": push.returncode == 0,
-                "workflow_run": workflow_ok,
-                "run_msg": (run.stderr or "").strip()[:200],
-            })
-        except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
+            with open(pf, encoding="utf-8-sig") as fh:
+                return jsonify(json.load(fh))
+        except Exception:
+            return jsonify({"fase": "inactivo", "porcentaje": 0, "mensaje": ""})
 
 
     @app.route("/sitemap.xml")
@@ -1466,11 +1548,12 @@ def registrar_rutas(app):
         return list(clasificadores_proyecto().items())
 
     def clasificadores_oc(p):
-        """Opciones para O/C y O/S: solo Bienes, Servicios y Expediente Tecnico."""
+        """Opciones para O/C y O/S: Bienes, Servicios, Expediente Tecnico y Liquidacion."""
         base = clasificadores_proyecto()
         codigos = [p.clasificador_bienes or "2.6.2.3.99.4",
                    p.clasificador_servicios or "2.6.2.3.99.5",
-                   p.clasificador_expediente or "2.6.8.1.3.1"]
+                   p.clasificador_expediente or "2.6.8.1.3.1",
+                   p.clasificador_liquidacion or "LIQUIDACION"]
         return [(c, base.get(c, c)) for c in codigos]
 
     def cls_nombre(p, code):
@@ -1530,7 +1613,8 @@ def registrar_rutas(app):
             if ep not in ("usuarios", "usuario_nuevo", "usuario_editar",
                           "usuario_eliminar", "respaldo", "suscripcion",
                           "suscripcion_renovar", "suscripcion_pausar",
-                          "actualizar", "api_actualizacion", "publicar_nueva_version"):
+                          "actualizar", "api_actualizacion", "publicar_nueva_version",
+                          "progreso_publicacion", "progreso_actualizacion"):
                 flash("La cuenta principal gestiona cuentas y licencia; "
                       "esta sección corresponde a los datos de un proyecto.",
                       "error")
@@ -1790,7 +1874,7 @@ def registrar_rutas(app):
         status = 400 if (es_modal and error) else 200
         return render_template("_usuario_form.html", u=u, es_edicion=True,
                                permisos_opciones=PERMISOS_SECCIONES, error=error,
-                               es_super=es_super,
+                               es_super=es_super, es_cuenta_propia=_es_cuenta_propia(u),
                                hay_datos=bool(es_super and u.rol == "Administrador"
                                               and _hay_datos_proyecto(uid))), status
 
@@ -1968,12 +2052,13 @@ def registrar_rutas(app):
             return redirect(url_for("usuarios"))
         p = get_proyecto()
         k = kpis()
+        num_anios = p.num_anios_anteriores if p.num_anios_anteriores is not None else 3
         por_mes = ejecucion_por_mes(p.anio)
         por_comp = ejecucion_por_componente(p.anio)
         recientes = (Gasto.query.order_by(Gasto.id.desc()).limit(8).all())
         return render_template(
             "dashboard.html", p=p, k=k, MESES=MESES, por_mes=por_mes,
-            por_comp=por_comp, recientes=recientes,
+            por_comp=por_comp, recientes=recientes, num_anios=num_anios,
             fe06_resumen=fe06_resumen(fe06_rows()))
 
     # ------------------------- CABECERA -------------------------------
@@ -2392,7 +2477,20 @@ def registrar_rutas(app):
         if g:
             p = get_proyecto()
             if es_super_actual() or (g.mes, g.anio) == (p.mes_actual, p.anio):
-                g.devengado = "devengado" in request.form
+                if "devengado" in request.form:
+                    g.devengado = True
+                    g.nota_pago = request.form.get("nota_pago", "").strip()
+                    fdep = request.form.get("fecha_devengado", "")
+                    if fdep:
+                        try:
+                            from datetime import datetime as _dt
+                            g.fecha_devengado = _dt.strptime(fdep, "%Y-%m-%d").date()
+                        except ValueError:
+                            pass
+                else:
+                    g.devengado = False
+                    g.nota_pago = ""
+                    g.fecha_devengado = None
                 db.session.commit()
             return redirect(url_for("ordenes", mes=g.mes, anio=g.anio))
         return redirect(url_for("ordenes"))
@@ -2595,6 +2693,7 @@ def registrar_rutas(app):
             except ValueError:
                 pass
             m.numero_doc = request.form.get("numero_doc", "").upper()
+            m.numero_siaf = request.form.get("numero_siaf", "").upper()
             m.pecosa_guia = request.form.get("pecosa_guia", "").upper()
             m.proveedor = request.form.get("proveedor", "").upper()
             m.responsable = request.form.get("responsable", "").upper()
@@ -2624,6 +2723,23 @@ def registrar_rutas(app):
                              "disponible ({:,.2f} {}) del material \"{}\".".format(
                                  cantidad_salida, m.und or "UND",
                                  stock, m.und or "UND", m.descripcion))
+            if (m.tipo == "E" and m.descripcion and m.numero_doc
+                    and error is None and alerta is None):
+                # Bloqueo servidor: no registrar dos veces el mismo material con la
+                # misma O/C (aplica en todo el proyecto, igual que el autocomplete).
+                dup = (db.session.query(AlmacenMovimiento)
+                       .filter(AlmacenMovimiento.tipo == "E",
+                               db.func.upper(AlmacenMovimiento.descripcion) == m.descripcion,
+                               AlmacenMovimiento.numero_doc == m.numero_doc))
+                if mov_id and m.id:
+                    dup = dup.filter(AlmacenMovimiento.id != m.id)
+                dup = dup.first()
+                if dup:
+                    error = ("No se permite registrar dos veces el mismo material con la misma O/C. "
+                             "El material \"{}\" ya fue ingresado con la O/C N° {} en {} {} de este "
+                             "proyecto; use otro número de orden o corrija el movimiento existente.").format(
+                                 m.descripcion, m.numero_doc,
+                                 MESES[dup.mes - 1], dup.anio)
             if error is None and alerta is None:
                 if not mov_id:
                     db.session.add(m)
@@ -2649,11 +2765,35 @@ def registrar_rutas(app):
             if det:
                 precios.setdefault(det.upper(), set()).add(float(pu or 0))
         precios = {d: sorted(s) for d, s in precios.items()}
+        # Pares (descripcion, numero_doc) ya ingresados en almacén (entradas E).
+        # Sirve para que el autocomplete de "Nuevo material" no repita el mismo
+        # material con la misma orden de compra (O/C).
+        usados = {}
+        for desc, num in (db.session.query(AlmacenMovimiento.descripcion,
+                                          AlmacenMovimiento.numero_doc)
+                          .filter(AlmacenMovimiento.tipo == "E")
+                          .filter(AlmacenMovimiento.descripcion.isnot(None),
+                                  AlmacenMovimiento.numero_doc.isnot(None),
+                                  AlmacenMovimiento.descripcion != "",
+                                  AlmacenMovimiento.numero_doc != "")
+                          .distinct().all()):
+            d = (desc or "").upper()
+            n = (num or "").strip().upper()
+            if d and n:
+                usados.setdefault(d, set()).add(n)
+        usados = {d: sorted(v) for d, v in usados.items()}
         tipo_fijo = None if mov_id else (request.args.get("tipo") or "E")
+        oc_list = []
+        saldo_material = 0.0
+        if tipo_fijo == "E" and m.descripcion:
+            oc_list = oc_para_material(m.descripcion)
+            saldo_material = saldo_insumo(m.descripcion)
         tmpl = "_almacen_form.html" if es_modal else "almacen_form.html"
         status = 400 if (es_modal and (error or alerta)) else 200
         return render_template(tmpl, m=m, p=p, MESES=MESES,
-                               insumos=insumos, precios=precios, tipo_fijo=tipo_fijo,
+                               insumos=insumos, precios=precios, usados=usados,
+                               tipo_fijo=tipo_fijo, oc_list=oc_list,
+                               saldo_material=saldo_material,
                                bloquear_descripcion=bloquear_descripcion,
                                error=error, alerta=alerta), status
 
@@ -2689,24 +2829,38 @@ def registrar_rutas(app):
         if g and g.detalles:
             responsable = (p.responsable_almacen or "").upper()
             creados = 0
+            saltados = 0
+            oc_num = str(g.num_doc or "").upper()
             for d in g.detalles:
-                if not (d.detalle or "").strip():
+                detalle = (d.detalle or "").strip().upper()
+                if not detalle:
+                    continue
+                # Evitar duplicados: si el mismo material ya fue ingresado con
+                # esta O/C no se vuelve a registrar en el almacén.
+                if (db.session.query(AlmacenMovimiento.id)
+                        .filter(AlmacenMovimiento.tipo == "E",
+                                db.func.upper(AlmacenMovimiento.descripcion) == detalle,
+                                AlmacenMovimiento.numero_doc == oc_num).first()):
+                    saltados += 1
                     continue
                 db.session.add(AlmacenMovimiento(
-                    descripcion=d.detalle.strip().upper(),
+                    descripcion=detalle,
                     und=(d.und or "UND").strip().upper(),
                     fecha=g.fecha or datetime.today().date(),
                     tipo="E",
                     cantidad=d.cantidad or 0,
                     precio_unitario=d.precio_unitario or 0,
-                    numero_doc=str(g.num_doc or "").upper(),
+                    numero_doc=oc_num,
                     proveedor=(g.proveedor or "").strip().upper(),
                     responsable=responsable,
                     actividad="",
                     mes=mes, anio=anio))
                 creados += 1
             db.session.commit()
-            flash(f"Se agregaron {creados} materiales de la O/C N° {g.num_doc} al almacén.", "success")
+            msg = f"Se agregaron {creados} materiales de la O/C N° {g.num_doc} al almacén."
+            if saltados:
+                msg += f" {saltados} material(es) ya estaban ingresados con esta O/C y se omitieron."
+            flash(msg, "success")
         else:
             flash("No se pudo agregar: O/C no encontrada o sin materiales.", "error")
         return redirect(url_for("almacen", mes=mes, anio=anio))
@@ -3294,13 +3448,29 @@ def registrar_rutas(app):
     def configuracion():
         p = get_proyecto()
         if request.method == "POST":
-            p.incluir_anios_anteriores = "incluir_anios_anteriores" in request.form
+            num = int(request.form.get("num_anios_anteriores", 3) or 3)
+            num = max(0, min(3, num))
+            p.num_anios_anteriores = num
+            p.incluir_anios_anteriores = num > 0
+            # Guardar metas por año
+            for yr, attr in [("2023", "meta_ejec2023"), ("2024", "meta_ejec2024"),
+                              ("2025", "meta_ejec2025")]:
+                try:
+                    setattr(p, attr, float(request.form.get(f"meta_{yr}", 0) or 0))
+                except ValueError:
+                    pass
             db.session.commit()
-            incluir = p.incluir_anios_anteriores
+            # Columnas de ejecución: mapeo inverso (ejec2025 = anio-1, ejec2024 = anio-2, etc.)
+            anio = p.anio
+            year_cols = {}
+            for i in range(1, 4):
+                yr = anio - i
+                col = f"ejec{yr}"
+                year_cols[col] = i  # 1=ejec2025, 2=ejec2024, 3=ejec2023
+            incluir_cols = {f"ejec{anio - i}" for i in range(1, num + 1)}
             for key, value in request.form.items():
                 if key.startswith("pim_") or key.startswith("et_") or \
-                   (incluir and (key.startswith("ejec2023_") or key.startswith("ejec2024_") or
-                                 key.startswith("ejec2025_"))):
+                   (key.startswith("ejec20") and key.split("_")[0] in incluir_cols):
                     try:
                         pref, cid = key.split("_", 1)
                         cfg = db.session.get(Presupuesto, int(cid))
@@ -3348,6 +3518,40 @@ def registrar_rutas(app):
                           f"del estado anterior: {os.path.basename(pre)}", "success")
                 except Exception as e:
                     flash(f"No se pudo restaurar el respaldo: {e}", "danger")
+                return redirect(url_for("respaldo"))
+            if accion == "cargar":
+                archivo = request.files.get("archivo_db")
+                if not archivo or not archivo.filename:
+                    flash("Debe seleccionar un archivo de base de datos.", "danger")
+                    return redirect(url_for("respaldo"))
+                fname = archivo.filename.strip()
+                if not fname.lower().endswith(".db"):
+                    flash("El archivo debe ser una base de datos SQLite (.db).", "danger")
+                    return redirect(url_for("respaldo"))
+                # Nombre seguro: evitar路径 traversal
+                safe_name = os.path.basename(fname)
+                os.makedirs(RESPALDO_DIR, exist_ok=True)
+                dest = os.path.join(RESPALDO_DIR, safe_name)
+                archivo.save(dest)
+                # Validar que sea SQLite
+                try:
+                    con = sqlite3.connect(dest)
+                    con.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()
+                    con.close()
+                except Exception:
+                    try:
+                        os.remove(dest)
+                    except Exception:
+                        pass
+                    flash("El archivo no es una base de datos SQLite válida.", "danger")
+                    return redirect(url_for("respaldo"))
+                # Restaurar desde el archivo cargado
+                try:
+                    pre = restaurar_respaldo(safe_name)
+                    flash(f"Base de datos restaurada desde {safe_name}. Se guardó una copia "
+                          f"del estado anterior: {os.path.basename(pre)}", "success")
+                except Exception as e:
+                    flash(f"No se pudo restaurar el respaldo cargado: {e}", "danger")
                 return redirect(url_for("respaldo"))
         db_path = ruta_db()
         stats = None

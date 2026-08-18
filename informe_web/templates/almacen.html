@@ -9,7 +9,7 @@
 <div class="card">
   <div class="card-head between">
     <form method="get" class="filters">
-      <select name="mes" onchange="this.form.submit()">
+      <select name="mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}

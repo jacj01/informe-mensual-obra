@@ -9,7 +9,7 @@
 <div class="card">
   <div class="card-head between">
     <form method="get" class="filters">
-      <select name="mes" onchange="this.form.submit()">
+      <select name="mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
@@ -17,7 +17,7 @@
       <input type="number" name="anio" value="{{ anio }}" readonly title="Año configurado en la cabecera del proyecto">
     </form>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
-      <a class="btn btn-outline" href="#" onclick="return abrirModal('{{ url_for('formatos_actividades', mes=mes, anio=anio) }}')">
+      <a class="btn btn-outline" href="javascript:void(0)" onclick="return abrirModal('{{ url_for('formatos_actividades', mes=mes, anio=anio) }}')">
         <i class="bi bi-list-check"></i> Ingresar Actividades</a>
       <a class="btn btn-primary" href="{{ url_for('imprimir_panel', mes=mes, anio=anio) }}" target="_blank">
         <i class="bi bi-clipboard-data"></i> Resumen Financiero</a>
@@ -35,10 +35,6 @@
     <div class="card-head between"><h3>EJECUCIÓN PRESUPUESTAL MENSUAL - {{ MESES[mes-1] }} {{ anio }}</h3>
       <a class="btn btn-primary" href="{{ url_for('imprimir_fe05', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
     </div>
-    {% set pers = p.clasificador_personal or '2.6.2.3.99.3' %}
-    {% set bien = p.clasificador_bienes or '2.6.2.3.99.4' %}
-    {% set serv = p.clasificador_servicios or '2.6.2.3.99.5' %}
-    {% set clabel = {pers: ' (PERSONAL)', bien: ' (BIENES)', serv: ' (SERVICIOS)'} %}
     {% for sec in secciones %}
     <div class="grupo">
       <div class="grupo-head"><div><span class="grupo-titulo">TOTAL COSTO DE CONSTRUCCIÓN POR ADM. DIRECTA - {{ sec.label }}</span></div></div>
@@ -49,7 +45,7 @@
             <th>N°</th><th>SIAF</th><th>Fecha</th><th>Tipo</th><th>N°</th>
             <th>Proveedor</th><th>Detalle</th><th>Und</th><th class="num">Cant</th>
             <th class="num">P.U</th><th class="num">Importe</th>
-            {% for c in clasif_cols %}<th class="num">{{ c }}{{ clabel.get(c, '') }}</th>{% endfor %}
+            {% for c in clasif_cols %}<th class="num">{{ c }}</th>{% endfor %}
             <th class="num">Directos</th><th class="num">Grales</th>
             <th class="num">Superv.</th><th class="num">Total</th>
           </tr>

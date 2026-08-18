@@ -43,23 +43,27 @@ function Version-Tag([string]$tag) {
 
 function gh-ok { $null = Get-Command gh -ErrorAction SilentlyContinue; return $?}
 
+try {
+
 # 7) Detectar ultima release publicada en GitHub (usa gh: repo privado requiere auth)
 $verLocal = Version-Local
 Write-Host "Local: v$verLocal"
 
 if (-not (gh-ok)) {
+    Escribir-Progreso "error" 100 "gh (GitHub CLI) no esta disponible. Instala gh e inicia sesion (gh auth login)."
     Write-Warning "gh (GitHub CLI) no esta disponible. Instala gh e inicia sesion (gh auth login)."
     exit 1
 }
 
 # tag de la release mas reciente
 $tag = (gh release list -R $OwnerRepo --limit 1 --json tagName --jq ".[0].tagName").Trim()
-if (-not $tag) { Write-Host "No hay releases disponibles."; exit 0 }
+if (-not $tag) { Escribir-Progreso "listo" 100 "No hay releases disponibles."; Write-Host "No hay releases disponibles."; exit 0 }
 
 $verRem = Version-Tag $tag
 Write-Host "GitHub: $tag (v$verRem)"
 
 if ([version]$verLocal -ge [version]$verRem) {
+    Escribir-Progreso "listo" 100 "Ya esta actualizado (v$verLocal)."
     "Ya esta actualizado (v$verLocal)."
     exit 0
 }
@@ -75,19 +79,20 @@ Escribir-Progreso "descargando" 5 "Descargando $tag de GitHub..."
 # 8) Descargar paquete (gh usa tu token del keyring: funciona en repo privado)
 New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 Write-Host "Descargando $tag ..."
-Escribir-Progreso "descargando" 20 "Descargando $tag..."
+Escribir-Progreso "descargando" 10 "Descargando $tag..."
 gh release download "$tag" -R $OwnerRepo --pattern "*.zip" --dir $tmpDir
+Escribir-Progreso "descargando" 25 "Descargado. Descomprimiendo paquete..."
 
 $zipPath = (Get-ChildItem $tmpDir -Filter "*.zip" | Select-Object -First 1).FullName
 if (-not $zipPath) { Write-Error "No se encontro el asset zip descargado"; exit 2 }
 
 # Descomprimir a temp (no toca la instalacion viva)
 Expand-Archive -LiteralPath $zipPath -DestinationPath $tmpDir -Force
+Escribir-Progreso "descargando" 30 "Paquete listo. Preparando instalación..."
 
 # Preservar la base de datos / respaldos / uploads / logs del usuario (no viajan en el zip)
 $preservation = @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/static/uploads",
                "informe_web\servidor.log", "informe_web\servidor.pid")
-
 # 8.1) Detener el servidor ANTES de mover informe_web; si no, los .py/.pyc abiertos
 #      impiden el Move-Item ("proceso en uso"). El updater corre detached, sobrevive.
 Escribir-Progreso "instalando" 35 "Deteniendo servidor..."
@@ -123,7 +128,7 @@ Escribir-Progreso "instalando" 70 "Instalando nueva version..."
 Copy-Item -Recurse -Force (Join-Path $tmpDir "informe_web") -Destination (Join-Path $Raiz "informe_web") -ErrorAction Stop
 
 # Restaurar los datos preservados (si existian en el backup, copiarlos de vuelta)
-foreach ($p in $preservar) {
+foreach ($p in $preservation) {
     $src = Join-Path $bakDir $p
     if (Test-Path $src) {
         $dst = Join-Path $Raiz $p
@@ -166,4 +171,25 @@ if ($ok) {
         -WorkingDirectory "$Raiz/informe_web"
     Write-Host "Servidor antiguo restaurado y reiniciado."
     exit 2
+}
+
+} catch {
+    # Cualquier error inesperado: reportar y, si la instalacion quedo incompleta,
+    # restaurar la version anterior desde el respaldo.
+    $errMsg = $_.Exception.Message
+    Write-Warning "Error durante la actualizacion: $errMsg"
+    $bakOld = Join-Path $bakDir "informe_web"
+    $liveDir = Join-Path $Raiz "informe_web"
+    if ((Test-Path (Join-Path $bakOld "app.py")) -and -not (Test-Path (Join-Path $liveDir "app.py"))) {
+        Write-Warning "Instalacion incompleta: restaurando respaldo anterior..."
+        Remove-Item -Recurse -Force $liveDir -ErrorAction SilentlyContinue
+        Move-Item -LiteralPath $bakOld -Destination $liveDir -ErrorAction SilentlyContinue
+        Start-Process -FilePath "C:\Python314\pythonw.exe" `
+            -ArgumentList "servidor_silencioso.py" `
+            -WorkingDirectory "$Raiz/informe_web" -ErrorAction SilentlyContinue
+        Escribir-Progreso "rollback" 100 "Se restauro la version anterior tras un error."
+    } else {
+        Escribir-Progreso "error" 100 ("Error: " + $errMsg)
+    }
+    exit 1
 }

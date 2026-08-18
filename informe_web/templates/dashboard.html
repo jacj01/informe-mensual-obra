@@ -42,22 +42,20 @@
 
 <div class="kpi-grid">
   <div class="card kpi">
+    <div class="kpi-icon teal"><i class="bi bi-file-earmark-text"></i></div>
+    <div>
+      <div class="kpi-label">Expediente Técnico</div>
+      <div class="kpi-value">S/ {{ "{:,.2f}".format(k.presupuesto_total) }}</div>
+      <div class="kpi-sub">Presupuesto total según ET</div>
+    </div>
+  </div>
+  <div class="card kpi">
     <div class="kpi-icon blue"><i class="bi bi-cash-stack"></i></div>
     <div>
       <div class="kpi-label">PIM {{ p.anio }}</div>
       <div class="kpi-value">S/ {{ "{:,.2f}".format(k.pim) }}</div>
     </div>
   </div>
-  {% if p.ampliacion_presupuestal %}
-  <div class="card kpi">
-    <div class="kpi-icon orange"><i class="bi bi-plus-circle"></i></div>
-    <div>
-      <div class="kpi-label">Ampliación presupuestal</div>
-      <div class="kpi-value">S/ {{ "{:,.2f}".format(p.monto_ampliacion) }}</div>
-      <div class="kpi-sub">Adicional de obra (incluido en el PIM)</div>
-    </div>
-  </div>
-  {% endif %}
   <div class="card kpi">
     <div class="kpi-icon green"><i class="bi bi-graph-up"></i></div>
     <div>
@@ -90,19 +88,22 @@
   <div class="card kpi">
     <div class="kpi-icon teal"><i class="bi bi-pie-chart"></i></div>
     <div>
-      <div class="kpi-label">Acumulado 2023-2026</div>
+      <div class="kpi-label">Acumulado {{ p.anio - num_anios }}-{{ p.anio }}</div>
       <div class="kpi-value">S/ {{ "{:,.2f}".format(k.acumulado_total) }}</div>
       <div class="kpi-sub">de S/ {{ "{:,.2f}".format(k.presupuesto_total) }}</div>
     </div>
   </div>
   {% endif %}
+  {% if p.ampliacion_presupuestal %}
   <div class="card kpi">
-    <div class="kpi-icon red"><i class="bi bi-bank"></i></div>
+    <div class="kpi-icon orange"><i class="bi bi-plus-circle"></i></div>
     <div>
-      <div class="kpi-label">Saldo del proyecto</div>
-      <div class="kpi-value">S/ {{ "{:,.2f}".format(k.saldo_proyecto) }}</div>
+      <div class="kpi-label">Ampliación presupuestal</div>
+      <div class="kpi-value">S/ {{ "{:,.2f}".format(p.monto_ampliacion) }}</div>
+      <div class="kpi-sub">Adicional de obra (incluido en el PIM)</div>
     </div>
   </div>
+  {% endif %}
 </div>
 
 {% if semaforo != 'green' %}

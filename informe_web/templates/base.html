@@ -55,6 +55,10 @@
     // paginas se muestra el estado cacheado sin volver a llamar a la API.
     var _CLAVE_CACHE = 'informe_upd_cache';
     var _pollTimer = null;
+    var _pubTimer = null;
+    // flags de flujo: solo recargar si ya hubo avance real de progreso
+    window._vistoProgreso = false;
+    window._pubVersion = '';
     window._csrfToken = function () {
       var m = document.querySelector('meta[name="csrf-token"]');
       return m ? m.getAttribute('content') : '';
@@ -75,8 +79,9 @@
       var txt = document.getElementById('updMsg');
       if (!barra || !fill || !txt) return;
       barra.style.display = 'block';
-      fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
-      txt.textContent = msg || '';
+      var p = Math.max(0, Math.min(100, Math.round(pct || 0)));
+      fill.style.width = p + '%';
+      txt.textContent = ((msg || '') + ' ' + p + '%').trim();
     };
     window._ocultarBarra = function () {
       var barra = document.getElementById('updProg');
@@ -133,23 +138,44 @@
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d.fase === 'inactivo') {
-            // Server reinicio y limpio el estado -> verificar si ya responde
-            clearTimeout(_pollTimer);
-            window._esperarServerYRecargar();
+            // El updater aun no escribe su estado, o ya termino y el server
+            // (reiniciado) borro el archivo. Solo recargar si YA vimos avance.
+            if (window._vistoProgreso) {
+              clearTimeout(_pollTimer);
+              window._esperarServerYRecargar();
+            } else {
+              window._pollIntentos = (window._pollIntentos || 0) + 1;
+              if (window._pollIntentos > 15) {
+                // El script no escribio nada en ~20s: fallo al lanzar el updater
+                clearTimeout(_pollTimer);
+                window._ocultarBarra();
+                mostrarToast('error', 'No se pudo iniciar la actualizacion. Intente de nuevo.');
+                var btn = document.getElementById('btnUpd');
+                if (btn) { btn.disabled = false; btn.style.display = 'inline-flex'; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
+                return;
+              }
+              clearTimeout(_pollTimer);
+              _pollTimer = setTimeout(window._pollProgreso, 1500);
+            }
             return;
           }
+          window._vistoProgreso = true;
+          window._pollIntentos = 0;
           window._mostrarBarra(d.porcentaje || 0, d.mensaje || d.fase);
           if (d.fase === 'listo') {
             clearTimeout(_pollTimer);
             window._esperarServerYRecargar();
-          } else if (d.fase === 'rollback' || (d.error && d.porcentaje === 100)) {
+          } else if (d.fase === 'rollback' || d.fase === 'error' || (d.error && d.porcentaje === 100)) {
             clearTimeout(_pollTimer);
             var txt = document.getElementById('upTxt');
             if (txt) { txt.textContent = 'Error en la actualizacion (rollback aplicado)'; txt.classList.remove('upd-disponible'); }
             mostrarToast('error', 'La actualizacion fallo; se restauro la version anterior.');
             window._ocultarBarra();
+            var btn = document.getElementById('btnUpd');
+            if (btn) { btn.disabled = false; btn.style.display = 'inline-flex'; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
           } else {
-            _pollTimer = setTimeout(window._pollProgreso, 1500);
+            clearTimeout(_pollTimer);
+            _pollTimer = setTimeout(window._pollProgreso, 1200);
           }
         })
         .catch(function () {
@@ -189,6 +215,8 @@
     window.actualizarSistema = function () {
       var btn = document.getElementById('btnUpd');
       var txt = document.getElementById('upTxt');
+      window._vistoProgreso = false;
+      window._pollIntentos = 0;
       if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-arrow-down-loading"></i> Instalando...'; }
       if (txt) { txt.textContent = 'Instalando...'; txt.classList.remove('upd-disponible'); }
       window._mostrarBarra(0, 'Iniciando actualizacion...');
@@ -219,7 +247,7 @@
           window._ocultarBarra();
         });
     };
-    // Publicar nueva version (SOLO Super Usuario): bump + commit + push + workflow_dispatch
+    // Publicar nueva version (SOLO Administrador / Cuenta Principal): bump + commit + push + workflow_dispatch
     // 1) Abrir modal con inputs (version + mensaje)
     // 2) Al confirmar -> confirmPopup (SI/NO) -> si acepta, fetch POST /api/actualizar-publicar
     window.abrirModalPublicar = function () {
@@ -248,13 +276,14 @@
       window.cerrarModalPublicar();
       confirmarPopup({
         titulo: 'Publicar nueva version ' + ver,
-        mensaje: 'Se creara el release v' + ver + ' en GitHub, se hara commit + push y se disparara el workflow de build. El servidor se reiniciara al terminar. <strong>Estas de acuerdo con la publicacion?</strong>',
+        mensaje: 'Se creara el release v' + ver + ' en GitHub: commit + push y disparo del workflow de build. Otras instalaciones podran instalar esta version. <strong>Estas de acuerdo con la publicacion?</strong>',
         colorOk: 'btn-upd',
         icono: 'info'
       }).then(function (acepto) {
         if (!acepto) return;
         var btn = document.getElementById('btnPub');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-upload"></i> Publicando...'; }
+        window._pubVersion = ver;
         fetch('/api/actualizar-publicar', {
           method: 'POST',
           credentials: 'same-origin',
@@ -265,19 +294,65 @@
         })
           .then(function (r) { return r.json().catch(function () { return {}; }); })
           .then(function (d) {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
             if (d.ok) {
-              mostrarToast('success', 'Publicado ' + (d.tag || '') + '. La release se creara en GitHub en breve. El servidor se reiniciara.');
-              setTimeout(function () { location.reload(); }, 3500);
+              window._mostrarBarra(5, 'Iniciando publicación de v' + ver + '...');
+              clearTimeout(_pubTimer);
+              _pubTimer = setTimeout(window._pollPublicar, 1000);
             } else {
+              if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
               mostrarToast('error', d.error || 'No se pudo publicar');
+              window._ocultarBarra();
             }
           })
           .catch(function (e) {
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
             mostrarToast('error', 'Error publicando: ' + e.message);
+            window._ocultarBarra();
           });
       });
+    };
+    // Polling del progreso de publicacion (release GitHub)
+    window._pollPublicar = function () {
+      fetch('/api/actualizar-publicar/progreso', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.fase === 'inactivo') {
+            clearTimeout(_pubTimer);
+            _pubTimer = setTimeout(window._pollPublicar, 1200);
+            return;
+          }
+          if (d.fase === 'listo') {
+            clearTimeout(_pubTimer);
+            window._mostrarBarra(100, d.mensaje || 'Nueva versión publicada.');
+            var btn = document.getElementById('btnPub');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+            mostrarToast('success', d.mensaje || 'Nueva versión publicada.');
+            sessionStorage.removeItem(_CLAVE_CACHE);
+            var txt = document.getElementById('upTxt');
+            if (txt) {
+              txt.textContent = 'Versión publicada (v' + window._pubVersion + ')';
+              txt.classList.remove('upd-disponible');
+            }
+            var btnUpd = document.getElementById('btnUpd');
+            if (btnUpd) btnUpd.style.display = 'none';
+            window._vistoProgreso = false;
+            setTimeout(window._ocultarBarra, 6000);
+          } else if (d.fase === 'error') {
+            clearTimeout(_pubTimer);
+            var btn2 = document.getElementById('btnPub');
+            if (btn2) { btn2.disabled = false; btn2.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+            mostrarToast('error', 'Error publicando: ' + (d.mensaje || ''));
+            window._ocultarBarra();
+          } else {
+            window._mostrarBarra(d.porcentaje || 0, d.mensaje || d.fase);
+            clearTimeout(_pubTimer);
+            _pubTimer = setTimeout(window._pollPublicar, 1200);
+          }
+        })
+        .catch(function () {
+          clearTimeout(_pubTimer);
+          _pubTimer = setTimeout(window._pollPublicar, 2000);
+        });
     };
     // Chequear SOLO al iniciar (dashboard); en otras paginas solo renderiza el cache
     document.addEventListener('DOMContentLoaded', function () { window.buscarActualizacion(); });
@@ -469,6 +544,40 @@
   <div id="toast-container" aria-live="polite"></div>
 
   <script>
+    (function () {
+      try {
+        var saved = sessionStorage.getItem('_scrollY');
+        if (saved !== null) {
+          sessionStorage.removeItem('_scrollY');
+          window.scrollTo(0, parseInt(saved, 10));
+        }
+      } catch (e) {}
+    })();
+
+    window.guardarScrollY = function () {
+      try { sessionStorage.setItem('_scrollY', String(window.scrollY)); } catch (e) {}
+    };
+
+    window.recargarManteniendoScroll = function () {
+      window.guardarScrollY();
+      window.location.reload();
+    };
+
+    window.redirigirManteniendoScroll = function (url) {
+      window.guardarScrollY();
+      window.location.href = url;
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('form[method="post"]').forEach(function (f) {
+        if (f.dataset.scrollBound) return;
+        f.dataset.scrollBound = '1';
+        f.addEventListener('submit', function () { window.guardarScrollY(); });
+      });
+    });
+  </script>
+
+  <script>
     var csrfValor = (function () {
       var m = document.querySelector('meta[name="csrf-token"]');
       return m ? m.getAttribute('content') : '';
@@ -514,12 +623,12 @@
             body: new FormData(form)
           }).then(function (r) {
             if (r.redirected) {
-              window.location.href = r.url;
+              window.redirigirManteniendoScroll(r.url);
               return;
             }
             return r.text().then(function (text) {
               if (r.ok) {
-                window.location.reload();
+                window.recargarManteniendoScroll();
                 return;
               }
               var body = document.getElementById('modalBody');
@@ -550,7 +659,7 @@
           document.body.classList.add('modal-open');
         })
         .catch(function () {
-          window.location.href = url;
+          window.redirigirManteniendoScroll(url);
         });
       return false;
     }
@@ -844,7 +953,7 @@
           <label for="pubMsj">Mensaje opcional <small>(para el tag de release)</small></label>
           <input id="pubMsj" type="text" placeholder="Ej: correccion de reportes" maxlength="200">
         </div>
-        <p class="modal-help">Al confirmar se har&aacute; <strong>git commit + push</strong> y se disparar&aacute; el workflow de GitHub que construye y publica el release. El servidor se reiniciar&aacute; al terminar.</p>
+        <p class="modal-help">Al confirmar se har&aacute; <strong>git commit + push</strong> y se disparar&aacute; el workflow de GitHub que construye y publica el release. Otras instalaciones podr&aacute;n instalar esta versi&oacute;n; el avance se mostrar&aacute; en la barra de progreso.</p>
       </div>
       <div class="modal-foot">
         <button type="button" class="btn btn-ghost" onclick="window.cerrarModalPublicar();">Cancelar</button>

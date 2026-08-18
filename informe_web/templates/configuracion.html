@@ -6,25 +6,30 @@
 {% block subheading %}Expediente técnico, ejecución histórica y PIM por componente{% endblock %}
 
 {% block content %}
+{% set anio_actual = p.anio %}
+{% set num = p.num_anios_anteriores if p.num_anios_anteriores is not none else 3 %}
+{% set anios_list = [] %}
+{% for i in range(num, 0, -1) %}
+  {% if anios_list.append(anio_actual - i) %}{% endif %}
+{% endfor %}
+
 <form method="post">
   <div class="card">
     <div class="card-head"><h3><i class="bi bi-clock-history"></i> Años de ejecución anteriores</h3></div>
     <div class="form-grid">
       <div class="field full">
-        <label class="check-line">
-          <input type="checkbox" name="incluir_anios_anteriores" id="incluir_anios"
-                 {{ 'checked' if p.incluir_anios_anteriores }}>
-          Incluir la ejecución de los años anteriores (2023, 2024, 2025) antes del año actual
-        </label>
+        <label for="num_anios">Cantidad de años anteriores a incluir (0 = ninguno)</label>
+        <input type="number" name="num_anios_anteriores" id="num_anios" min="0" max="3"
+               value="{{ num }}" style="width:80px">
       </div>
     </div>
     <div class="note">
       <i class="bi bi-info-circle"></i>
-      Al desactivar esta opción, las columnas de los años anteriores (2023-2025) no se editarán
-      para los nuevos ingresos. El Exp. Técnico (S/) y el PIM del año actual siempre se mantienen
-      fijos y visibles.
+      Ingrese la cantidad de años anteriores a mostrar (máximo 3). Con 0 se ocultan todos los
+      años anteriores. El Exp. Técnico (S/) y el PIM del año actual siempre se mantienen visibles.
     </div>
   </div>
+
   <div class="card">
     <div class="card-head"><h3><i class="bi bi-table"></i> Presupuesto por componente y clasificador</h3></div>
     <div class="table-scroll">
@@ -33,10 +38,10 @@
           <tr>
             <th>Componente</th><th>Clasificador</th><th>Detalle</th>
             <th class="num">Exp. Técnico (S/)</th>
-            <th class="num {{ 'd-none' if not p.incluir_anios_anteriores }}">Ejec. 2023</th>
-            <th class="num {{ 'd-none' if not p.incluir_anios_anteriores }}">Ejec. 2024</th>
-            <th class="num {{ 'd-none' if not p.incluir_anios_anteriores }}">Ejec. 2025</th>
-            <th class="num">PIM {{ p.anio }}</th>
+            {% for yr in anios_list %}
+            <th class="num">Ejec. {{ yr }}<br><small>Meta: <input class="cell-meta" type="text" inputmode="decimal" name="meta_{{ yr }}" value="{{ p['meta_ejec' ~ yr] if p['meta_ejec' ~ yr] is not none else 0 }}" autocomplete="off" style="width:90px;font-size:0.8em;padding:3px 5px"></small></th>
+            {% endfor %}
+            <th class="num">PIM {{ anio_actual }}</th>
           </tr>
         </thead>
         <tbody>
@@ -46,9 +51,9 @@
             <td>{{ c.clasificador }}</td>
             <td>{{ c.detalle }}</td>
             <td class="num"><input class="cell total-et monto" type="text" inputmode="decimal" name="et_{{ c.id }}" value="{{ c.et }}" autocomplete="off"></td>
-            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><input class="cell total-2023 monto" type="text" inputmode="decimal" name="ejec2023_{{ c.id }}" value="{{ c.ejec2023 }}" autocomplete="off"></td>
-            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><input class="cell total-2024 monto" type="text" inputmode="decimal" name="ejec2024_{{ c.id }}" value="{{ c.ejec2024 }}" autocomplete="off"></td>
-            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><input class="cell total-2025 monto" type="text" inputmode="decimal" name="ejec2025_{{ c.id }}" value="{{ c.ejec2025 }}" autocomplete="off"></td>
+            {% for yr in anios_list %}
+            <td class="num"><input class="cell total-anio monto" type="text" inputmode="decimal" name="ejec{{ yr }}_{{ c.id }}" value="{{ c['ejec' ~ yr] if c['ejec' ~ yr] is not none else 0 }}" autocomplete="off" data-prefix="ejec{{ yr }}"></td>
+            {% endfor %}
             <td class="num"><input class="cell total-pim monto" type="text" inputmode="decimal" name="pim_{{ c.id }}" value="{{ c.pim2026 }}" autocomplete="off"></td>
           </tr>
           {% endfor %}
@@ -57,9 +62,9 @@
           <tr class="totales">
             <td colspan="3"><strong>TOTAL</strong></td>
             <td class="num"><span id="tot-et" class="total-val">0.00</span></td>
-            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><span id="tot-2023" class="total-val">0.00</span></td>
-            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><span id="tot-2024" class="total-val">0.00</span></td>
-            <td class="num {{ 'd-none' if not p.incluir_anios_anteriores }}"><span id="tot-2025" class="total-val">0.00</span></td>
+            {% for yr in anios_list %}
+            <td class="num"><span id="tot-anio-{{ yr }}" class="total-val">0.00</span></td>
+            {% endfor %}
             <td class="num"><span id="tot-pim" class="total-val">0.00</span></td>
           </tr>
         </tfoot>
@@ -67,9 +72,10 @@
     </div>
     <div class="note">
       <i class="bi bi-info-circle"></i>
-      La columna "Ejecución {{ p.anio }}" y los formatos FE-05/FE-06 se calculan automáticamente
+      La columna "Ejecución {{ anio_actual }}" y los formatos FE-05/FE-06 se calculan automáticamente
       desde los gastos registrados en el Manifiesto de Gasto. Aquí solo se edita el marco
-      aprobado (expediente técnico), la ejecución de años anteriores (2023-2025) y el PIM.
+      aprobado (expediente técnico), la ejecución de años anteriores y el PIM.
+      Las "Meta" son los montos de referencia de cada año para el Resumen Financiero.
     </div>
   </div>
   <div class="form-actions">
@@ -82,14 +88,25 @@
 {% block scripts %}
 <script>
   function recalcularTotales() {
-    var prefijos = { 'et': 'tot-et', '2023': 'tot-2023', '2024': 'tot-2024',
-                     '2025': 'tot-2025', 'pim': 'tot-pim' };
+    var prefijos = { 'et': 'tot-et', 'pim': 'tot-pim' };
     Object.keys(prefijos).forEach(function (p) {
       var total = 0;
-      document.querySelectorAll('input[name^="' + p + '_"]').forEach(function (inp) {
+      document.querySelectorAll('input[name^="' + p + '_"]:not(.cell-meta)').forEach(function (inp) {
         total += parseFloat(String(inp.value).replace(/,/g, '')) || 0;
       });
-      document.getElementById(prefijos[p]).textContent = total.toLocaleString('es-PE',
+      var el = document.getElementById(prefijos[p]);
+      if (el) el.textContent = total.toLocaleString('es-PE',
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    });
+    document.querySelectorAll('input[data-prefix]').forEach(function (inp) {
+      var prefix = inp.getAttribute('data-prefix');
+      if (!prefix) return;
+      var total = 0;
+      document.querySelectorAll('input[data-prefix="' + prefix + '"]').forEach(function (el) {
+        total += parseFloat(String(el.value).replace(/,/g, '')) || 0;
+      });
+      var el = document.getElementById('tot-anio-' + prefix.replace('ejec', ''));
+      if (el) el.textContent = total.toLocaleString('es-PE',
         { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     });
   }

@@ -44,7 +44,7 @@
   .meta-line .lbl { font-weight: 700; color: var(--azul-osc); }
   .meta-grid { margin: 3px 2px; }
 
-  .firmas { margin-top: 20px; padding: 0 25%; text-align: center; }
+  .firmas { margin-top: 70px; padding: 0 25%; text-align: center; }
   .firma .linea { width: 85%; }
 
   .charts-row { display: flex; gap: 6px; margin: 4px 0 6px; }
@@ -65,7 +65,7 @@
     html, body { background: #fff !important; }
     .hoja { width: 100% !important; min-height: auto !important; margin: 0 !important; box-shadow: none !important; padding: 0 !important; }
     .toolbar { display: none !important; }
-    .firmas { break-inside: avoid; margin-top: 20px; }
+    .firmas { break-inside: avoid; margin-top: 70px; }
     .pv, .sec-txt, .meta-grid, .charts-row { break-inside: avoid; page-break-inside: avoid; }
     .sec-band, .sec-band.b2, .sec-band.b3 { break-after: avoid; page-break-after: avoid; }
     .tabla { break-inside: avoid; page-break-inside: avoid; margin-top: 2px; }
@@ -410,7 +410,7 @@
     <div class="meta-line"><span class="lbl">Fuente de financiamiento:</span> {{ d.p.fuente or '' }}.</div>
     <div class="meta-line"><span class="lbl">Rubro:</span> {{ d.p.rubro or '' }}.</div>
     {% if d.incluir_anios %}
-      {% for y in range(2023, d.anio + 1) %}
+      {% for y in range(d.anio - d.num_anios, d.anio + 1) %}
       <div class="meta-line"><span class="lbl">Mes y a&ntilde;o:</span> a diciembre del {{ y }}.</div>
       {% endfor %}
     {% else %}

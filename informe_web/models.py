@@ -68,6 +68,10 @@ class Proyecto(db.Model):
     anio = db.Column(db.Integer, default=2026)
     mes_actual = db.Column(db.Integer, default=6)
     incluir_anios_anteriores = db.Column(db.Boolean, default=True)
+    num_anios_anteriores = db.Column(db.Integer, default=3)
+    meta_ejec2023 = db.Column(db.Float, default=0)
+    meta_ejec2024 = db.Column(db.Float, default=0)
+    meta_ejec2025 = db.Column(db.Float, default=0)
     fecha_inicio = db.Column(db.Date)
     fecha_fin = db.Column(db.Date)
     dias_ejecucion = db.Column(db.Integer, default=0)
@@ -119,6 +123,8 @@ class Gasto(db.Model):
     mes = db.Column(db.Integer, default=6)
     anio = db.Column(db.Integer, default=2026)
     devengado = db.Column(db.Boolean, default=False)
+    nota_pago = db.Column(db.String(100), default="")
+    fecha_devengado = db.Column(db.Date)
 
     detalles = db.relationship(
         "GastoDetalle", backref="gasto", cascade="all, delete-orphan",
@@ -157,6 +163,7 @@ class AlmacenMovimiento(db.Model):
     tipo = db.Column(db.String(1), default="E")  # E = entrada, S = salida
     cantidad = db.Column(db.Float, default=1)
     numero_doc = db.Column(db.String(50), default="")
+    numero_siaf = db.Column(db.String(50), default="")
     pecosa_guia = db.Column(db.String(50), default="")
     proveedor = db.Column(db.String(300), default="")
     responsable = db.Column(db.String(300), default="")

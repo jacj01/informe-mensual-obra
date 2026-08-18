@@ -11,7 +11,7 @@
   <div class="card">
     <div class="card-head between">
       <h3><i class="bi bi-box-seam"></i> {{ 'Editar movimiento' if m.id else 'Nuevo movimiento' }}</h3>
-      <button type="button" class="btn btn-green btn-sm" onclick="return abrirModal('{{ url_for('almacen_oc', mes=m.mes, anio=m.anio) }}')" title="Buscar una O/C y agregar todos sus materiales al almacén">
+      <button type="button" class="btn btn-green btn-sm" id="btn-oc" onclick="return abrirModal('{{ url_for('almacen_oc', mes=m.mes, anio=m.anio) }}')" title="Buscar una O/C y agregar todos sus materiales al almacén">
         <i class="bi bi-bag-check"></i> Agregar por O/C
       </button>
     </div>
@@ -67,7 +67,12 @@
       </div>
       <div class="field campo-entrada">
         <label>N° OC</label>
-        <input type="text" name="numero_doc" value="{{ m.numero_doc }}" placeholder="Ej.: 44">
+        <input type="text" name="numero_doc" id="numero-doc-input" value="{{ m.numero_doc }}" placeholder="Ej.: 44">
+        <div class="field-hint" id="oc-hint" style="display:none"></div>
+      </div>
+      <div class="field campo-entrada" id="siaf-field" style="{{ '' if m.numero_siaf else 'display:none' }}">
+        <label>N° SIAF</label>
+        <input type="text" name="numero_siaf" id="numero-siaf-input" value="{{ m.numero_siaf }}" placeholder="Ej.: 2026-123456">
       </div>
       <div class="field campo-entrada">
         <label>N° de Pecosa o Guía de Remisión</label>
@@ -115,9 +120,12 @@
   (function () {
   const insumos = {{ insumos | tojson }};
   const precios = {{ precios | tojson }};
+  const usados = {{ usados | tojson }};
   const respAlmacen = {{ p.responsable_almacen | tojson }};
   const precioActual = {{ (m.precio_unitario if m.precio_unitario is not none else none) | tojson }};
   const esNuevo = {{ 1 if not m.id else 0 }};
+  const ocList = {{ oc_list | tojson }};
+  const saldoMaterial = {{ saldo_material | tojson }};
 
   const tipoSel = document.getElementById('tipo-sel');
   const descInp = document.getElementById('desc-input');
@@ -127,6 +135,10 @@
   const respHint = document.getElementById('resp-hint');
   const precioInput = document.getElementById('precio-input');
   const precioSelect = document.getElementById('precio-select');
+  const ocInp = document.getElementById('numero-doc-input');
+  const siafInp = document.getElementById('numero-siaf-input');
+  const siafField = document.getElementById('siaf-field');
+  const ocHint = document.getElementById('oc-hint');
 
   function aplicarTipo() {
     const esEnt = tipoSel.value === 'E';
@@ -143,6 +155,44 @@
       if (esNuevo) respInp.value = respAlmacen || '';
     } else {
       respInp.readOnly = false;
+    }
+    const btnOc = document.getElementById('btn-oc');
+    if (btnOc) btnOc.style.display = esEnt ? '' : 'none';
+  }
+
+  function aplicarOCPorDefecto() {
+    if (tipoSel.value !== 'E' || !ocInp) return;
+    var ocListActiva = ocList || [];
+    var tieneSaldo = saldoMaterial > 0;
+    if (tieneSaldo && ocListActiva.length >= 1) {
+      var oc = ocListActiva[0];
+      ocInp.value = oc.oc_num;
+      if (siafInp && oc.siaf) siafInp.value = oc.siaf;
+      if (siafField) siafField.style.display = 'none';
+      if (ocHint) {
+        var msg = '<i class="bi bi-info-circle"></i> Saldo de almacén: ' + Number(saldoMaterial).toLocaleString('en-US', {minimumFractionDigits:2}) + '. ';
+        if (ocListActiva.length === 1) {
+          msg += 'O/C sugerida: <b>' + oc.oc_num + '</b>';
+          if (oc.siaf) msg += ' — SIAF: ' + oc.siaf;
+        } else {
+          msg += 'Este material existe en ' + ocListActiva.length + ' O/C.';
+        }
+        ocHint.innerHTML = msg;
+        ocHint.style.display = '';
+      }
+    } else {
+      if (siafField) siafField.style.display = '';
+      if (ocHint) {
+        if (ocListActiva.length === 0) {
+          ocHint.innerHTML = '<i class="bi bi-info-circle"></i> Material nuevo sin O/C previa. Ingrese la O/C y el N° SIAF.';
+        } else {
+          var opciones = ocListActiva.map(function(oc) {
+            return 'O/C ' + oc.oc_num;
+          }).join(', ');
+          ocHint.innerHTML = '<i class="bi bi-info-circle"></i> Sin saldo en almacén. O/C disponibles: ' + opciones + '. Ingrese la O/C y el N° SIAF.';
+        }
+        ocHint.style.display = '';
+      }
     }
   }
 
@@ -229,17 +279,23 @@
 
   function buscarMateriales() {
     const texto = (descInp.value || '').toUpperCase().trim();
-    const matches = texto
+    const oc = (ocInp ? ocInp.value.trim().toUpperCase() : '');
+    const matches = (texto
       ? insumos.filter(function (par) {
           return (par[0] || '').toUpperCase().indexOf(texto) !== -1;
         })
-      : insumos;
+      : insumos).filter(function (par) {
+        if (!oc) return true;
+        const arr = usados[(par[0] || '').toUpperCase()];
+        return !(arr && arr.indexOf(oc) !== -1);
+      });
     mostrarMateriales(matches);
     aplicarPrecios();
   }
 
   descInp.addEventListener('input', buscarMateriales);
   descInp.addEventListener('focus', buscarMateriales);
+  if (ocInp) ocInp.addEventListener('input', buscarMateriales);
   descInp.addEventListener('keydown', function (e) {
     const total = descList.children.length;
     if (total === 0) return;
@@ -269,7 +325,9 @@
     aplicarPrecios();
   });
   document.addEventListener('click', function (e) {
-    const wrap = document.getElementById('desc-input').closest('.autocomplete-wrap');
+    const descEl = document.getElementById('desc-input');
+    if (!descEl) return;
+    const wrap = descEl.closest('.autocomplete-wrap');
     if (wrap && !wrap.contains(e.target)) {
       descList.style.display = 'none';
     }
@@ -277,6 +335,7 @@
 
   aplicarTipo();
   aplicarPrecios();
+  aplicarOCPorDefecto();
 
   const modal = document.getElementById('modal');
   if (modal) modal.querySelector('.modal-box').classList.add('lg');
