@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Reporte de Inventario{% endblock %}
+{% block og_title %}Reporte de Inventario{% endblock %}
+{% block meta_description %}Reporte de inventario consolidado por material del almacén de obra - {{ MESES[mes-1] }} {{ anio }}.{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head between">
+    <h3><i class="bi bi-box-seam"></i> REPORTE DE INVENTARIO - {{ MESES[mes-1] }} {{ anio }}</h3>
+    <div>
+      <a class="btn btn-print btn-sm" href="{{ url_for('imprimir_inventario', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
+      <a class="btn btn-outline btn-sm" href="{{ url_for('almacen', mes=mes, anio=anio) }}"><i class="bi bi-arrow-left"></i> Volver</a>
+    </div>
+  </div>
+</div>
+
+{% if items %}
+<div class="card resumen-card" style="margin-bottom:16px">
+  <div class="resumen-title">
+    <span><i class="bi bi-graph-up"></i> RESUMEN DE INVENTARIO</span>
+  </div>
+  <div class="resumen-grid">
+    <div class="resumen-item">
+      <span class="resumen-ico blue"><i class="bi bi-boxes"></i></span>
+      <div class="resumen-val">{{ p_items }}</div>
+      <div class="resumen-lbl">Materiales</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico green"><i class="bi bi-box-arrow-in-down"></i></span>
+      <div class="resumen-val">{{ "{:,.2f}".format(totals.cant_in) }}</div>
+      <div class="resumen-lbl">Total entradas</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico red"><i class="bi bi-box-arrow-up"></i></span>
+      <div class="resumen-val">{{ "{:,.2f}".format(totals.cant_out) }}</div>
+      <div class="resumen-lbl">Total salidas</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico gold"><i class="bi bi-arrow-repeat"></i></span>
+      <div class="resumen-val">{{ "{:,.2f}".format(totals.saldo) }}</div>
+      <div class="resumen-lbl">Saldo total</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico blue"><i class="bi bi-cash-stack"></i></span>
+      <div class="resumen-val">{{ "S/ {:,.2f}".format(totals.valor_saldo) }}</div>
+      <div class="resumen-lbl">Valor saldo</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <colgroup>
+        <col style="width:5%">
+        <col style="width:40%">
+        <col style="width:5%">
+        <col style="width:8%">
+        <col style="width:8%">
+        <col style="width:8%">
+        <col style="width:8%">
+        <col style="width:10%">
+        <col style="width:10%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Descripción</th>
+          <th>Und</th>
+          <th class="num">Cant. Ingreso</th>
+          <th class="num">Cant. Egreso</th>
+          <th class="num">Saldo</th>
+          <th class="num">P.U.</th>
+          <th class="num">Valor Ingreso</th>
+          <th class="num">Valor Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr class="{{ 'ent' if item.saldo > 0 else ('sal' if item.saldo < 0 else '') }}">
+          <td class="ctr">{{ loop.index }}</td>
+          <td class="wrap strong">{{ item.descripcion }}</td>
+          <td class="ctr">{{ item.und }}</td>
+          <td class="num">{{ "{:,.2f}".format(item.cant_in) }}</td>
+          <td class="num">{{ "{:,.2f}".format(item.cant_out) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(item.saldo) }}</td>
+          <td class="num">{{ "S/ {:,.2f}".format(item.pu) if item.saldo > 0 else '' }}</td>
+          <td class="num">{{ "S/ {:,.2f}".format(item.valor_in) }}</td>
+          <td class="num strong">{{ "S/ {:,.2f}".format(item.valor_saldo) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="fila-total">
+          <td colspan="3" class="right strong">TOTAL</td>
+          <td class="num strong">{{ "{:,.2f}".format(totals.cant_in) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(totals.cant_out) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(totals.saldo) }}</td>
+          <td class="num"></td>
+          <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_in) }}</td>
+          <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_saldo) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <p class="empty">No hay movimientos de almacén para {{ MESES[mes-1] }} {{ anio }}.</p>
+</div>
+{% endif %}
+{% endblock %}

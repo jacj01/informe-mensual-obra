@@ -1128,16 +1128,13 @@ body.modal-open { overflow: hidden; }
 .file-upload-input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2; }
 .file-upload-label { cursor: pointer; white-space: nowrap; position: relative; z-index: 1; pointer-events: none; }
 .file-upload-name { font-size: 13px; color: var(--texto2); font-style: italic; }
-
-/* --- Select / Combobox estilizado --- */
-select.custom-select, select.form-select, .field select, .filters select, .precio-wrapper select {
-  -webkit-appearance: none; -moz-appearance: none; appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%236c757d'%3E%3Cpath d='M7.247 11.14 2.5 6.38a1 1 0 0 1 0-1.42l5.25-5.25a.75.75 0 0 1 1.275.53v10.26a.75.75 0 0 1-1.275.53z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 12px center; background-size: 14px;
-  padding-right: 40px;
+/* --- Select / Combobox estilizado (aplica a TODOS los selects) --- */
+select:not([disabled]) {
+  -webkit-appearance: none !important; -moz-appearance: none !important; appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%236c757d'%3E%3Cpath d='M7.247 11.14 2.5 6.38a1 1 0 0 1 0-1.42l5.25-5.25a.75.75 0 0 1 1.275.53v10.26a.75.75 0 0 1-1.275.53z'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right 12px center !important; background-size: 14px !important;
+  padding-right: 40px !important;
 }
-select.custom-select::-webkit-inner-spin-button, select.form-select::-webkit-inner-spin-button, select::-webkit-inner-spin-button {
-  display: none;
-}
-.filters select, .precio-wrapper select { padding-right: 36px; }
+select:not([disabled])::-webkit-inner-spin-button { display: none !important; }
+select:not([disabled])::-ms-expand { display: none !important; }
 select:focus { outline: none; }

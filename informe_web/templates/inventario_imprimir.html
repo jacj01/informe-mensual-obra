@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Reporte de inventario imprimible de almacén de obra - {{ MESES[mes-1] }} {{ anio }}.">
+<title>Reporte de Inventario - {{ MESES[mes-1] }} {{ anio }}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<style>
+  .fila-total td { font-size: 8.5pt; padding: 5px 5px; }
+  .num { text-align: right; }
+  .ctr { text-align: center; }
+  .wrap { word-break: break-word; }
+  .strong { font-weight: 700; }
+  .ent { color: #17713a; font-weight: 700; }
+  .sal { color: #a62626; font-weight: 700; }
+  .tabla th { background: var(--azul-osc); color: #fff; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <h2>REPORTE DE INVENTARIO</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('almacen', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+<div class="hoja">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Reporte de Inventario</div>
+      <div class="subtitulo">PERIODO: {{ MESES[mes-1] }} - {{ anio }}</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">{{ MESES[mes-1] }} {{ anio }}</div>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Codigo Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Responsable Almacén</span><span class="info-val">{{ p.responsable_almacen or '' }}</span></div>
+  </div>
+  <div class="responsables">
+    <div class="resp-item"><div class="resp-label">Supervisor de Obra</div><div class="resp-val">{{ p.supervisor or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Residente de Obra</div><div class="resp-val">{{ p.residente or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
+  </div>
+
+  <table class="tabla">
+    <colgroup>
+      <col style="min-width:25px"><col style="min-width:220px"><col style="min-width:30px">
+      <col style="min-width:55px"><col style="min-width:55px"><col style="min-width:50px">
+      <col style="min-width:45px"><col style="min-width:60px"><col style="min-width:75px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>#</th><th>Descripción</th><th>Und</th>
+        <th class="num">Cant. Ingreso</th><th class="num">Cant. Egreso</th><th class="num">Saldo</th>
+        <th class="num">P.U.</th><th class="num">Valor Ingreso</th><th class="num">Valor Saldo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="ctr">{{ loop.index }}</td>
+        <td><b>{{ item.descripcion }}</b></td>
+        <td class="ctr">{{ item.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(item.cant_in) }}</td>
+        <td class="num">{{ "{:,.2f}".format(item.cant_out) }}</td>
+        <td class="num strong">{{ "{:,.2f}".format(item.saldo) }}</td>
+        <td class="num">{{ "S/ {:,.2f}".format(item.pu) if item.saldo > 0 else '' }}</td>
+        <td class="num">{{ "S/ {:,.2f}".format(item.valor_in) }}</td>
+        <td class="num strong">{{ "S/ {:,.2f}".format(item.valor_saldo) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total">
+        <td colspan="3" class="right strong">TOTAL</td>
+        <td class="num strong">{{ "{:,.2f}".format(totals.cant_in) }}</td>
+        <td class="num strong">{{ "{:,.2f}".format(totals.cant_out) }}</td>
+        <td class="num strong">{{ "{:,.2f}".format(totals.saldo) }}</td>
+        <td class="num"></td>
+        <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_in) }}</td>
+        <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_saldo) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+</body>
+</html>

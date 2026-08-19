@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Kardex de Almacén{% endblock %}
+{% block og_title %}Kardex de Almacén{% endblock %}
+{% block meta_description %}Kardex por material con saldo corrido del almacén de obra - {{ MESES[mes-1] }} {{ anio }}.{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head between">
+    <h3><i class="bi bi-journal-text"></i> KARDEX - {{ MESES[mes-1] }} {{ anio }}</h3>
+    <div style="display:flex;align-items:center;gap:10px">
+      <form method="get" class="filters" style="margin:0">
+        <select name="material" onchange="this.form.submit()" style="padding:6px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;background:#fff">
+          <option value="">Todos los materiales</option>
+          {% set descripciones = items | map(attribute='descripcion') | unique %}
+          {% for desc in descripciones %}
+          <option value="{{ desc }}" {{ 'selected' if filtro == desc }}>{{ desc }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      <a class="btn btn-print btn-sm" href="{{ url_for('imprimir_kardex', mes=mes, anio=anio, material=filtro) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
+      <a class="btn btn-outline btn-sm" href="{{ url_for('almacen', mes=mes, anio=anio) }}"><i class="bi bi-arrow-left"></i> Volver</a>
+    </div>
+  </div>
+</div>
+
+{% if items %}
+<div class="card resumen-card" style="margin-bottom:16px">
+  <div class="resumen-title">
+    <span><i class="bi bi-graph-up"></i> RESUMEN DEL KARDEX</span>
+  </div>
+  <div class="resumen-grid">
+    <div class="resumen-item">
+      <span class="resumen-ico blue"><i class="bi bi-boxes"></i></span>
+      <div class="resumen-val">{{ items|length }}</div>
+      <div class="resumen-lbl">Materiales</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico green"><i class="bi bi-box-arrow-in-down"></i></span>
+      <div class="resumen-val">{{ "{:,.2f}".format(items | sum(attribute='cant_in')) }}</div>
+      <div class="resumen-lbl">Total entradas</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico red"><i class="bi bi-box-arrow-up"></i></span>
+      <div class="resumen-val">{{ "{:,.2f}".format(items | sum(attribute='cant_out')) }}</div>
+      <div class="resumen-lbl">Total salidas</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico gold"><i class="bi bi-arrow-repeat"></i></span>
+      <div class="resumen-val">{{ "{:,.2f}".format(items | sum(attribute='saldo')) }}</div>
+      <div class="resumen-lbl">Saldo total</div>
+    </div>
+  </div>
+</div>
+
+{% for item in items %}
+<div class="card alm-card">
+  <div class="card-head between">
+    <h3><i class="bi bi-box-seam"></i> {{ item.descripcion }}</h3>
+    <div class="alm-meta">
+      <span><b>Und:</b> {{ item.und }}</span>
+      <span><b>Movs:</b> {{ item.movs }}</span>
+      <span class="ent"><b>Entradas:</b> {{ "{:,.2f}".format(item.cant_in) }}</span>
+      <span class="sal"><b>Salidas:</b> {{ "{:,.2f}".format(item.cant_out) }}</span>
+      <span><b>Saldo:</b> {{ "{:,.2f}".format(item.saldo) }}</span>
+    </div>
+  </div>
+  <div class="table-scroll">
+    <table class="table table-compact alm-tabla">
+      <thead>
+        <tr>
+          <th rowspan="2">ITEM</th>
+          <th rowspan="2">Fecha</th>
+          <th rowspan="2">UND</th>
+          <th rowspan="2" class="num">Saldo<br>anterior</th>
+          <th colspan="3">ENTRADA</th>
+          <th colspan="2">SALIDA</th>
+          <th rowspan="2" class="num">Saldo</th>
+        </tr>
+        <tr>
+          <th class="num">Cant.</th>
+          <th>N° OC / Pecosa</th>
+          <th>Proveedor</th>
+          <th class="num">Cant.</th>
+          <th>Actividad</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(item=0) %}
+        {% for r in item.rows %}
+        {% if r.mov.tipo == 'E' %}{% set ns.item = ns.item + 1 %}{% endif %}
+        <tr>
+          <td class="num">{{ ns.item if r.mov.tipo == 'E' else '' }}</td>
+          <td>{{ r.mov.fecha.strftime("%d/%m/%Y") if r.mov.fecha else '' }}</td>
+          <td>{{ item.und }}</td>
+          <td class="num">{{ "{:,.2f}".format(r.saldo_anterior) }}</td>
+          {% if r.mov.tipo == 'E' %}
+          <td class="num ent">{{ "{:,.2f}".format(r.mov.cantidad) }}</td>
+          <td>{{ r.mov.numero_doc }}<br><small>{{ r.mov.pecosa_guia }}</small></td>
+          <td class="wrap">{{ r.mov.proveedor }}</td>
+          <td></td>
+          <td></td>
+          {% else %}
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="num sal">{{ "{:,.2f}".format(r.mov.cantidad) }}</td>
+          <td class="wrap">{{ r.mov.actividad }}</td>
+          {% endif %}
+          <td class="num strong">{{ "{:,.2f}".format(r.saldo) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="empty">Sin movimientos para este insumo.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card">
+  <p class="empty">No hay movimientos de almacén para {{ MESES[mes-1] }} {{ anio }}.</p>
+</div>
+{% endif %}
+{% endblock %}

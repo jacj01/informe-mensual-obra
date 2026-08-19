@@ -29,5 +29,8 @@ skills-lock.json
 Auditoria_QA/
 .playwright-mcp/
 
+# Estado de updater/publicador (temporal)
+*.estado
+
 # Entorno
 .env

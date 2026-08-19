@@ -1367,7 +1367,8 @@ def registrar_rutas(app):
             #    (no es un hijo que muera al matar al padre).
             #  - CREATE_NO_WINDOW + DEVNULL: nada de IO a la consola del server.
             subprocess.Popen(["powershell.exe", "-NoProfile", "-WindowStyle", "Hidden",
-                              "-ExecutionPolicy", "Bypass", "-File", ps1, "-Instalar"],
+                              "-ExecutionPolicy", "Bypass", "-File", ps1, "-Instalar",
+                              "-VersionLocal", app.config.get("INFORME_VERSION", "1.0.0")],
                              cwd=root,
                              creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                              stdin=subprocess.DEVNULL,
@@ -3646,6 +3647,209 @@ def registrar_rutas(app):
         return render_template("fe08_imprimir.html", p=p, mes=mes, anio=anio,
                                MESES=MESES, valorizado=valorizado,
                                valor_total=valor_total)
+
+    @app.route("/almacen/kardex")
+    def kardex():
+        """Vista de Kardex por material con saldo corrido."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        filtro = request.args.get("material", "").strip()
+        movs = (AlmacenMovimiento.query
+                .filter(AlmacenMovimiento.mes == mes, AlmacenMovimiento.anio == anio)
+                .order_by(AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
+        running = {}
+        orden = []
+        for m in movs:
+            if filtro and m.descripcion != filtro:
+                continue
+            key = (m.descripcion, m.und)
+            if key not in running:
+                running[key] = {"balance": 0.0, "rows": []}
+                orden.append(key)
+            bal = running[key]["balance"]
+            nuevo = bal + (m.cantidad or 0) if m.tipo == "E" else bal - (m.cantidad or 0)
+            running[key]["rows"].append({"mov": m, "saldo_anterior": round(bal, 2),
+                                         "saldo": round(nuevo, 2),
+                                         "importe": round((m.cantidad or 0) * (m.precio_unitario or 0), 2)})
+            running[key]["balance"] = nuevo
+        items = []
+        for key in orden:
+            info = running[key]
+            rows = info["rows"]
+            ent = sum(r["mov"].cantidad or 0 for r in rows if r["mov"].tipo == "E")
+            sal = sum(r["mov"].cantidad or 0 for r in rows if r["mov"].tipo == "S")
+            val_ent = sum(r["importe"] for r in rows if r["mov"].tipo == "E")
+            val_sal = sum((r["mov"].cantidad or 0) * (r["mov"].precio_unitario or 0) for r in rows if r["mov"].tipo == "S")
+            items.append({
+                "descripcion": key[0], "und": key[1], "movs": len(rows),
+                "cant_in": round(ent, 2), "cant_out": round(sal, 2),
+                "saldo": round(ent - sal, 2),
+                "valor_in": round(val_ent, 2),
+                "valor_out": round(val_sal, 2),
+                "valor_saldo": round(val_ent - val_sal, 2),
+                "rows": rows,
+            })
+        return render_template("kardex.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, items=items, filtro=filtro)
+
+    @app.route("/almacen/inventario")
+    def inventario():
+        """Vista de Reporte de Inventario consolidado por material."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        movs = (AlmacenMovimiento.query
+                .filter(AlmacenMovimiento.mes == mes, AlmacenMovimiento.anio == anio)
+                .order_by(AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
+        inv = {}
+        orden = []
+        for m in movs:
+            key = m.descripcion
+            if not key:
+                continue
+            if key not in inv:
+                inv[key] = {"und": m.und, "cant_in": 0.0, "cant_out": 0.0,
+                            "valor_in": 0.0, "valor_out": 0.0, "movs": 0,
+                            "ult_entrada": None, "ult_precio": 0.0}
+                orden.append(key)
+            info = inv[key]
+            info["movs"] += 1
+            if m.tipo == "E":
+                info["cant_in"] += m.cantidad or 0
+                info["valor_in"] += (m.cantidad or 0) * (m.precio_unitario or 0)
+                info["ult_entrada"] = m.fecha
+                info["ult_precio"] = m.precio_unitario or 0
+            else:
+                info["cant_out"] += m.cantidad or 0
+                info["valor_out"] += (m.cantidad or 0) * (m.precio_unitario or 0)
+        items = []
+        for key in orden:
+            info = inv[key]
+            saldo = round(info["cant_in"] - info["cant_out"], 2)
+            valor_saldo = round(info["valor_in"] - info["valor_out"], 2)
+            items.append({
+                "descripcion": key,
+                "und": info["und"],
+                "movs": info["movs"],
+                "cant_in": round(info["cant_in"], 2),
+                "cant_out": round(info["cant_out"], 2),
+                "saldo": saldo,
+                "pu": round(info["ult_precio"], 2) if saldo > 0 else 0.0,
+                "valor_in": round(info["valor_in"], 2),
+                "valor_out": round(info["valor_out"], 2),
+                "valor_saldo": valor_saldo,
+                "ult_entrada": info["ult_entrada"],
+            })
+        items.sort(key=lambda x: x["descripcion"])
+        totals = {
+            "cant_in": round(sum(i["cant_in"] for i in items), 2),
+            "valor_in": round(sum(i["valor_in"] for i in items), 2),
+            "cant_out": round(sum(i["cant_out"] for i in items), 2),
+            "valor_out": round(sum(i["valor_out"] for i in items), 2),
+            "saldo": round(sum(i["saldo"] for i in items), 2),
+            "valor_saldo": round(sum(i["valor_saldo"] for i in items), 2),
+        }
+        return render_template("inventario.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, items=items, totals=totals, p_items=len(items))
+
+    @app.route("/almacen/kardex/imprimir")
+    def imprimir_kardex():
+        """Vista imprimible del Kardex por material."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        filtro = request.args.get("material", "").strip()
+        movs = (AlmacenMovimiento.query
+                .filter(AlmacenMovimiento.mes == mes, AlmacenMovimiento.anio == anio)
+                .order_by(AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
+        running = {}
+        orden = []
+        for m in movs:
+            if filtro and m.descripcion != filtro:
+                continue
+            key = (m.descripcion, m.und)
+            if key not in running:
+                running[key] = {"balance": 0.0, "rows": []}
+                orden.append(key)
+            bal = running[key]["balance"]
+            nuevo = bal + (m.cantidad or 0) if m.tipo == "E" else bal - (m.cantidad or 0)
+            running[key]["rows"].append({"mov": m, "saldo_anterior": round(bal, 2),
+                                         "saldo": round(nuevo, 2)})
+            running[key]["balance"] = nuevo
+        items = []
+        for key in orden:
+            info = running[key]
+            rows = info["rows"]
+            ent = sum(r["mov"].cantidad or 0 for r in rows if r["mov"].tipo == "E")
+            sal = sum(r["mov"].cantidad or 0 for r in rows if r["mov"].tipo == "S")
+            items.append({
+                "descripcion": key[0], "und": key[1], "movs": len(rows),
+                "cant_in": round(ent, 2), "cant_out": round(sal, 2),
+                "saldo": round(ent - sal, 2), "rows": rows,
+            })
+        return render_template("kardex_imprimir.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, items=items, filtro=filtro)
+
+    @app.route("/almacen/inventario/imprimir")
+    def imprimir_inventario():
+        """Vista imprimible del Reporte de Inventario."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        movs = (AlmacenMovimiento.query
+                .filter(AlmacenMovimiento.mes == mes, AlmacenMovimiento.anio == anio)
+                .order_by(AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
+        inv = {}
+        orden = []
+        for m in movs:
+            key = m.descripcion
+            if not key:
+                continue
+            if key not in inv:
+                inv[key] = {"und": m.und, "cant_in": 0.0, "cant_out": 0.0,
+                            "valor_in": 0.0, "valor_out": 0.0, "movs": 0,
+                            "ult_entrada": None, "ult_precio": 0.0}
+                orden.append(key)
+            info = inv[key]
+            info["movs"] += 1
+            if m.tipo == "E":
+                info["cant_in"] += m.cantidad or 0
+                info["valor_in"] += (m.cantidad or 0) * (m.precio_unitario or 0)
+                info["ult_entrada"] = m.fecha
+                info["ult_precio"] = m.precio_unitario or 0
+            else:
+                info["cant_out"] += m.cantidad or 0
+                info["valor_out"] += (m.cantidad or 0) * (m.precio_unitario or 0)
+        items = []
+        for key in orden:
+            info = inv[key]
+            saldo = round(info["cant_in"] - info["cant_out"], 2)
+            valor_saldo = round(info["valor_in"] - info["valor_out"], 2)
+            items.append({
+                "descripcion": key,
+                "und": info["und"],
+                "movs": info["movs"],
+                "cant_in": round(info["cant_in"], 2),
+                "cant_out": round(info["cant_out"], 2),
+                "saldo": saldo,
+                "pu": round(info["ult_precio"], 2) if saldo > 0 else 0.0,
+                "valor_in": round(info["valor_in"], 2),
+                "valor_out": round(info["valor_out"], 2),
+                "valor_saldo": valor_saldo,
+                "ult_entrada": info["ult_entrada"],
+            })
+        items.sort(key=lambda x: x["descripcion"])
+        totals = {
+            "cant_in": round(sum(i["cant_in"] for i in items), 2),
+            "valor_in": round(sum(i["valor_in"] for i in items), 2),
+            "cant_out": round(sum(i["cant_out"] for i in items), 2),
+            "valor_out": round(sum(i["valor_out"] for i in items), 2),
+            "saldo": round(sum(i["saldo"] for i in items), 2),
+            "valor_saldo": round(sum(i["valor_saldo"] for i in items), 2),
+        }
+        return render_template("inventario_imprimir.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, items=items, totals=totals)
 
     @app.route("/api/resumen")
     def api_resumen():

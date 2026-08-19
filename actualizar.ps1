@@ -16,7 +16,8 @@
 #>
 param(
     [switch]$Instalar,
-    [string]$OwnerRepo = "jacj01/informe-mensual-obra"
+    [string]$OwnerRepo = "jacj01/informe-mensual-obra",
+    [string]$VersionLocal = ""  # Permite al server pasar su version en ejecucion
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,7 +47,7 @@ function gh-ok { $null = Get-Command gh -ErrorAction SilentlyContinue; return $?
 try {
 
 # 7) Detectar ultima release publicada en GitHub (usa gh: repo privado requiere auth)
-$verLocal = Version-Local
+$verLocal = if ($VersionLocal) { $VersionLocal } else { Version-Local }
 Write-Host "Local: v$verLocal"
 
 if (-not (gh-ok)) {
@@ -92,7 +93,7 @@ Escribir-Progreso "descargando" 30 "Paquete listo. Preparando instalación..."
 
 # Preservar la base de datos / respaldos / uploads / logs del usuario (no viajan en el zip)
 $preservation = @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/static/uploads",
-               "informe_web\servidor.log", "informe_web\servidor.pid")
+               "informe_web/servidor.log", "informe_web/servidor.pid")
 # 8.1) Detener el servidor ANTES de mover informe_web; si no, los .py/.pyc abiertos
 #      impiden el Move-Item ("proceso en uso"). El updater corre detached, sobrevive.
 Escribir-Progreso "instalando" 35 "Deteniendo servidor..."

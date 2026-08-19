@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Kardex imprimible de almacén de obra - {{ MESES[mes-1] }} {{ anio }}.">
+<title>Kardex - {{ MESES[mes-1] }} {{ anio }}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<style>
+  .seccion { margin-top: 10px; page-break-inside: avoid; }
+  .seccion-titulo { background: var(--azul); color: #fff; font-weight: 700; font-size: 8.5pt; padding: 6px 12px; border-radius: 4px 4px 0 0; margin: 0; }
+  .seccion-meta { background: var(--bg); padding: 5px 12px; font-size: 7.5pt; border: 1px solid var(--borde); border-top: none; display: flex; gap: 16px; flex-wrap: wrap; }
+  .seccion-meta b { color: var(--azul-osc); }
+  .ent { color: #17713a; font-weight: 700; }
+  .sal { color: #a62626; font-weight: 700; }
+  .empty { color: var(--texto2); font-style: italic; padding: 8px; text-align: center; }
+  .tabla th { background: var(--azul-osc); color: #fff; }
+  .tabla th.ent-head { background: #dcf5e5; color: #14532d; }
+  .tabla th.sal-head { background: #fca8a2; color: #7f1d1d; }
+  .num { text-align: right; }
+  .ctr { text-align: center; }
+  .wrap { word-break: break-word; }
+  .strong { font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <h2>KARDEX DE ALMACÉN</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('almacen', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+<div class="hoja">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Kardex de Almacén</div>
+      <div class="subtitulo">PERIODO: {{ MESES[mes-1] }} - {{ anio }}</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">{{ MESES[mes-1] }} {{ anio }}</div>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Codigo Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Responsable Almacén</span><span class="info-val">{{ p.responsable_almacen or '' }}</div>
+  </div>
+  <div class="responsables">
+    <div class="resp-item"><div class="resp-label">Supervisor de Obra</div><div class="resp-val">{{ p.supervisor or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Residente de Obra</div><div class="resp-val">{{ p.residente or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
+  </div>
+
+  {% for item in items %}
+  <div class="seccion">
+    <div class="seccion-titulo">{{ item.descripcion }} ({{ item.und }})</div>
+    <div class="seccion-meta">
+      <b>Movimientos:</b> {{ item.movs }}
+      &nbsp;|&nbsp; <span class="ent">Entradas: {{ "{:,.2f}".format(item.cant_in) }}</span>
+      &nbsp;|&nbsp; <span class="sal">Salidas: {{ "{:,.2f}".format(item.cant_out) }}</span>
+      &nbsp;|&nbsp; <b>Saldo:</b> {{ "{:,.2f}".format(item.saldo) }}
+    </div>
+    <table class="tabla">
+      <colgroup>
+        <col style="width:6%"><col style="width:9%"><col style="width:5%">
+        <col style="width:12%"><col style="width:10%">
+        <col style="width:12%">
+        <col style="width:10%"><col style="width:13%">
+        <col style="width:10%"><col style="width:13%">
+        <col style="width:10%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>ITEM</th><th>Fecha</th><th>UND</th>
+          <th class="num">Saldo<br>anterior</th>
+          <th colspan="3" class="ent-head">ENTRADA</th>
+          <th colspan="2" class="sal-head">SALIDA</th>
+          <th class="num">Saldo</th>
+        </tr>
+        <tr>
+          <th class="num"></th><th></th><th></th>
+          <th class="num"></th>
+          <th class="num ent-head">Cant.</th>
+          <th class="ent-head">N° OC / Pecosa</th>
+          <th class="ent-head">Proveedor</th>
+          <th class="num sal-head">Cant.</th>
+          <th class="sal-head">Actividad</th>
+          <th class="num"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(item=0) %}
+        {% for r in item.rows %}
+        {% if r.mov.tipo == 'E' %}{% set ns.item = ns.item + 1 %}{% endif %}
+        <tr>
+          <td class="num">{{ ns.item if r.mov.tipo == 'E' else '' }}</td>
+          <td>{{ r.mov.fecha.strftime("%d/%m/%Y") if r.mov.fecha else '' }}</td>
+          <td class="ctr">{{ item.und }}</td>
+          <td class="num">{{ "{:,.2f}".format(r.saldo_anterior) }}</td>
+          {% if r.mov.tipo == 'E' %}
+          <td class="num ent">{{ "{:,.2f}".format(r.mov.cantidad) }}</td>
+          <td>{{ r.mov.numero_doc }}<br><small>{{ r.mov.pecosa_guia }}</small></td>
+          <td>{{ r.mov.proveedor }}</td>
+          <td></td><td></td>
+          {% else %}
+          <td></td><td></td><td></td>
+          <td class="num sal">{{ "{:,.2f}".format(r.mov.cantidad) }}</td>
+          <td>{{ r.mov.actividad }}</td>
+          {% endif %}
+          <td class="num strong">{{ "{:,.2f}".format(r.saldo) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</div>
+</body>
+</html>
