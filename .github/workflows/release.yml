@@ -1,7 +1,7 @@
 name: Build & Release
 
 # CI/CD: verifica sintaxis, empaqueta la app y crea una GitHub Release con el
-# zip para que los clientes se actualicen (auto-update).
+# zip (para auto-update) y el instalador .exe (para instalaciones nuevas).
 # Excluye datos sensibles (BD, respaldos, logs, uploads y archivos .xlsx)
 # que estan en .gitignore y no viajan por git.
 on:
@@ -34,7 +34,7 @@ jobs:
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -Path @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/__pycache__", "informe_web/static/uploads")
           Remove-Item -Force -ErrorAction SilentlyContinue -Path @("informe_web/servidor.log", "informe_web/servidor.pid")
 
-      - name: Build package
+      - name: Build update package (zip)
         shell: pwsh
         run: |
           $sha = (git log --pretty=format:"%h" -1).Trim()
@@ -42,9 +42,25 @@ jobs:
           echo "VERSION=$ver" >> $env:GITHUB_ENV
           echo "SHA=$sha" >> $env:GITHUB_ENV
           $zip = "$env:GITHUB_WORKSPACE\informe-web-$ver-$sha.zip"
-          Compress-Archive -Path informe_web, *.bat, *.vbs, Logo.png, .gitignore -DestinationPath $zip -Force
-          echo "ARTIFACT=$zip" >> $env:GITHUB_ENV
-          Write-Host "ARTIFACT:$zip VERSION:$ver SHA:$sha"
+          Compress-Archive -Path informe_web, *.bat, *.vbs, Logo.png, Logo.ico, .gitignore, actualizar.ps1, abrir_puerto_firewall.bat -DestinationPath $zip -Force
+          echo "ARTIFACT_ZIP=$zip" >> $env:GITHUB_ENV
+          Write-Host "ZIP:$zip VERSION:$ver SHA:$sha"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer (exe)
+        shell: pwsh
+        run: |
+          $ver = "${{ env.VERSION }}"
+          $iss = "$env:GITHUB_WORKSPACE\installer.iss"
+          # Actualizar version en el script .iss si es necesario
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /D"MyAppVersion=$ver" "$iss"
+          $exe = Get-ChildItem "$env:GITHUB_WORKSPACE\installer_output\*.exe" | Select-Object -First 1
+          if (-not $exe) { Write-Error "No se genero el instalador .exe"; exit 1 }
+          echo "ARTIFACT_EXE=$($exe.FullName)" >> $env:GITHUB_ENV
+          Write-Host "EXE:$($exe.FullName)"
 
       - name: Create GitHub release
         shell: pwsh
@@ -52,8 +68,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ env.VERSION }}
           SHA: ${{ env.SHA }}
-          ARTIFACT: ${{ env.ARTIFACT }}
+          ARTIFACT_ZIP: ${{ env.ARTIFACT_ZIP }}
+          ARTIFACT_EXE: ${{ env.ARTIFACT_EXE }}
         run: |
           $tag = "v$env:VERSION-$env:SHA"
-          echo "Creando release $tag con asset $env:ARTIFACT"
-          gh release create "$tag" "$env:ARTIFACT" --title "v$env:VERSION ($env:SHA)" --notes "Versión $env:VERSION (commit $env:SHA). Build automático desde GitHub Actions."
+          $notes = "Versión $env:VERSION (commit $env:SHA).`n`n"
+          $notes += "- **InformeObra-Setup-$env:VERSION.exe**: Instalador completo (Python + app). Para instalaciones nuevas.`n"
+          $notes += "- **informe-web-$env:VERSION-$env:SHA.zip**: Paquete de actualización. Para instalaciones existentes (auto-update)."
+          Write-Host "Creando release $tag"
+          gh release create "$tag" "$env:ARTIFACT_ZIP" "$env:ARTIFACT_EXE" `
+            --title "v$env:VERSION ($env:SHA)" `
+            --notes $notes

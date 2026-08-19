@@ -27,6 +27,29 @@ $bakDir    = Join-Path $Raiz "actualizar.bak"
 $tmpDir    = Join-Path $env:TEMP ("informe_update_" + [System.Guid]::NewGuid().Guid.Substring(0,8))
 $progFile  = Join-Path $Raiz "actualizar.estado"
 
+# --- Detectar Python: embebido (carpeta\python\), PATH, o ruta legacy ---
+function Find-Python {
+    # 1) Python embebido (junto al script)
+    $emb = Join-Path $Raiz "python\python.exe"
+    if (Test-Path $emb) { return $emb }
+    # 2) PATH del sistema
+    $inPath = Get-Command python -ErrorAction SilentlyContinue
+    if ($inPath) { return $inPath.Source }
+    # 3) Ruta legacy (compatibilidad)
+    if (Test-Path "C:\Python314\python.exe") { return "C:\Python314\python.exe" }
+    return $null
+}
+function Find-Pythonw {
+    $emb = Join-Path $Raiz "python\pythonw.exe"
+    if (Test-Path $emb) { return $emb }
+    $inPath = Get-Command pythonw -ErrorAction SilentlyContinue
+    if ($inPath) { return $inPath.Source }
+    if (Test-Path "C:\Python314\pythonw.exe") { return "C:\Python314\pythonw.exe" }
+    return $null
+}
+$PyExe  = Find-Python
+$PyWexe = Find-Pythonw
+
 function Escribir-Progreso([string]$fase, [int]$porcentaje, [string]$mensaje = "") {
     $obj = @{ fase = $fase; porcentaje = $porcentaje; mensaje = $mensaje; ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") }
     $obj | ConvertTo-Json -Compress | Set-Content -Path $progFile -Encoding UTF8
@@ -45,6 +68,13 @@ function Version-Tag([string]$tag) {
 function gh-ok { $null = Get-Command gh -ErrorAction SilentlyContinue; return $?}
 
 try {
+
+if (-not $PyExe) {
+    Escribir-Progreso "error" 100 "No se encontro Python (ni embebido, ni en PATH, ni legacy)."
+    Write-Warning "No se encontro Python. Instale Python o coloque la carpeta python\ junto al script."
+    exit 1
+}
+Write-Host "Python: $PyExe"
 
 # 7) Detectar ultima release publicada en GitHub (usa gh: repo privado requiere auth)
 $verLocal = if ($VersionLocal) { $VersionLocal } else { Version-Local }
@@ -147,7 +177,7 @@ Write-Host "Verificando sintaxis de la nueva version ..."
 Escribir-Progreso "verificando" 80 "Verificando sintaxis de la nueva version..."
 $ok = $true
 try {
-    & "C:\Python314\python.exe" -m py_compile "$Raiz/informe_web/app.py" 2>$null
+    & $PyExe -m py_compile "$Raiz/informe_web/app.py" 2>$null
     if ($LASTEXITCODE -ne 0) { $ok = $false }
 } catch { $ok = $false }
 
@@ -155,7 +185,7 @@ if ($ok) {
     Write-Host "Actualizacion OK ($tag). Limpiando backup."
     Remove-Item -Recurse -Force $bakDir
     # El servidor ya fue detenido antes del backup. Levantarlo con la nueva version.
-    Start-Process -FilePath "C:\Python314\pythonw.exe" `
+    Start-Process -FilePath $PyWexe `
         -ArgumentList "servidor_silencioso.py" `
         -WorkingDirectory "$Raiz/informe_web"
     Write-Host "Servidor iniciado con la nueva version ($tag)."
@@ -167,7 +197,7 @@ if ($ok) {
     Move-Item -LiteralPath (Join-Path $bakDir "informe_web") -Destination (Join-Path $Raiz "informe_web")
     Write-Host "Rollback completado. Sistema sin cambios."
     # Reactivar el server antiguo (ya que el updater lo mata al instalar)
-    Start-Process -FilePath "C:\Python314\pythonw.exe" `
+    Start-Process -FilePath $PyWexe `
         -ArgumentList "servidor_silencioso.py" `
         -WorkingDirectory "$Raiz/informe_web"
     Write-Host "Servidor antiguo restaurado y reiniciado."
@@ -185,7 +215,7 @@ if ($ok) {
         Write-Warning "Instalacion incompleta: restaurando respaldo anterior..."
         Remove-Item -Recurse -Force $liveDir -ErrorAction SilentlyContinue
         Move-Item -LiteralPath $bakOld -Destination $liveDir -ErrorAction SilentlyContinue
-        Start-Process -FilePath "C:\Python314\pythonw.exe" `
+        Start-Process -FilePath $PyWexe `
             -ArgumentList "servidor_silencioso.py" `
             -WorkingDirectory "$Raiz/informe_web" -ErrorAction SilentlyContinue
         Escribir-Progreso "rollback" 100 "Se restauro la version anterior tras un error."

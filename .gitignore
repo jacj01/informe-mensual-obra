@@ -32,5 +32,8 @@ Auditoria_QA/
 # Estado de updater/publicador (temporal)
 *.estado
 
+# Instalador compilado
+installer_output/
+
 # Entorno
 .env

@@ -67,16 +67,29 @@ If pid > 0 Then
   End If
 End If
 
-' Busca pythonw.exe: primero en el PATH, si no usa la ruta de instalacion.
+' Busca pythonw.exe: primero embebido (junto a este script), luego PATH, luego ruta legacy.
 pythonw = ""
-Dim sh, exec, salida
-Set sh = CreateObject("WScript.Shell")
-Set exec = sh.Exec("cmd /c where pythonw")
-salida = exec.StdOut.ReadAll()
-exec.Terminate
-If Trim(salida) <> "" Then
-  pythonw = Trim(Split(salida, vbCrLf)(0))
+
+' 1) Python embebido: carpeta\python\pythonw.exe
+Dim rutaEmbebido
+rutaEmbebido = carpeta & "\python\pythonw.exe"
+If FSO.FileExists(rutaEmbebido) Then
+  pythonw = rutaEmbebido
 End If
+
+' 2) PATH del sistema
+If pythonw = "" Then
+  Dim sh, exec, salida
+  Set sh = CreateObject("WScript.Shell")
+  Set exec = sh.Exec("cmd /c where pythonw")
+  salida = exec.StdOut.ReadAll()
+  exec.Terminate
+  If Trim(salida) <> "" Then
+    pythonw = Trim(Split(salida, vbCrLf)(0))
+  End If
+End If
+
+' 3) Ruta legacy (compatibilidad con instalaciones anteriores)
 If pythonw = "" Then
   If FSO.FileExists("C:\Python314\pythonw.exe") Then
     pythonw = "C:\Python314\pythonw.exe"
@@ -84,7 +97,9 @@ If pythonw = "" Then
 End If
 
 If pythonw = "" Then
-  MsgBox "No se encontro pythonw.exe. Instale Python o revise el PATH.", 48, "Informe Mensual de Obra"
+  MsgBox "No se encontro pythonw.exe." & vbCrLf & vbCrLf & _
+         "Verifique que la carpeta 'python' este junto a este script," & vbCrLf & _
+         "o que Python este instalado en el PATH.", 48, "Informe Mensual de Obra"
   WScript.Quit
 End If
 

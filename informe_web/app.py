@@ -454,21 +454,14 @@ def _asegurar_tenants():
 
 
 def _seed_inicial():
-    """Siembra los datos de ejemplo en la base del primer Administrador.
+    """Semilla de datos de ejemplo (deshabilitada para instaladores).
 
-    Solo se ejecuta si su base aún no tiene proyecto (instalación nueva);
-    tras una migración de datos existentes se omite automáticamente.
+    La función original creaba datos de demostración (Proyecto, Presupuesto,
+    Gastos, Almacén) para el primer Administrador.  Se desactiva para que
+    las instalaciones nuevas arranquen con la BD vacía y solo el Super
+    Usuario; el usuario crea sus datos desde la interfaz.
     """
-    adm = (_bd.master_session.query(Usuario)
-           .filter(Usuario.rol == "Administrador").order_by(Usuario.id).first())
-    if not adm:
-        return
-    eng = ensure_tenant(adm.id)
-    bind_session(eng)
-    try:
-        seed()
-    finally:
-        bind_session(_bd.master_engine)
+    return
 
 
 def create_app():

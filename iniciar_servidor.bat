@@ -13,22 +13,27 @@ echo  (como Administrador) para permitir el acceso desde otros
 echo  equipos de la misma red.
 echo.
 
-where python >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] No se encontro Python en el PATH.
-  pause
-  exit /b 1
+:: Detectar Python: primero embebido, luego PATH del sistema
+set "PYEXE=%~dp0python\python.exe"
+if not exist "%PYEXE%" (
+  where python >nul 2>&1
+  if errorlevel 1 (
+    echo [ERROR] No se encontro Python ni en la carpeta python\ ni en el PATH.
+    pause
+    exit /b 1
+  )
+  set "PYEXE=python"
 )
 
-python -c "import waitress" >nul 2>&1
+"%PYEXE%" -c "import waitress" >nul 2>&1
 if errorlevel 1 (
   echo Instalando waitress...
-  python -m pip install waitress --quiet --disable-pip-version-check
+  "%PYEXE%" -m pip install waitress --quiet --disable-pip-version-check
 )
 
 echo.
 echo Iniciando servidor... (deje esta ventana abierta)
 echo Para detener: presione Ctrl+C
 echo.
-python -m waitress --host=0.0.0.0 --port=5000 --threads=8 --connection-limit=128 app:app
+"%PYEXE%" -m waitress --host=0.0.0.0 --port=5000 --threads=8 --connection-limit=128 app:app
 pause
