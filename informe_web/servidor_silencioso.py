@@ -137,6 +137,8 @@ def main():
         f.write(str(os.getpid()))
     log.info("Arrancando servidor (oculto) PID=%s", os.getpid())
 
+    if str(BASE) not in sys.path:
+        sys.path.insert(0, str(BASE))
     from waitress import serve  # noqa: E402
     from app import app  # noqa: E402
 

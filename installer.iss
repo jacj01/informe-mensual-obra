@@ -140,8 +140,10 @@ begin
     'echo Instalando pip...' + #13#10 +
     'python -c "import pip" 2>nul' + #13#10 +
     'if errorlevel 1 (' + #13#10 +
-    '  python -m ensurepip --upgrade >nul 2>&1' + #13#10 +
-    '  python -m pip install --upgrade pip --quiet --disable-pip-version-check' + #13#10 +
+    '  echo Descargando get-pip.py...' + #13#10 +
+    '  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri ''https://bootstrap.pypa.io/get-pip.py'' -OutFile ''get-pip.py''"' + #13#10 +
+    '  python get-pip.py --quiet' + #13#10 +
+    '  del get-pip.py' + #13#10 +
     ')' + #13#10 +
     'echo Instalando Flask, Flask-SQLAlchemy, waitress...' + #13#10 +
     'python -m pip install Flask Flask-SQLAlchemy waitress --quiet --disable-pip-version-check' + #13#10 +

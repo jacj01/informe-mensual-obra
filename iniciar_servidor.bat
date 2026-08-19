@@ -35,5 +35,6 @@ echo.
 echo Iniciando servidor... (deje esta ventana abierta)
 echo Para detener: presione Ctrl+C
 echo.
+set "PYTHONPATH=%~dp0informe_web"
 "%PYEXE%" -m waitress --host=0.0.0.0 --port=5000 --threads=8 --connection-limit=128 app:app
 pause
