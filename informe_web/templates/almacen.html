@@ -18,7 +18,6 @@
     </form>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
       <div style="display:flex;align-items:center;gap:10px">
-        <a class="btn btn-outline btn-sm" href="{{ url_for('kardex', mes=mes, anio=anio) }}"><i class="bi bi-journal-text"></i> Kardex</a>
         <a class="btn btn-outline btn-sm" href="{{ url_for('inventario', mes=mes, anio=anio) }}"><i class="bi bi-box-seam"></i> Reporte de Inventario</a>
         <input type="text" id="searchMaterial" placeholder="Buscar material..."
                style="padding:6px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;width:220px"

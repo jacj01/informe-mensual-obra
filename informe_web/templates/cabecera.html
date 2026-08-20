@@ -6,6 +6,18 @@
 {% block subheading %}Datos generales que se muestran en todos los formatos{% endblock %}
 
 {% block content %}
+<style>
+.adicional-card{background:var(--card,#fff);border:1px solid var(--borde,#e2e8f0);border-radius:10px;padding:12px 14px;position:relative;margin-bottom:8px;border-left:3px solid var(--azul,#2563eb)}
+.adicional-card:hover{box-shadow:0 2px 8px rgba(37,99,235,.1)}
+.adic-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.adic-num{font-size:13px;font-weight:700;color:var(--azul,#2563eb)}
+.adic-btn-del{background:none;border:none;color:var(--texto2,#64748b);cursor:pointer;padding:2px 6px;border-radius:6px;font-size:13px;transition:all .15s}
+.adic-btn-del:hover{color:var(--error,#d33);background:rgba(221,51,51,.08)}
+.adic-card-pills{display:flex;flex-wrap:wrap;gap:6px}
+.adic-pill{display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;color:var(--texto,#1e293b);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap}
+.adic-pill-pim{background:#ecfdf5;color:#065f46}
+.adic-card-footer{margin-top:8px;font-size:12px;color:var(--texto2,#64748b);border-top:1px solid var(--borde,#e2e8f0);padding-top:6px}
+</style>
 <form method="post" class="form-panel form-panel-cabecera" enctype="multipart/form-data" data-no-validar novalidate>
   <div class="card">
     <div class="card-head"><h3><i class="bi bi-image"></i> Logo / Escudo de la Entidad</h3></div>
@@ -29,7 +41,25 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-1-circle"></i> Datos del proyecto</h3></div>
+    <div class="card-head"><h3><i class="bi bi-1-circle"></i> Período del informe</h3></div>
+    <div class="form-grid form-grid-cabecera">
+      <div class="field span2">
+        <label>Año</label>
+        <input type="number" name="anio" value="{{ p.anio }}">
+      </div>
+      <div class="field span2">
+        <label>Mes de trabajo (por defecto)</label>
+        <select name="mes_actual">
+          {% for m in MESES %}
+          <option value="{{ loop.index }}" {{ 'selected' if loop.index == p.mes_actual }}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-2-circle"></i> Datos del proyecto</h3></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field full">
         <label>Nombre del proyecto</label>
@@ -96,73 +126,6 @@
     </div>
   </div>
 
-   <div class="card">
-     <div class="card-head"><h3><i class="bi bi-2-circle"></i> Presupuesto (S/.)</h3></div>
-     <div class="presup-grid">
-        {% set componentes = presupuesto|map(attribute='componente')|unique|list %}
-        <!-- EXPEDIENTE TÉCNICO -->
-        <div class="presup-grupo" data-grupo="et">
-          <div class="presup-grupo-titulo"><i class="bi bi-file-earmark-text"></i> Expediente Técnico</div>
-          {% set ns_idx = namespace(n=0) %}
-          {% for comp in componentes %}
-          <div class="presup-bloque">
-            <div class="presup-bloque-head">
-              <span class="presup-bloque-nombre">{{ comp }}</span>
-              <span class="presup-bloque-total" data-sub="{{ comp }}">S/ 0.00</span>
-            </div>
-            {% for f in presupuesto|selectattr('componente', 'equalto', comp) %}
-           <div class="presup-fila">
-             <span class="presup-det">{{ f.etiqueta }}</span>
-             <input type="text" inputmode="decimal" class="monto presup-input pres-et"
-                    name="pres_et_{{ ns_idx.n }}" value="{{ '{:,.2f}'.format(f.et or 0) }}"
-                    data-comp="{{ comp }}" autocomplete="off">
-           </div>
-           {% set ns_idx.n = ns_idx.n + 1 %}
-           {% endfor %}
-         </div>
-         {% endfor %}
-         <div class="presup-total-card">
-           <span class="presup-total-lbl"><i class="bi bi-cash-stack"></i> Total Expediente Técnico</span>
-           <span class="presup-total-val" data-total>S/ 0.00</span>
-         </div>
-       </div>
-       <!-- PIM (AÑO) -->
-       <div class="presup-grupo" data-grupo="pim">
-         <div class="presup-grupo-titulo"><i class="bi bi-calendar3"></i> PIM {{ p.anio }}</div>
-          {% set ns_idx2 = namespace(n=0) %}
-          {% for comp in componentes %}
-          <div class="presup-bloque">
-            <div class="presup-bloque-head">
-              <span class="presup-bloque-nombre">{{ comp }}</span>
-              <span class="presup-bloque-total" data-sub="{{ comp }}">S/ 0.00</span>
-            </div>
-            {% for f in presupuesto|selectattr('componente', 'equalto', comp) %}
-           <div class="presup-fila">
-             <span class="presup-det">{{ f.etiqueta }}</span>
-             <input type="text" inputmode="decimal" class="monto presup-input pres-pim"
-                    name="pres_pim_{{ ns_idx2.n }}" value="{{ '{:,.2f}'.format(f.pim or 0) }}"
-                    data-comp="{{ comp }}" autocomplete="off">
-           </div>
-           {% set ns_idx2.n = ns_idx2.n + 1 %}
-           {% endfor %}
-         </div>
-         {% endfor %}
-         <div class="presup-total-card">
-           <span class="presup-total-lbl"><i class="bi bi-cash-stack"></i> Total PIM {{ p.anio }}</span>
-           <span class="presup-total-val" data-total>S/ 0.00</span>
-         </div>
-       </div>
-     </div>
-      <div class="field-hint" style="margin-top: 10px;">Los montos actualizan la columna <b>Exp. Técnico</b> y <b>PIM {{ p.anio }}</b> de la FE-06 "Presupuesto vs ejecutado" y los totales del Resumen Financiero. El <b>Presupuesto total</b> se calcula automáticamente como la suma de todas las filas.</div>
-     <!-- Campos ocultos: los totales se recalcularan en el handler -->
-     <input type="hidden" name="presupuesto_total" value="">
-     <input type="hidden" name="costo_directo" value="">
-     <input type="hidden" name="gastos_generales" value="">
-     <input type="hidden" name="gastos_supervision" value="">
-     <input type="hidden" name="elaboracion_expediente" value="">
-     <input type="hidden" name="liquidacion_obra" value="">
-   </div>
-
   <div class="card">
     <div class="card-head"><h3><i class="bi bi-3-circle"></i> Equipo de gestión</h3></div>
     <div class="form-grid form-grid-cabecera">
@@ -210,25 +173,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-4-circle"></i> Período del informe</h3></div>
-    <div class="form-grid form-grid-cabecera">
-      <div class="field span2">
-        <label>Año</label>
-        <input type="number" name="anio" value="{{ p.anio }}">
-      </div>
-      <div class="field span2">
-        <label>Mes de trabajo (por defecto)</label>
-        <select name="mes_actual">
-          {% for m in MESES %}
-          <option value="{{ loop.index }}" {{ 'selected' if loop.index == p.mes_actual }}>{{ m }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h3><i class="bi bi-5-circle"></i> Cronograma y adicional de obra</h3></div>
+    <div class="card-head"><h3><i class="bi bi-4-circle"></i> Cronograma y adicional de obra</h3></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field">
         <label>Fecha de inicio de obra</label>
@@ -244,69 +189,79 @@
         <label>Días de ejecución</label>
         <input type="number" name="dias_ejecucion" id="dias_ejecucion" min="0"
                value="{{ p.dias_ejecucion }}">
-      </div>
-      <div class="field check">
-        <label class="check-line">
-          <input type="checkbox" name="adicional_obra" id="adicional_obra"
-                 {{ 'checked' if p.adicional_obra }}>
-          Adicional de obra
-        </label>
-        <div class="field-hint">Se habilitan los campos de ampliación.</div>
+        <div id="dias-total-badge" style="margin-top:4px;font-size:12px;color:var(--azul);font-weight:600;display:none">
+          <i class="bi bi-calendar3"></i> Total: <span id="dias-total-val">0</span> días (ejecución + adicionales)
+        </div>
       </div>
     </div>
-    <div class="form-grid form-grid-cabecera" id="adicional-fields">
-      <div class="field">
-        <label>Días de ampliación</label>
-        <input type="number" name="dias_ampliacion" id="dias_ampliacion" min="0"
-               value="{{ p.dias_ampliacion }}" disabled>
+    <input type="hidden" name="adicionales_json" id="adicionales_json"
+           value="{{ p.adicionales or '[]' }}">
+    <div style="padding:0 20px;margin-top:8px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <button type="button" class="btn btn-outline btn-sm" onclick="abrirModalAdicional()">
+          <i class="bi bi-plus-circle"></i> Agregar adicional
+        </button>
+        <span class="field-hint">Extensiones de plazo de la obra.</span>
       </div>
-      <div class="field">
-        <label>Nuevo final de obra</label>
-        <input type="date" name="nuevo_final_obra" id="nuevo_final_obra"
-               value="{{ p.nuevo_final_obra.strftime('%Y-%m-%d') if p.nuevo_final_obra else '' }}" disabled>
-      </div>
-      <div class="field span2">
-        <label>Monto de ampliación presupuestal (S/.)</label>
-        <input type="text" inputmode="decimal" class="monto" name="monto_ampliacion" id="monto_ampliacion" min="0"
-               value="{{ p.monto_ampliacion }}" disabled>
-      </div>
-      <div class="field full">
-        <label>N° de resolución de aprobación del adicional</label>
-        <input type="text" name="n_resolucion_adicional" id="n_resolucion_adicional"
-               value="{{ p.n_resolucion_adicional }}" disabled>
-      </div>
-      <div class="field full">
-        <label class="check-line">
-          <input type="checkbox" name="ampliacion_presupuestal" id="ampliacion_presupuestal"
-                 {{ 'checked' if p.ampliacion_presupuestal }} disabled>
-          ¿El adicional incluye ampliación presupuestal? (el monto se suma al PIM {{ p.anio }})
-        </label>
+      <div id="adicionales-list" class="form-grid form-grid-cabecera">
       </div>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-6-circle"></i> Clasificadores de gasto</h3></div>
+    <div class="card-head"><h3><i class="bi bi-5-circle"></i> Clasificadores de gasto</h3></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field">
         <label>Clasificador para PERSONAL</label>
-        <input type="text" name="clasificador_personal" value="{{ p.clasificador_personal or '2.6.2.3.99.3' }}">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" name="clasificador_personal" value="{{ p.clasificador_personal or '2.6.2.3.99.3' }}" style="flex:1">
+          <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'PERSONAL')"><i class="bi bi-trash"></i></button>
+        </div>
       </div>
       <div class="field">
         <label>Clasificador para BIENES</label>
-        <input type="text" name="clasificador_bienes" value="{{ p.clasificador_bienes or '2.6.2.3.99.4' }}">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" name="clasificador_bienes" value="{{ p.clasificador_bienes or '2.6.2.3.99.4' }}" style="flex:1">
+          <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'BIENES')"><i class="bi bi-trash"></i></button>
+        </div>
       </div>
       <div class="field">
         <label>Clasificador para SERVICIOS</label>
-        <input type="text" name="clasificador_servicios" value="{{ p.clasificador_servicios or '2.6.2.3.99.5' }}">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" name="clasificador_servicios" value="{{ p.clasificador_servicios or '2.6.2.3.99.5' }}" style="flex:1">
+          <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'SERVICIOS')"><i class="bi bi-trash"></i></button>
+        </div>
       </div>
       <div class="field">
         <label>Clasificador para ELABORACIÓN DE EXPEDIENTE TÉCNICO</label>
-        <input type="text" name="clasificador_expediente" value="{{ p.clasificador_expediente or '2.6.8.1.3.1' }}">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" name="clasificador_expediente" value="{{ p.clasificador_expediente or '2.6.8.1.3.1' }}" style="flex:1">
+          <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'ELABORACIÓN DE EXPEDIENTE TÉCNICO')"><i class="bi bi-trash"></i></button>
+        </div>
       </div>
       <div class="field">
         <label>Clasificador para LIQUIDACIÓN DE OBRA</label>
-        <input type="text" name="clasificador_liquidacion" value="{{ p.clasificador_liquidacion or 'LIQUIDACION' }}">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" name="clasificador_liquidacion" value="{{ p.clasificador_liquidacion or 'LIQUIDACION' }}" style="flex:1">
+          <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'LIQUIDACIÓN DE OBRA')"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>
+      {% for ex in clasificadores_extra %}
+      <div class="field extra-clasif">
+        <label>Clasificador para {{ ex.nombre }} <span style="color:var(--texto2);font-weight:400;font-size:.85em">({{ ex.componente or 'Costo Directo' }})</span></label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" name="extra_codigo_{{ loop.index0 }}" value="{{ ex.codigo or '' }}" style="flex:1">
+          <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="eliminarClasif(this)"><i class="bi bi-trash"></i></button>
+        </div>
+        <input type="hidden" name="extra_nombre_{{ loop.index0 }}" value="{{ ex.nombre or '' }}">
+        <input type="hidden" name="extra_componente_{{ loop.index0 }}" value="{{ ex.componente or 'Costo Directo' }}">
+      </div>
+      {% endfor %}
+      <div class="field full" style="margin-top:4px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button type="button" class="btn btn-outline btn-sm" onclick="abrirModalClasif()"><i class="bi bi-plus-circle"></i> Agregar clasificador</button>
+          <span class="field-hint">Códigos adicionales que aparecerán en los selects de gastos y órdenes.</span>
+        </div>
       </div>
       <div class="field full">
         <div class="field-hint">Estos códigos se usan en el <b>Ingreso de O/C o O/S</b> y en los
@@ -315,7 +270,160 @@
     </div>
   </div>
 
-  <div class="form-actions">
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-6-circle"></i> Presupuesto (S/.)</h3></div>
+    <div class="presup-grid">
+       {% set componentes = presupuesto|map(attribute='componente')|unique|list %}
+       <!-- EXPEDIENTE TÉCNICO -->
+       <div class="presup-grupo" data-grupo="et">
+         <div class="presup-grupo-titulo"><i class="bi bi-file-earmark-text"></i> Expediente Técnico</div>
+         {% set ns_idx = namespace(n=0) %}
+         {% set ns_ex = namespace(n=0) %}
+         {% for comp in componentes %}
+         <div class="presup-bloque">
+           <div class="presup-bloque-head">
+             <span class="presup-bloque-nombre">{{ comp }}</span>
+             <span class="presup-bloque-total" data-sub="{{ comp }}">S/ 0.00</span>
+           </div>
+           {% for f in presupuesto|selectattr('componente', 'equalto', comp) %}
+           {% if f.extra %}
+          <div class="presup-fila" style="border-left:3px solid var(--primary,#2563eb);padding-left:8px">
+            <span class="presup-det">{{ f.etiqueta }}</span>
+            <input type="text" inputmode="decimal" class="monto presup-input pres-et"
+                   name="pres_et_extra_{{ ns_ex.n }}" value="{{ '{:,.2f}'.format(f.et or 0) }}"
+                   data-comp="{{ comp }}" autocomplete="off">
+          </div>
+          {% set ns_ex.n = ns_ex.n + 1 %}
+          {% else %}
+          <div class="presup-fila">
+            <span class="presup-det">{{ f.etiqueta }}</span>
+            <input type="text" inputmode="decimal" class="monto presup-input pres-et"
+                   name="pres_et_{{ ns_idx.n }}" value="{{ '{:,.2f}'.format(f.et or 0) }}"
+                   data-comp="{{ comp }}" autocomplete="off">
+          </div>
+          {% set ns_idx.n = ns_idx.n + 1 %}
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <div class="presup-total-card">
+          <span class="presup-total-lbl"><i class="bi bi-cash-stack"></i> Total Expediente Técnico</span>
+          <span class="presup-total-val" data-total>S/ 0.00</span>
+        </div>
+      </div>
+      <!-- PIM (AÑO) -->
+      <div class="presup-grupo" data-grupo="pim">
+        <div class="presup-grupo-titulo"><i class="bi bi-calendar3"></i> PIM {{ p.anio }}</div>
+         {% set ns_idx2 = namespace(n=0) %}
+         {% set ns_ex2 = namespace(n=0) %}
+         {% for comp in componentes %}
+         <div class="presup-bloque">
+           <div class="presup-bloque-head">
+             <span class="presup-bloque-nombre">{{ comp }}</span>
+             <span class="presup-bloque-total" data-sub="{{ comp }}">S/ 0.00</span>
+           </div>
+           {% for f in presupuesto|selectattr('componente', 'equalto', comp) %}
+           {% if f.extra %}
+          <div class="presup-fila" style="border-left:3px solid var(--primary,#2563eb);padding-left:8px">
+            <span class="presup-det">{{ f.etiqueta }}</span>
+            <input type="text" inputmode="decimal" class="monto presup-input pres-pim"
+                   name="pres_pim_extra_{{ ns_ex2.n }}" value="{{ '{:,.2f}'.format(f.pim or 0) }}"
+                   data-comp="{{ comp }}" autocomplete="off">
+          </div>
+          {% set ns_ex2.n = ns_ex2.n + 1 %}
+          {% else %}
+          <div class="presup-fila">
+            <span class="presup-det">{{ f.etiqueta }}</span>
+            <input type="text" inputmode="decimal" class="monto presup-input pres-pim"
+                   name="pres_pim_{{ ns_idx2.n }}" value="{{ '{:,.2f}'.format(f.pim or 0) }}"
+                   data-comp="{{ comp }}" autocomplete="off">
+          </div>
+          {% set ns_idx2.n = ns_idx2.n + 1 %}
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <div class="presup-total-card">
+          <span class="presup-total-lbl"><i class="bi bi-cash-stack"></i> Total PIM {{ p.anio }}</span>
+          <span class="presup-total-val" data-total>S/ 0.00</span>
+        </div>
+      </div>
+    </div>
+     <div class="field-hint" style="margin-top: 10px;">Los montos actualizan la columna <b>Exp. Técnico</b> y <b>PIM {{ p.anio }}</b> de la FE-06 "Presupuesto vs ejecutado" y los totales del Resumen Financiero. El <b>Presupuesto total</b> se calcula automáticamente como la suma de todas las filas.</div>
+     <input type="hidden" name="presupuesto_total" value="">
+     <input type="hidden" name="costo_directo" value="">
+     <input type="hidden" name="gastos_generales" value="">
+     <input type="hidden" name="gastos_supervision" value="">
+     <input type="hidden" name="elaboracion_expediente" value="">
+     <input type="hidden" name="liquidacion_obra" value="">
+  </div>
+
+  <!-- Modal agregar clasificador -->
+  <div class="modal" id="modalClasif">
+    <div class="modal-backdrop" onclick="cerrarModalClasif()"></div>
+    <div class="modal-box" style="max-width:420px">
+      <button type="button" class="modal-close" onclick="cerrarModalClasif()"><i class="bi bi-x-lg"></i></button>
+      <div class="modal-body">
+        <h3 style="margin:0 0 16px"><i class="bi bi-tag"></i> Agregar clasificador de gasto</h3>
+        <div class="field">
+          <label>Nombre del clasificador</label>
+          <input type="text" id="clasi-nombre" placeholder="ej. OTROS GASTOS" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Código del clasificador</label>
+          <input type="text" id="clasi-codigo" placeholder="ej. 2.6.2.3.99.6" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Componente</label>
+          <select id="clasi-componente">
+            {% for comp in COMPONENTES %}
+            <option value="{{ comp }}">{{ comp }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-actions" style="border:none;padding:16px 0 0;margin-top:8px">
+          <button type="button" class="btn btn-primary" onclick="guardarClasif()"><i class="bi bi-check2-circle"></i> Guardar</button>
+          <button type="button" class="btn btn-outline" onclick="cerrarModalClasif()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal agregar adicional -->
+  <div class="modal" id="modalAdicional">
+    <div class="modal-backdrop" onclick="cerrarModalAdicional()"></div>
+    <div class="modal-box" style="max-width:480px">
+      <button type="button" class="modal-close" onclick="cerrarModalAdicional()"><i class="bi bi-x-lg"></i></button>
+      <div class="modal-body">
+        <h3 style="margin:0 0 16px"><i class="bi bi-calendar-plus"></i> Agregar adicional de obra</h3>
+        <div class="field">
+          <label>Días de ampliación</label>
+          <input type="number" id="adic-dias" min="0" placeholder="0">
+        </div>
+        <div class="field">
+          <label>N° de resolución de aprobación del adicional</label>
+          <input type="text" id="adic-resolucion" placeholder="ej. R.A. 123-2026">
+        </div>
+        <div class="field">
+          <label class="check-line">
+            <input type="checkbox" id="adic-ampliacion" onchange="toggleMontoAdicModal()">
+            ¿Incluye ampliación presupuestal? (el monto se suma al PIM {{ p.anio }})
+          </label>
+        </div>
+        <div class="field" id="adic-campo-monto" style="display:none">
+          <label>Monto de ampliación presupuestal (S/.)</label>
+          <input type="text" inputmode="decimal" class="monto" id="adic-monto" placeholder="0.00">
+        </div>
+        <div class="form-actions" style="border:none;padding:16px 0 0;margin-top:8px">
+          <button type="button" class="btn btn-primary" onclick="guardarAdicional()"><i class="bi bi-check2-circle"></i> Guardar</button>
+          <button type="button" class="btn btn-outline" onclick="cerrarModalAdicional()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <div class="form-actions" style="margin-top:18px;padding:18px 24px;background:var(--card,#fff);border:1px solid var(--borde,#e2e8f0);border-radius:12px">
     <button type="submit" class="btn btn-primary btn-lg" formnovalidate><i class="bi bi-check2-circle"></i> Guardar cabecera</button>
     <a href="{{ url_for('dashboard') }}" class="btn btn-outline">Cancelar</a>
   </div>
@@ -360,19 +468,94 @@
     });
   }
 
-  function setDisabled(cond, campos) {
-    campos.forEach(function (id) {
-      document.getElementById(id).disabled = !cond;
+  var adicionalesData = [];
+  try { adicionalesData = JSON.parse(document.getElementById('adicionales_json').value || '[]'); } catch(e) { adicionalesData = []; }
+
+  function abrirModalAdicional() {
+    document.getElementById('adic-dias').value = '';
+    document.getElementById('adic-resolucion').value = '';
+    document.getElementById('adic-ampliacion').checked = false;
+    document.getElementById('adic-monto').value = '';
+    document.getElementById('adic-campo-monto').style.display = 'none';
+    document.getElementById('modalAdicional').classList.add('open');
+    document.getElementById('adic-dias').focus();
+  }
+  function cerrarModalAdicional() {
+    document.getElementById('modalAdicional').classList.remove('open');
+  }
+  function toggleMontoAdicModal() {
+    var chk = document.getElementById('adic-ampliacion').checked;
+    document.getElementById('adic-campo-monto').style.display = chk ? '' : 'none';
+  }
+  function guardarAdicional() {
+    var dias = parseInt(document.getElementById('adic-dias').value, 10) || 0;
+    var resol = document.getElementById('adic-resolucion').value.trim();
+    var amp = document.getElementById('adic-ampliacion').checked;
+    var monto = 0;
+    if (amp) {
+      monto = parseFloat(document.getElementById('adic-monto').value.replace(/,/g, '')) || 0;
+    }
+    if (!dias && !resol) { alert('Ingrese los días de ampliación o el número de resolución.'); return; }
+    adicionalesData.push({ dias_ampliacion: dias, n_resolucion_adicional: resol, ampliacion_presupuestal: amp, monto_ampliacion: monto });
+    document.getElementById('adicionales_json').value = JSON.stringify(adicionalesData);
+    renderAdicionales();
+    cerrarModalAdicional();
+  }
+  function eliminarAdicional(idx) {
+    confirmarPopup({
+      titulo: 'Eliminar adicional',
+      mensaje: '¿Está seguro de eliminar el Adicional ' + (idx + 1) + '? Se recalcularán las fechas.',
+      botonOk: 'Eliminar',
+      colorOk: 'btn-red',
+      icono: 'danger'
+    }).then(function (acepto) {
+      if (!acepto) return;
+      adicionalesData.splice(idx, 1);
+      document.getElementById('adicionales_json').value = JSON.stringify(adicionalesData);
+      renderAdicionales();
     });
   }
-
-  function actualizarAdicional() {
-    var activo = document.getElementById('adicional_obra').checked;
-    setDisabled(activo, ['dias_ampliacion', 'nuevo_final_obra',
-                         'n_resolucion_adicional', 'ampliacion_presupuestal']);
-    document.getElementById('monto_ampliacion').disabled =
-      !(activo && document.getElementById('ampliacion_presupuestal').checked);
+  function renderAdicionales() {
+    var container = document.getElementById('adicionales-list');
+    container.innerHTML = '';
+    var inicio = parseFecha(document.getElementById('fecha_inicio').value);
+    var ejec = parseInt(document.getElementById('dias_ejecucion').value, 10) || 0;
+    var totalDiasAdic = 0;
+    var totalPim = 0;
+    adicionalesData.forEach(function (ad) { totalDiasAdic += ad.dias_ampliacion || 0; totalPim += ad.ampliacion_presupuestal ? (ad.monto_ampliacion || 0) : 0; });
+    var badge = document.getElementById('dias-total-badge');
+    var diasInput = parseInt(document.getElementById('dias_ejecucion').value, 10) || 0;
+    if (totalDiasAdic > 0) {
+      badge.style.display = '';
+      document.getElementById('dias-total-val').textContent = diasInput + totalDiasAdic;
+    } else {
+      badge.style.display = 'none';
+    }
+    var acumDias = 0;
+    adicionalesData.forEach(function (ad, i) {
+      var d = document.createElement('div');
+      d.className = 'adicional-card';
+      var nf = '';
+      if (inicio && ejec) {
+        acumDias += (ad.dias_ampliacion || 0);
+        var fd = new Date(inicio);
+        fd.setDate(fd.getDate() + ejec + acumDias);
+        nf = fmtFecha(fd);
+      }
+      var diasPill = ad.dias_ampliacion ? '<span class="adic-pill">' + ad.dias_ampliacion + ' días</span>' : '';
+      var resPill = ad.n_resolucion_adicional ? '<span class="adic-pill">' + ad.n_resolucion_adicional + '</span>' : '';
+      var montoPill = ad.ampliacion_presupuestal ? '<span class="adic-pill adic-pill-pim">PIM: S/ ' + (ad.monto_ampliacion || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</span>' : '';
+      d.innerHTML =
+        '<div class="adic-card-head">' +
+          '<span class="adic-num">Adicional ' + (i + 1) + '</span>' +
+          '<button type="button" class="adic-btn-del" title="Eliminar adicional" onclick="eliminarAdicional(' + i + ')"><i class="bi bi-trash3"></i></button>' +
+        '</div>' +
+        '<div class="adic-card-pills">' + diasPill + resPill + montoPill + '</div>' +
+        (nf ? '<div class="adic-card-footer">Fecha estimada de fin: <b>' + nf + '</b></div>' : '');
+      container.appendChild(d);
+    });
   }
+  renderAdicionales();
 
   function parseFecha(v) {
     if (!v) return null;
@@ -395,12 +578,12 @@
   function actualizarNuevoFinal() {
     var inicio = parseFecha(document.getElementById('fecha_inicio').value);
     var dias = parseInt(document.getElementById('dias_ejecucion').value, 10) || 0;
-    var da = parseInt(document.getElementById('dias_ampliacion').value, 10) || 0;
-    var nf = document.getElementById('nuevo_final_obra');
-    if (inicio && (dias || da)) {
+    var totalAdic = 0;
+    adicionalesData.forEach(function (ad) { totalAdic += ad.dias_ampliacion || 0; });
+    if (inicio && (dias || totalAdic)) {
       var d = new Date(inicio);
-      d.setDate(d.getDate() + dias + da);
-      nf.value = fmtFecha(d);
+      d.setDate(d.getDate() + dias + totalAdic);
+      document.getElementById('fecha_fin').value = fmtFecha(d);
     }
   }
 
@@ -456,7 +639,6 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    actualizarAdicional();
     recalcularPresupuesto();
     document.querySelectorAll('.presup-input').forEach(function (inp) {
       inp.addEventListener('input', recalcularPresupuesto);
@@ -466,17 +648,94 @@
     var inicio = document.getElementById('fecha_inicio');
     var fin = document.getElementById('fecha_fin');
     var dias = document.getElementById('dias_ejecucion');
-    var ampliacion = document.getElementById('dias_ampliacion');
     inicio.addEventListener('change', recalcularPorInicio);
     inicio.addEventListener('input', recalcularPorInicio);
     fin.addEventListener('change', function () { desdeFechaFin(); actualizarNuevoFinal(); });
     fin.addEventListener('input', function () { desdeFechaFin(); actualizarNuevoFinal(); });
-    dias.addEventListener('change', function () { desdeDiasEjecucion(); actualizarNuevoFinal(); });
-    dias.addEventListener('input', function () { desdeDiasEjecucion(); actualizarNuevoFinal(); });
-    ampliacion.addEventListener('change', actualizarNuevoFinal);
-    ampliacion.addEventListener('input', actualizarNuevoFinal);
-    document.getElementById('adicional_obra').addEventListener('change', actualizarAdicional);
-    document.getElementById('ampliacion_presupuestal').addEventListener('change', actualizarAdicional);
+    dias.addEventListener('change', function () { desdeDiasEjecucion(); actualizarNuevoFinal(); renderAdicionales(); });
+    dias.addEventListener('input', function () { desdeDiasEjecucion(); actualizarNuevoFinal(); renderAdicionales(); });
   });
+  function abrirModalClasif() {
+    document.getElementById('clasi-nombre').value = '';
+    document.getElementById('clasi-codigo').value = '';
+    document.getElementById('modalClasif').classList.add('open');
+    document.getElementById('clasi-nombre').focus();
+  }
+  function cerrarModalClasif() {
+    document.getElementById('modalClasif').classList.remove('open');
+  }
+  function guardarClasif() {
+    var nombre = document.getElementById('clasi-nombre').value.trim().toUpperCase();
+    var codigo = document.getElementById('clasi-codigo').value.trim().toUpperCase();
+    var componente = document.getElementById('clasi-componente').value;
+    if (!nombre || !codigo) {
+      alert('Ingrese el nombre y código del clasificador.');
+      return;
+    }
+    var items = document.querySelectorAll('.extra-clasif');
+    var idx = items.length;
+    var div = document.createElement('div');
+    div.className = 'field extra-clasif';
+    div.innerHTML =
+      '<label>Clasificador para ' + nombre + ' <span style="color:var(--texto2);font-weight:400;font-size:.85em">(' + componente + ')</span></label>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+      '<input type="text" name="extra_codigo_' + idx + '" value="' + codigo + '" style="flex:1">' +
+      '<button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="eliminarClasif(this)"><i class="bi bi-trash"></i></button>' +
+      '</div>' +
+      '<input type="hidden" name="extra_nombre_' + idx + '" value="' + nombre + '">' +
+      '<input type="hidden" name="extra_componente_' + idx + '" value="' + componente + '">';
+    var btnField = document.querySelector('.form-grid-cabecera .field.full[style*="margin-top"]');
+    if (btnField) btnField.parentNode.insertBefore(div, btnField);
+    cerrarModalClasif();
+  }
+  function eliminarClasif(btn) {
+    var label = btn.closest('.extra-clasif');
+    var nombre = '';
+    if (label) { var lbl = label.querySelector('label'); if (lbl) nombre = lbl.textContent.trim(); }
+    confirmarPopup({
+      titulo: 'Eliminar clasificador',
+      mensaje: '¿Está seguro de eliminar ' + (nombre || 'este clasificador') + '?',
+      botonOk: 'Eliminar',
+      colorOk: 'btn-red',
+      icono: 'danger'
+    }).then(function (acepto) {
+      if (!acepto) return;
+      btn.closest('.extra-clasif').remove();
+      var nCards = document.querySelectorAll('.extra-clasif').length;
+      document.querySelectorAll('.presup-fila[style*="border-left"]').forEach(function (fila) {
+        var inp = fila.querySelector('input[name^="pres_et_extra_"], input[name^="pres_pim_extra_"]');
+        if (inp) {
+          var m = inp.name.match(/pres_(?:et|pim)_extra_(\d+)/);
+          if (m && parseInt(m[1]) >= nCards) fila.remove();
+        }
+      });
+      renumerarExtras();
+    });
+  }
+  function renumerarExtras() {
+    var items = document.querySelectorAll('.extra-clasif');
+    items.forEach(function (el, i) {
+      var cod = el.querySelector('input[type="text"]');
+      var hiddens = el.querySelectorAll('input[type="hidden"]');
+      if (cod) cod.name = 'extra_codigo_' + i;
+      if (hiddens[0]) hiddens[0].name = 'extra_nombre_' + i;
+      if (hiddens[1]) hiddens[1].name = 'extra_componente_' + i;
+    });
+    var etInputs = document.querySelectorAll('input[name^="pres_et_extra_"]');
+    var pimInputs = document.querySelectorAll('input[name^="pres_pim_extra_"]');
+    etInputs.forEach(function (inp, i) { inp.name = 'pres_et_extra_' + i; });
+    pimInputs.forEach(function (inp, i) { inp.name = 'pres_pim_extra_' + i; });
+  }
+  function limpiarClasifBase(inp, nombre) {
+    confirmarPopup({
+      titulo: 'Eliminar clasificador',
+      mensaje: '¿Está seguro de eliminar el clasificador de ' + nombre + '?',
+      botonOk: 'Eliminar',
+      colorOk: 'btn-red',
+      icono: 'danger'
+    }).then(function (acepto) {
+      if (acepto) inp.value = '';
+    });
+  }
 </script>
 {% endblock %}

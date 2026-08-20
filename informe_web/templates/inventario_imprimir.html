@@ -10,13 +10,15 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
 <style>
   .fila-total td { font-size: 8.5pt; padding: 5px 5px; }
-  .num { text-align: right; }
-  .ctr { text-align: center; }
-  .wrap { word-break: break-word; }
-  .strong { font-weight: 700; }
-  .ent { color: #17713a; font-weight: 700; }
-  .sal { color: #a62626; font-weight: 700; }
-  .tabla th { background: var(--azul-osc); color: #fff; }
+  .saldo-pos { color: #16a34a; font-weight: 700; }
+  .saldo-neg { color: #dc2626; font-weight: 700; }
+  .resumen-print { display: flex; gap: 8px; margin: 6px 0; }
+  .resumen-print .rb { flex: 1; border: 1px solid var(--borde); border-radius: 5px; padding: 5px 8px; text-align: center; }
+  .resumen-print .rb-val { font-size: 11pt; font-weight: 700; color: var(--azul-osc); }
+  .resumen-print .rb-lbl { font-size: 6.5pt; text-transform: uppercase; color: var(--texto2); letter-spacing: .3px; margin-top: 1px; }
+  table.tabla td.ctr.und-col { white-space: nowrap; text-align: center; }
+  table.tabla th.und-col { white-space: nowrap; }
+  table.tabla td.num { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -44,7 +46,7 @@
   <div class="info-grid">
     <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
     <div class="info-item"><span class="info-label">Codigo Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
-    <div class="info-item"><span class="info-label">Responsable Almacén</span><span class="info-val">{{ p.responsable_almacen or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Responsable Almacen</span><span class="info-val">{{ p.responsable_almacen or '' }}</span></div>
   </div>
   <div class="responsables">
     <div class="resp-item"><div class="resp-label">Supervisor de Obra</div><div class="resp-val">{{ p.supervisor or '' }}</div></div>
@@ -52,17 +54,28 @@
     <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
   </div>
 
+  <div class="resumen-print">
+    <div class="rb"><div class="rb-val">{{ p_items }}</div><div class="rb-lbl">Materiales</div></div>
+    <div class="rb"><div class="rb-val">{{ "{:,.2f}".format(totals.cant_in) }}</div><div class="rb-lbl">Total Ingresos</div></div>
+    <div class="rb"><div class="rb-val">{{ "{:,.2f}".format(totals.cant_out) }}</div><div class="rb-lbl">Total Egresos</div></div>
+    <div class="rb"><div class="rb-val">{{ "{:,.2f}".format(totals.saldo) }}</div><div class="rb-lbl">Saldo Fisico</div></div>
+    <div class="rb"><div class="rb-val">S/ {{ "{:,.2f}".format(totals.valor_in) }}</div><div class="rb-lbl">Valor Ingresos</div></div>
+    <div class="rb"><div class="rb-val">S/ {{ "{:,.2f}".format(totals.valor_saldo) }}</div><div class="rb-lbl">Valor en Saldo</div></div>
+  </div>
+
   <table class="tabla">
     <colgroup>
-      <col style="min-width:25px"><col style="min-width:220px"><col style="min-width:30px">
-      <col style="min-width:55px"><col style="min-width:55px"><col style="min-width:50px">
-      <col style="min-width:45px"><col style="min-width:60px"><col style="min-width:75px">
+      <col style="min-width:25px"><col style="min-width:190px"><col style="white-space:nowrap;width:35px">
+      <col style="min-width:50px"><col style="min-width:50px"><col style="min-width:42px">
+      <col style="min-width:60px"><col style="min-width:55px"><col style="min-width:55px">
+      <col style="min-width:55px"><col style="min-width:50px">
     </colgroup>
     <thead>
       <tr>
-        <th>#</th><th>Descripción</th><th>Und</th>
+        <th>#</th><th>Descripcion del Material</th><th class="und-col">Und</th>
         <th class="num">Cant. Ingreso</th><th class="num">Cant. Egreso</th><th class="num">Saldo</th>
-        <th class="num">P.U.</th><th class="num">Valor Ingreso</th><th class="num">Valor Saldo</th>
+        <th class="num">P.U.</th><th class="num">Valor Ingreso</th><th class="num">Valor Egreso</th>
+        <th class="num">Valor Saldo</th><th>Ult. Ingreso</th>
       </tr>
     </thead>
     <tbody>
@@ -70,28 +83,50 @@
       <tr>
         <td class="ctr">{{ loop.index }}</td>
         <td><b>{{ item.descripcion }}</b></td>
-        <td class="ctr">{{ item.und }}</td>
+        <td class="ctr und-col">{{ item.und }}</td>
         <td class="num">{{ "{:,.2f}".format(item.cant_in) }}</td>
         <td class="num">{{ "{:,.2f}".format(item.cant_out) }}</td>
-        <td class="num strong">{{ "{:,.2f}".format(item.saldo) }}</td>
-        <td class="num">{{ "S/ {:,.2f}".format(item.pu) if item.saldo > 0 else '' }}</td>
+        <td class="num strong {{ 'saldo-pos' if item.saldo > 0 else ('saldo-neg' if item.saldo < 0 else '') }}">{{ "{:,.2f}".format(item.saldo) }}</td>
+        <td class="num">{{ "S/ {:,.2f}".format(item.pu) if item.saldo > 0 else '-' }}</td>
         <td class="num">{{ "S/ {:,.2f}".format(item.valor_in) }}</td>
+        <td class="num">{{ "S/ {:,.2f}".format(item.valor_out) }}</td>
         <td class="num strong">{{ "S/ {:,.2f}".format(item.valor_saldo) }}</td>
+        <td>{{ item.ult_entrada.strftime("%d/%m/%Y") if item.ult_entrada else '-' }}</td>
       </tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr class="fila-total">
-        <td colspan="3" class="right strong">TOTAL</td>
+        <td colspan="3" class="right strong">TOTALES</td>
         <td class="num strong">{{ "{:,.2f}".format(totals.cant_in) }}</td>
         <td class="num strong">{{ "{:,.2f}".format(totals.cant_out) }}</td>
         <td class="num strong">{{ "{:,.2f}".format(totals.saldo) }}</td>
         <td class="num"></td>
         <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_in) }}</td>
+        <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_out) }}</td>
         <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_saldo) }}</td>
+        <td></td>
       </tr>
     </tfoot>
   </table>
+
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.supervisor or '' }}</div>
+      <div class="cargo">Supervisor de Obra</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.residente or '' }}</div>
+      <div class="cargo">Residente de Obra</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.responsable_almacen or '' }}</div>
+      <div class="cargo">Responsable de Almacen</div>
+    </div>
+  </div>
 </div>
 </body>
 </html>

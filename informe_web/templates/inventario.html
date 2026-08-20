@@ -4,10 +4,46 @@
 {% block meta_description %}Reporte de inventario consolidado por material del almacén de obra - {{ MESES[mes-1] }} {{ anio }}.{% endblock %}
 
 {% block content %}
+<style>
+  .inv-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+  .inv-header h3{margin:0}
+  .inv-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:.82em;font-weight:600;background:var(--bg2,#f0f4f8);color:var(--texto2,#666)}
+  .inv-resumen{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .inv-ri{background:var(--card,#fff);border:1px solid var(--borde,#e2e8f0);border-radius:12px;padding:16px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .inv-ri .ico{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1em}
+  .inv-ri .ico.blue{background:#dbeafe;color:#2563eb}
+  .inv-ri .ico.green{background:#dcfce7;color:#16a34a}
+  .inv-ri .ico.red{background:#fee2e2;color:#dc2626}
+  .inv-ri .ico.gold{background:#fef3c7;color:#d97706}
+  .inv-ri .val{font-size:1.4em;font-weight:700;color:var(--texto,#1e293b)}
+  .inv-ri .lbl{font-size:.78em;color:var(--texto2,#666);text-transform:uppercase;letter-spacing:.5px}
+  .inv-table th{background:var(--azul-osc,#1e3a5f);color:#fff;font-size:.8em;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;padding:8px 10px}
+  .inv-table td{font-size:.85em;padding:6px 10px;vertical-align:middle}
+  .inv-table .fila-total td{background:var(--bg2,#f0f4f8);font-weight:700;border-top:2px solid var(--azul-osc,#1e3a5f)}
+  .inv-saldo-pos{color:#16a34a;font-weight:600}
+  .inv-saldo-neg{color:#dc2626;font-weight:600}
+  .inv-fecha{font-size:.78em;color:var(--texto2,#666)}
+  .inv-oc{font-family:monospace;font-size:.82em;background:var(--bg2,#f0f4f8);padding:2px 6px;border-radius:4px}
+  .inv-filtros{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .inv-filtros input{padding:6px 12px;border:1px solid var(--borde,#e2e8f0);border-radius:8px;font-size:13px;width:220px}
+  .inv-leyenda{display:flex;gap:16px;font-size:.8em;color:var(--texto2,#666);margin-top:8px;flex-wrap:wrap}
+  .inv-leyenda span{display:inline-flex;align-items:center;gap:4px}
+  .inv-leyenda .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .inv-leyenda .dot.pos{background:#16a34a}
+  .inv-leyenda .dot.neg{background:#dc2626}
+  .inv-leyenda .dot.cero{background:#94a3b8}
+</style>
+
 <div class="card">
   <div class="card-head between">
-    <h3><i class="bi bi-box-seam"></i> REPORTE DE INVENTARIO - {{ MESES[mes-1] }} {{ anio }}</h3>
-    <div>
+    <div class="inv-header">
+      <h3><i class="bi bi-box-seam"></i> REPORTE DE INVENTARIO</h3>
+      <span class="inv-badge"><i class="bi bi-calendar3"></i> {{ MESES[mes-1] }} {{ anio }}</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="inv-filtros">
+        <input type="text" id="searchInv" placeholder="Buscar material..." oninput="filtrarInv()">
+      </div>
       <a class="btn btn-print btn-sm" href="{{ url_for('imprimir_inventario', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
       <a class="btn btn-outline btn-sm" href="{{ url_for('almacen', mes=mes, anio=anio) }}"><i class="bi bi-arrow-left"></i> Volver</a>
     </div>
@@ -15,90 +51,96 @@
 </div>
 
 {% if items %}
-<div class="card resumen-card" style="margin-bottom:16px">
-  <div class="resumen-title">
-    <span><i class="bi bi-graph-up"></i> RESUMEN DE INVENTARIO</span>
+<div class="inv-resumen">
+  <div class="inv-ri">
+    <span class="ico blue"><i class="bi bi-boxes"></i></span>
+    <span class="val">{{ p_items }}</span>
+    <span class="lbl">Materiales</span>
   </div>
-  <div class="resumen-grid">
-    <div class="resumen-item">
-      <span class="resumen-ico blue"><i class="bi bi-boxes"></i></span>
-      <div class="resumen-val">{{ p_items }}</div>
-      <div class="resumen-lbl">Materiales</div>
-    </div>
-    <div class="resumen-item">
-      <span class="resumen-ico green"><i class="bi bi-box-arrow-in-down"></i></span>
-      <div class="resumen-val">{{ "{:,.2f}".format(totals.cant_in) }}</div>
-      <div class="resumen-lbl">Total entradas</div>
-    </div>
-    <div class="resumen-item">
-      <span class="resumen-ico red"><i class="bi bi-box-arrow-up"></i></span>
-      <div class="resumen-val">{{ "{:,.2f}".format(totals.cant_out) }}</div>
-      <div class="resumen-lbl">Total salidas</div>
-    </div>
-    <div class="resumen-item">
-      <span class="resumen-ico gold"><i class="bi bi-arrow-repeat"></i></span>
-      <div class="resumen-val">{{ "{:,.2f}".format(totals.saldo) }}</div>
-      <div class="resumen-lbl">Saldo total</div>
-    </div>
-    <div class="resumen-item">
-      <span class="resumen-ico blue"><i class="bi bi-cash-stack"></i></span>
-      <div class="resumen-val">{{ "S/ {:,.2f}".format(totals.valor_saldo) }}</div>
-      <div class="resumen-lbl">Valor saldo</div>
-    </div>
+  <div class="inv-ri">
+    <span class="ico green"><i class="bi bi-box-arrow-in-down"></i></span>
+    <span class="val">{{ "{:,.2f}".format(totals.cant_in) }}</span>
+    <span class="lbl">Total Ingresos</span>
+  </div>
+  <div class="inv-ri">
+    <span class="ico red"><i class="bi bi-box-arrow-up"></i></span>
+    <span class="val">{{ "{:,.2f}".format(totals.cant_out) }}</span>
+    <span class="lbl">Total Egresos</span>
+  </div>
+  <div class="inv-ri">
+    <span class="ico gold"><i class="bi bi-arrow-repeat"></i></span>
+    <span class="val">{{ "{:,.2f}".format(totals.saldo) }}</span>
+    <span class="lbl">Saldo Fisico</span>
+  </div>
+  <div class="inv-ri">
+    <span class="ico blue"><i class="bi bi-cash-stack"></i></span>
+    <span class="val">S/ {{ "{:,.2f}".format(totals.valor_in) }}</span>
+    <span class="lbl">Valor Ingresos</span>
+  </div>
+  <div class="inv-ri">
+    <span class="ico gold"><i class="bi bi-piggy-bank"></i></span>
+    <span class="val">S/ {{ "{:,.2f}".format(totals.valor_saldo) }}</span>
+    <span class="lbl">Valor en Saldo</span>
   </div>
 </div>
 
-<div class="card">
+<div class="inv-leyenda">
+  <span><span class="dot pos"></span> Saldo positivo</span>
+  <span><span class="dot neg"></span> Saldo negativo (verificar)</span>
+  <span><span class="dot cero"></span> Saldo cero (agotado)</span>
+</div>
+
+<div class="card" style="margin-top:8px">
   <div class="table-scroll">
-    <table class="table table-compact">
+    <table class="table table-compact inv-table">
       <colgroup>
-        <col style="width:5%">
-        <col style="width:40%">
-        <col style="width:5%">
-        <col style="width:8%">
-        <col style="width:8%">
-        <col style="width:8%">
-        <col style="width:8%">
-        <col style="width:10%">
-        <col style="width:10%">
+        <col style="width:4%"><col style="width:28%"><col style="width:5%"><col style="width:8%">
+        <col style="width:8%"><col style="width:7%"><col style="width:7%">
+        <col style="width:9%"><col style="width:7%"><col style="width:8%"><col style="width:9%">
       </colgroup>
       <thead>
         <tr>
-          <th>Item</th>
-          <th>Descripción</th>
+          <th>#</th>
+          <th>Descripcion del Material</th>
           <th>Und</th>
           <th class="num">Cant. Ingreso</th>
           <th class="num">Cant. Egreso</th>
-          <th class="num">Saldo</th>
-          <th class="num">P.U.</th>
-          <th class="num">Valor Ingreso</th>
-          <th class="num">Valor Saldo</th>
+          <th class="num">Saldo Fisico</th>
+          <th class="num">P.U. (S/)</th>
+          <th class="num">Valor Ingreso (S/)</th>
+          <th class="num">Valor Egreso (S/)</th>
+          <th class="num">Valor Saldo (S/)</th>
+          <th>Ult. Ingreso</th>
         </tr>
       </thead>
       <tbody>
         {% for item in items %}
-        <tr class="{{ 'ent' if item.saldo > 0 else ('sal' if item.saldo < 0 else '') }}">
+        <tr class="inv-row" data-text="{{ item.descripcion|lower }}">
           <td class="ctr">{{ loop.index }}</td>
           <td class="wrap strong">{{ item.descripcion }}</td>
           <td class="ctr">{{ item.und }}</td>
           <td class="num">{{ "{:,.2f}".format(item.cant_in) }}</td>
           <td class="num">{{ "{:,.2f}".format(item.cant_out) }}</td>
-          <td class="num strong">{{ "{:,.2f}".format(item.saldo) }}</td>
-          <td class="num">{{ "S/ {:,.2f}".format(item.pu) if item.saldo > 0 else '' }}</td>
+          <td class="num {{ 'inv-saldo-pos' if item.saldo > 0 else ('inv-saldo-neg' if item.saldo < 0 else '') }}">{{ "{:,.2f}".format(item.saldo) }}</td>
+          <td class="num">{{ "S/ {:,.2f}".format(item.pu) if item.saldo > 0 else '-' }}</td>
           <td class="num">{{ "S/ {:,.2f}".format(item.valor_in) }}</td>
+          <td class="num">{{ "S/ {:,.2f}".format(item.valor_out) }}</td>
           <td class="num strong">{{ "S/ {:,.2f}".format(item.valor_saldo) }}</td>
+          <td class="inv-fecha">{{ item.ult_entrada.strftime("%d/%m/%Y") if item.ult_entrada else '-' }}</td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot>
         <tr class="fila-total">
-          <td colspan="3" class="right strong">TOTAL</td>
+          <td colspan="3" class="right strong">TOTALES</td>
           <td class="num strong">{{ "{:,.2f}".format(totals.cant_in) }}</td>
           <td class="num strong">{{ "{:,.2f}".format(totals.cant_out) }}</td>
           <td class="num strong">{{ "{:,.2f}".format(totals.saldo) }}</td>
           <td class="num"></td>
           <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_in) }}</td>
+          <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_out) }}</td>
           <td class="num strong">{{ "S/ {:,.2f}".format(totals.valor_saldo) }}</td>
+          <td></td>
         </tr>
       </tfoot>
     </table>
@@ -106,7 +148,18 @@
 </div>
 {% else %}
 <div class="card">
-  <p class="empty">No hay movimientos de almacén para {{ MESES[mes-1] }} {{ anio }}.</p>
+  <p class="empty">No hay movimientos de almacen para {{ MESES[mes-1] }} {{ anio }}.</p>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filtrarInv() {
+  var q = document.getElementById('searchInv').value.toLowerCase();
+  document.querySelectorAll('.inv-row').forEach(function(r) {
+    r.style.display = r.dataset.text.indexOf(q) > -1 ? '' : 'none';
+  });
+}
+</script>
 {% endblock %}

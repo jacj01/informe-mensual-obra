@@ -94,6 +94,7 @@ def migrar_schema():
             "n_resolucion_adicional": "VARCHAR(200) DEFAULT ''",
             "monto_ampliacion": "FLOAT DEFAULT 0",
             "adicional_obra": "BOOLEAN DEFAULT 0",
+            "adicionales": "TEXT DEFAULT ''",
             "ampliacion_presupuestal": "BOOLEAN DEFAULT 0",
         }
         for col, tipo in nuevos.items():
@@ -1009,8 +1010,51 @@ def ruta_db():
     return os.path.join(BASE_PROYECTO, "instance", "informe.db")
 
 
+# ------------------- CIFRADO DE RESPALDOS -------------------
+_MAGIC = b"INFRES"  # cabecera mágica para identificar archivos cifrados
+_SALT = b"InformeMensual2026!@#"
+
+
+def _derivar_clave():
+    """Derive una clave de 32 bytes a partir del hostname de la máquina."""
+    import socket
+    host = socket.gethostname().encode("utf-8")
+    return hashlib.sha256(_SALT + host).digest()
+
+
+def _cifrar_datos(data):
+    """Cifra datos con XOR usando la clave derivada del hostname."""
+    clave = _derivar_clave()
+    # Stream cipher XOR con clave repetida
+    out = bytearray(len(data))
+    for i in range(len(data)):
+        out[i] = data[i] ^ clave[i % len(clave)]
+    return _MAGIC + bytes(out)
+
+
+def _descifrar_datos(data):
+    """Descifra datos XOR si tienen cabecera mágica; si no, retorna tal cual (compat)."""
+    if data[:len(_MAGIC)] == _MAGIC:
+        payload = data[len(_MAGIC):]
+        clave = _derivar_clave()
+        out = bytearray(len(payload))
+        for i in range(len(payload)):
+            out[i] = payload[i] ^ clave[i % len(clave)]
+        return bytes(out)
+    return data  # compatibilidad con respaldos antiguos sin cifrar
+
+
+def _es_cifrado(path):
+    """True si el archivo tiene cabecera mágica de cifrado."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(len(_MAGIC)) == _MAGIC
+    except Exception:
+        return False
+
+
 def crear_respaldo(nombre=None, db_path=None):
-    """Copia la base indicada (o la base en uso) a la carpeta de respaldos.
+    """Copia la base indicada (o la base en uso) a la carpeta de respaldos y la cifra.
 
     db_path permite respaldar explícitamente la base de un Administrador
     (p.ej. al restablecer o eliminar su proyecto).
@@ -1027,6 +1071,14 @@ def crear_respaldo(nombre=None, db_path=None):
     finally:
         dst.close()
         src.close()
+    # Cifrar el archivo de respaldo
+    try:
+        with open(dest, "rb") as f:
+            raw = f.read()
+        with open(dest, "wb") as f:
+            f.write(_cifrar_datos(raw))
+    except Exception as e:
+        logging.getLogger("respaldo").warning("No se pudo cifrar respaldo: %s", e)
     problemas = verificar_integridad(dest)
     if problemas:
         logging.getLogger("respaldo").warning(
@@ -1037,17 +1089,27 @@ def crear_respaldo(nombre=None, db_path=None):
 
 
 def verificar_integridad(db_path):
-    """Ejecuta PRAGMA integrity_check sobre una base SQLite.
-
-    Devuelve la lista de errores (vacía si la base está íntegra).
-    """
+    """Ejecuta PRAGMA integrity_check sobre una base SQLite (cifrada o no)."""
     try:
-        con = sqlite3.connect(db_path)
+        with open(db_path, "rb") as f:
+            raw = f.read()
+        data = _descifrar_datos(raw)
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.write(data)
+        tmp.close()
         try:
-            filas = con.execute("PRAGMA integrity_check").fetchall()
-            return [f[0] for f in filas if f[0] != "ok"]
+            con = sqlite3.connect(tmp.name)
+            try:
+                filas = con.execute("PRAGMA integrity_check").fetchall()
+                return [f[0] for f in filas if f[0] != "ok"]
+            finally:
+                con.close()
         finally:
-            con.close()
+            try:
+                os.remove(tmp.name)
+            except Exception:
+                pass
     except sqlite3.Error as e:
         return [str(e)]
 
@@ -1178,7 +1240,19 @@ def restaurar_respaldo(nombre):
     src = os.path.join(RESPALDO_DIR, nombre)
     if not os.path.isfile(src):
         raise FileNotFoundError("El respaldo no existe.")
-    con = sqlite3.connect(src)
+    # Descifrar si es necesario
+    try:
+        with open(src, "rb") as f:
+            raw = f.read()
+        decrypted = _descifrar_datos(raw)
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.write(decrypted)
+        tmp.close()
+        restore_src = tmp.name
+    except Exception:
+        restore_src = src
+    con = sqlite3.connect(restore_src)
     try:
         con.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()
     finally:
@@ -1192,7 +1266,7 @@ def restaurar_respaldo(nombre):
         dispose_tenant(tid)
     else:
         db.engine.dispose()
-    src_con = sqlite3.connect(src)
+    src_con = sqlite3.connect(restore_src)
     dst_con = sqlite3.connect(target)
     try:
         with dst_con:
@@ -1200,6 +1274,12 @@ def restaurar_respaldo(nombre):
     finally:
         dst_con.close()
         src_con.close()
+    # Limpiar archivo temporal si se creó
+    if restore_src != src:
+        try:
+            os.remove(restore_src)
+        except Exception:
+            pass
     if tid:
         eng = tenant_engine(tid)
         db.metadata.create_all(bind=eng, tables=tablas_tenant())
@@ -1542,13 +1622,19 @@ def registrar_rutas(app):
         return list(clasificadores_proyecto().items())
 
     def clasificadores_oc(p):
-        """Opciones para O/C y O/S: Bienes, Servicios, Expediente Tecnico y Liquidacion."""
+        """Opciones para O/C y O/S: Bienes, Servicios, Expediente Tecnico, Liquidacion y extras."""
         base = clasificadores_proyecto()
         codigos = [p.clasificador_bienes or "2.6.2.3.99.4",
                    p.clasificador_servicios or "2.6.2.3.99.5",
                    p.clasificador_expediente or "2.6.8.1.3.1",
                    p.clasificador_liquidacion or "LIQUIDACION"]
-        return [(c, base.get(c, c)) for c in codigos]
+        excluidos = {p.clasificador_personal or "2.6.2.3.99.3"}
+        codigos_set = set(codigos) | excluidos
+        result = [(c, base.get(c, c)) for c in codigos]
+        for c, n in base.items():
+            if c not in codigos_set:
+                result.append((c, n))
+        return result
 
     def cls_nombre(p, code):
         """Nombre legible de un clasificador (usa los configurados en la cabecera)."""
@@ -2089,6 +2175,52 @@ def registrar_rutas(app):
                     db.session.add(Presupuesto(componente=comp, clasificador=clasif,
                                                detalle=det, et=et_val, pim2026=pim_val))
             db.session.flush()
+            # Parsear clasificadores extras desde el formulario primero
+            extras = []
+            i = 0
+            while True:
+                cod = request.form.get(f"extra_codigo_{i}", "").strip().upper()
+                nom = request.form.get(f"extra_nombre_{i}", "").strip().upper()
+                comp = request.form.get(f"extra_componente_{i}", "Costo Directo").strip()
+                if cod and nom:
+                    extras.append({"codigo": cod, "nombre": nom, "componente": comp})
+                elif not cod and not nom:
+                    break
+                i += 1
+            p.clasificadores_extra = json.dumps(extras) if extras else ""
+            # Guardar presupuesto de clasificadores extras (usa lista nueva del formulario)
+            extras_list = extras
+            for i, ex in enumerate(extras_list):
+                nombre = (ex.get("nombre") or "").strip().upper()
+                componente = (ex.get("componente") or "Costo Directo").strip()
+                codigo = (ex.get("codigo") or "").strip().upper()
+                if not nombre:
+                    continue
+                try:
+                    et_val = float(request.form.get('pres_et_extra_%d' % i, 0) or 0)
+                    pim_val = float(request.form.get('pres_pim_extra_%d' % i, 0) or 0)
+                except ValueError:
+                    et_val = pim_val = 0
+                cfg = Presupuesto.query.filter_by(componente=componente, detalle=nombre).first()
+                if cfg:
+                    cfg.et = et_val
+                    cfg.pim2026 = pim_val
+                    cfg.clasificador = codigo or cfg.clasificador
+                else:
+                    db.session.add(Presupuesto(componente=componente, clasificador=codigo,
+                                               detalle=nombre, et=et_val, pim2026=pim_val))
+            db.session.flush()
+            # Eliminar Presupuesto rows de clasificadores extra que ya no existen
+            base_dets = {det for _, det in PRESUPUESTO_DETALLE}
+            extra_dets = set()
+            for ex in extras_list:
+                nombre = (ex.get("nombre") or "").strip().upper()
+                if nombre:
+                    extra_dets.add(nombre)
+            for cfg in Presupuesto.query.all():
+                if cfg.detalle not in base_dets and cfg.detalle not in extra_dets:
+                    db.session.delete(cfg)
+            db.session.flush()
             # Recalcular totales del proyecto desde Presupuesto
             from collections import defaultdict
             et_comp = defaultdict(float)
@@ -2139,10 +2271,41 @@ def registrar_rutas(app):
                     setattr(p, campo, int(request.form.get(campo, 0) or 0))
                 except ValueError:
                     pass
-            p.adicional_obra = "adicional_obra" in request.form
-            p.ampliacion_presupuestal = "ampliacion_presupuestal" in request.form
-            if p.adicional_obra:
-                p.fecha_fin = p.nuevo_final_obra or p.fecha_fin
+            raw_ad = request.form.get("adicionales_json", "") or ""
+            p.adicionales = raw_ad
+            adicionales_list = []
+            if raw_ad:
+                try:
+                    adicionales_list = json.loads(raw_ad)
+                except (json.JSONDecodeError, TypeError):
+                    adicionales_list = []
+            p.adicional_obra = len(adicionales_list) > 0
+            if adicionales_list:
+                ultimo = adicionales_list[-1]
+                nf_str = ultimo.get("nuevo_final_obra", "")
+                if nf_str:
+                    try:
+                        p.fecha_fin = datetime.strptime(nf_str, "%Y-%m-%d").date()
+                    except (ValueError, TypeError):
+                        pass
+                p.n_resolucion_adicional = ultimo.get("n_resolucion_adicional", "")
+                total_dias = 0
+                total_monto_amp = 0
+                any_amp = False
+                for ad in adicionales_list:
+                    try:
+                        total_dias += int(ad.get("dias_ampliacion", 0) or 0)
+                    except (ValueError, TypeError):
+                        pass
+                    if ad.get("ampliacion_presupuestal", False):
+                        any_amp = True
+                        try:
+                            total_monto_amp += float(ad.get("monto_ampliacion", 0) or 0)
+                        except (ValueError, TypeError):
+                            pass
+                p.dias_ampliacion = total_dias
+                p.ampliacion_presupuestal = any_amp
+                p.monto_ampliacion = total_monto_amp
             else:
                 p.dias_ampliacion = 0
                 p.nuevo_final_obra = None
@@ -2168,9 +2331,18 @@ def registrar_rutas(app):
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         rubros = leer_lista(os.path.join(base, "Rubro.txt"))
         fuentes = leer_lista(os.path.join(base, "Recursos.txt"))
+        extras = []
+        raw_ex = getattr(p, "clasificadores_extra", "") or ""
+        if raw_ex:
+            try:
+                extras = json.loads(raw_ex)
+            except (json.JSONDecodeError, TypeError):
+                extras = []
         return render_template("cabecera.html", p=p, MESES=MESES,
                                rubros=rubros, fuentes=fuentes,
-                               presupuesto=presupuesto_filas())
+                               presupuesto=presupuesto_filas(),
+                               clasificadores_extra=extras,
+                               COMPONENTES=COMPONENTES)
 
     @app.route("/cabecera/subir-logo", methods=["POST"])
     def subir_logo():
@@ -3474,12 +3646,41 @@ def registrar_rutas(app):
                     except (ValueError, TypeError):
                         pass
             db.session.commit()
+            from collections import defaultdict
+            et_comp = defaultdict(float)
+            for cfg in Presupuesto.query.filter(
+                    Presupuesto.componente.in_(COMPONENTES_FE06)).all():
+                et_comp[cfg.componente] = round(et_comp[cfg.componente] + (cfg.et or 0), 2)
+            p.costo_directo = round(et_comp.get("Costo Directo", 0), 2)
+            p.gastos_generales = round(et_comp.get("Gastos Generales", 0), 2)
+            p.gastos_supervision = round(et_comp.get("Gastos de Supervisión", 0), 2)
+            p.elaboracion_expediente = round(et_comp.get("Elaboración de Expediente Técnico", 0), 2)
+            p.liquidacion_obra = round(et_comp.get("Liquidación de Obra", 0), 2)
+            p.presupuesto_total = round(sum(et_comp.values()), 2)
+            db.session.commit()
             flash("Configuración presupuestal guardada.", "success")
             return redirect(url_for("configuracion"))
         orden_detalle = {"PERSONAL": 0, "BIENES": 1, "SERVICIOS": 2,
                          "ELABORACION DE EXPEDIENTE TECNICO": 3,
                          "COSTO DE LIQUIDACION": 4}
         comp_orden = {c: i for i, c in enumerate(COMPONENTES_FE06)}
+        # Construir set de detalles válidos: base + extras actuales del proyecto
+        base_dets = {det for _, det in PRESUPUESTO_DETALLE}
+        raw_ex = getattr(p, "clasificadores_extra", "") or ""
+        extra_dets = set()
+        try:
+            for ex in (json.loads(raw_ex) if raw_ex else []):
+                n = (ex.get("nombre") or "").strip().upper()
+                if n:
+                    extra_dets.add(n)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        valid_dets = base_dets | extra_dets
+        # Eliminar filas huérfanas de Presupuesto que ya no corresponden a ningún detalle
+        for cfg in Presupuesto.query.all():
+            if cfg.detalle not in valid_dets:
+                db.session.delete(cfg)
+        db.session.flush()
         configs = sorted(Presupuesto.query.all(),
                          key=lambda c: (comp_orden.get(c.componente, 99),
                                         orden_detalle.get(c.detalle, 99)))
@@ -3539,6 +3740,14 @@ def registrar_rutas(app):
                         pass
                     flash("El archivo no es una base de datos SQLite válida.", "danger")
                     return redirect(url_for("respaldo"))
+                # Cifrar el archivo cargado
+                try:
+                    with open(dest, "rb") as f:
+                        raw = f.read()
+                    with open(dest, "wb") as f:
+                        f.write(_cifrar_datos(raw))
+                except Exception:
+                    pass
                 # Restaurar desde el archivo cargado
                 try:
                     pre = restaurar_respaldo(safe_name)

@@ -1,5 +1,6 @@
 """Funciones auxiliares de calculo compartidas por rutas y exportadores."""
 import calendar
+import json
 import re
 from datetime import date, timedelta
 
@@ -57,8 +58,10 @@ DET_ETIQUETA = {
 
 def presupuesto_filas():
     """Datos de presupuesto (et, pim) por componente/detalle para la cabecera.
-    Lee de Presupuesto; si falta, devuelve 0.0 (no crea rows)."""
+    Lee de Presupuesto; si falta, devuelve 0.0 (no crea rows).
+    Incluye clasificadores extras configurados en la cabecera."""
     cfg = {(p.componente, p.detalle): p for p in _all_presupuestos()}
+    base_dets = {det for _, det in PRESUPUESTO_DETALLE}
     out = []
     for comp, det in PRESUPUESTO_DETALLE:
         c = cfg.get((comp, det))
@@ -69,6 +72,27 @@ def presupuesto_filas():
             "et": round(c.et or 0, 2) if c else 0.0,
             "pim": round(c.pim2026 or 0, 2) if c else 0.0,
         })
+    p = get_proyecto()
+    raw = getattr(p, "clasificadores_extra", "") or ""
+    if raw:
+        try:
+            extras = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            extras = []
+        for ex in extras:
+            nombre = (ex.get("nombre") or "").strip().upper()
+            componente = (ex.get("componente") or "Costo Directo").strip()
+            if not nombre or nombre in base_dets:
+                continue
+            c = cfg.get((componente, nombre))
+            out.append({
+                "componente": componente,
+                "detalle": nombre,
+                "etiqueta": nombre,
+                "et": round(c.et or 0, 2) if c else 0.0,
+                "pim": round(c.pim2026 or 0, 2) if c else 0.0,
+                "extra": True,
+            })
     return out
 
 # Actividades por defecto de la seccion II del Resumen Financiero (PANEL).
@@ -288,13 +312,25 @@ def incluir_anios():
 def clasificadores_proyecto():
     """Clasificadores configurados en la cabecera: codigo -> etiqueta."""
     p = get_proyecto()
-    return {
+    result = {
         (p.clasificador_personal or "2.6.2.3.99.3"): "PERSONAL",
         (p.clasificador_bienes or "2.6.2.3.99.4"): "BIENES",
         (p.clasificador_servicios or "2.6.2.3.99.5"): "SERVICIOS",
         (p.clasificador_expediente or "2.6.8.1.3.1"): "ELABORACION DE EXPEDIENTE TECNICO",
         (p.clasificador_liquidacion or "LIQUIDACION"): "COSTO DE LIQUIDACION",
     }
+    raw = getattr(p, "clasificadores_extra", "") or ""
+    if raw:
+        try:
+            extras = json.loads(raw)
+            for item in extras:
+                codigo = (item.get("codigo") or "").strip().upper()
+                nombre = (item.get("nombre") or "").strip().upper()
+                if codigo and nombre:
+                    result[codigo] = nombre
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return result
 
 
 def ejecucion_por_componente(anio):

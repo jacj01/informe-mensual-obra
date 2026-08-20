@@ -11,6 +11,8 @@
 <style>
   table.tabla { margin-top: 4px; }
   .fila-total td { font-size: 8.5pt; padding: 5px 5px; }
+  table.tabla td.und-col, table.tabla th.und-col { white-space: nowrap; }
+  table.tabla td.num { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -54,7 +56,7 @@
     </colgroup>
     <thead>
       <tr>
-        <th>Item</th><th>Descripcion</th><th>Und</th><th>O/C</th>
+        <th>Item</th><th>Descripcion</th><th class="und-col">Und</th><th>O/C</th>
         <th class="num">Cant. Ingreso</th><th class="num">P.U</th>
         <th class="num">Valor Ingreso</th><th class="num">Cant. Egreso</th>
         <th class="num">Valor Egreso</th><th class="num">Saldo</th>
@@ -66,7 +68,7 @@
       <tr>
         <td class="ctr">{{ loop.index }}</td>
         <td><b>{{ item.descripcion }}</b></td>
-        <td class="ctr">{{ item.und }}</td>
+        <td class="ctr und-col">{{ item.und }}</td>
         <td>{{ item.oc }}</td>
         <td class="num">{{ item.cant_in }}</td>
         <td class="num">{{ "{:,.2f}".format(item.pu) }}</td>

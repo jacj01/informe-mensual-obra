@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from informe_web.app import app; app.config['DEBUG']=True; app.run(debug=True)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JOHN\Documents\Informe Mensual\informe_web\app.py", line 33, in <module>
+    from models import (db, Proyecto, Presupuesto, Gasto, GastoDetalle,
+    ...<3 lines>...
+                        sumar_meses)
+ModuleNotFoundError: No module named 'models'
