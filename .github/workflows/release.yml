@@ -46,6 +46,12 @@ jobs:
           echo "ARTIFACT_ZIP=$zip" >> $env:GITHUB_ENV
           Write-Host "ZIP:$zip VERSION:$ver SHA:$sha"
 
+      - name: Create placeholder data files for installer
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "Rubro.txt")) { New-Item -ItemType File -Path "Rubro.txt" -Force | Out-Null }
+          if (-not (Test-Path "Recursos.txt")) { New-Item -ItemType File -Path "Recursos.txt" -Force | Out-Null }
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup -y --no-progress
