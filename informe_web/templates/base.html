@@ -50,206 +50,191 @@
   </script>
   {% if es_admin_actual() %}<script>
     // --- Gestor de actualizaciones (solo admin/super) ---
-    // La revision se hace SOLO al iniciar el aplicativo (dashboard "/"), no en
-    // cada navegacion. El resultado se cachea en sessionStorage; en el resto de
-    // paginas se muestra el estado cacheado sin volver a llamar a la API.
     var _CLAVE_CACHE = 'informe_upd_cache';
     var _pollTimer = null;
     var _pubTimer = null;
-    // flags de flujo: solo recargar si ya hubo avance real de progreso
-    window._vistoProgreso = false;
+    var _updDownloadUrl = '';
     window._pubVersion = '';
     window._csrfToken = function () {
       var m = document.querySelector('meta[name="csrf-token"]');
       return m ? m.getAttribute('content') : '';
     };
-    // Formatea el tag: "v1.0.1-abc1234" -> "v1.0.1"
     window._tagLimpio = function (tag) {
       if (!tag) return '';
       var m = String(tag).match(/v?([0-9]+\.[0-9]+\.[0-9]+)/);
       return m ? 'v' + m[1] : String(tag);
     };
-    window._esDashboard = function () {
-      return window.location.pathname.replace(/\/$/, '') === '';
-    };
-    // Muestra la barra de progreso con fase/porcentaje/mensaje
-    window._mostrarBarra = function (pct, msg) {
-      var barra = document.getElementById('updProg');
-      var fill = document.getElementById('updFill');
-      var txt = document.getElementById('updMsg');
-      if (!barra || !fill || !txt) return;
-      barra.style.display = 'block';
-      var p = Math.max(0, Math.min(100, Math.round(pct || 0)));
-      fill.style.width = p + '%';
-      txt.textContent = ((msg || '') + ' ' + p + '%').trim();
-    };
-    window._ocultarBarra = function () {
-      var barra = document.getElementById('updProg');
-      if (barra) barra.style.display = 'none';
-    };
-    // Render robusto (try/catch interno: nunca rompe la cadena .then/.catch)
-    window._renderUpdate = function (d) {
-      try {
-        var txt = document.getElementById('upTxt');
-        var btn = document.getElementById('btnUpd');
-        if (!txt) return;
-        if (d && d.disponible) {
-          txt.textContent = 'Actualizaci\u00F3n disponible: ' + window._tagLimpio(d.tag || '');
-          txt.classList.add('upd-disponible');
-          if (btn) btn.style.display = 'inline-flex';
-        } else {
-          var ver = (d && d.version_actual) ? window._tagLimpio(d.version_actual) : '';
-          txt.textContent = ver ? ('Versi\u00F3n actualizada (' + ver + ')') : 'Versi\u00F3n actualizada';
-          txt.classList.remove('upd-disponible');
-          if (btn) btn.style.display = 'none';
-        }
-      } catch (e) { /* no interrumpir UI */ }
-    };
-    // Muestra el estado cacheado SIN llamar a la API (usado en sub-paginas)
-    window._renderCache = function () {
-      var c = sessionStorage.getItem(_CLAVE_CACHE);
-      if (c) { try { window._renderUpdate(JSON.parse(c)); } catch (e) {} }
-    };
-    // Chequeo con llamada a la API: solo en dashboard
-    window.buscarActualizacion = function () {
-      var txt = document.getElementById('upTxt');
-      if (!window._esDashboard()) { window._renderCache(); return; }
-      var cached = sessionStorage.getItem(_CLAVE_CACHE);
-      if (cached) { try { window._renderUpdate(JSON.parse(cached)); } catch (e) {} }
-      if (txt) { txt.textContent = 'Buscando...'; txt.classList.remove('upd-disponible'); }
+
+    // --- Modal de actualizacion ---
+    function _updShow(id) {
+      document.querySelectorAll('#updModalBody .upd-estado').forEach(function(e){ e.style.display='none'; });
+      var el = document.getElementById(id);
+      if (el) el.style.display = '';
+    }
+    function _updBtn(name, show) {
+      var b = document.getElementById(name);
+      if (b) b.style.display = show ? '' : 'none';
+    }
+    function _updFill(pct, msg) {
+      var fill = document.getElementById('updFillModal');
+      var pctEl = document.getElementById('updPctModal');
+      var msgEl = document.getElementById('updMsgModal');
+      if (fill) fill.style.width = Math.max(0,Math.min(100,Math.round(pct))) + '%';
+      if (pctEl) pctEl.textContent = Math.round(pct) + '%';
+      if (msgEl) msgEl.textContent = msg || '';
+    }
+
+    window.abrirModalActualizacion = function () {
+      var m = document.getElementById('modalUpd');
+      if (!m) return;
+      m.classList.add('active');
+      // Reset UI
+      _updShow('updEstadoBuscando');
+      _updBtn('updBtnCerrar', true);
+      _updBtn('updBtnInstalar', false);
+      _updBtn('updBtnReiniciar', false);
+      _updDownloadUrl = '';
+      // Fetch version info
       fetch('/api/actualizacion', { credentials: 'same-origin' })
-        .then(function (r) {
-          if (r.status === 403 || r.redirected) throw new Error('No autorizado');
-          return r.json();
-        })
-        .then(function (d) {
+        .then(function(r) { if (r.status===403||r.redirected) throw new Error('No autorizado'); return r.json(); })
+        .then(function(d) {
           sessionStorage.setItem(_CLAVE_CACHE, JSON.stringify(d));
-          window._renderUpdate(d);
+          if (d.disponible) {
+            document.getElementById('updVerActual').textContent = window._tagLimpio(d.version_actual);
+            document.getElementById('updVerNueva').textContent = window._tagLimpio(d.tag);
+            document.getElementById('updFecha').textContent = d.publicada ? new Date(d.publicada).toLocaleDateString('es-PE') : '-';
+            document.getElementById('updAsset').textContent = d.asset || '-';
+            document.getElementById('updAssetRow').style.display = d.asset ? '' : 'none';
+            _updDownloadUrl = d.url || '';
+            _updShow('updEstadoDisponible');
+            _updBtn('updBtnInstalar', true);
+          } else {
+            document.getElementById('updVerLocal').textContent = window._tagLimpio(d.version_actual) || d.version_actual;
+            _updShow('updEstadoNoHay');
+          }
         })
-        .catch(function () {
-          if (txt) { txt.textContent = 'No se pudo consultar GitHub'; txt.classList.remove('upd-disponible'); }
-          var btn = document.getElementById('btnUpd');
-          if (btn) btn.style.display = 'none';
+        .catch(function(e) {
+          _updShow('updEstadoError');
+          document.getElementById('updErrorMsg').textContent = e.message || 'No se pudo conectar con GitHub';
+          _updBtn('updBtnInstalar', false);
         });
     };
-    // Polling del progreso de actualizacion
-    window._pollProgreso = function () {
+
+    window.cerrarModalActualizacion = function () {
+      var m = document.getElementById('modalUpd');
+      if (m) m.classList.remove('active');
+      clearTimeout(_pollTimer);
+    };
+
+    window.ejecutarActualizacion = function () {
+      confirmarPopup({
+        titulo: 'Instalar actualizacion',
+        mensaje: 'Se descargara e instalara la nueva version. El servidor se reiniciara automaticamente. <strong>Desea continuar?</strong>',
+        colorOk: 'btn-upd',
+        icono: 'info'
+      }).then(function(acepto) {
+        if (!acepto) return;
+        _updShow('updEstadoProgreso');
+        _updBtn('updBtnInstalar', false);
+        _updBtn('updBtnCerrar', false);
+        _updFill(0, 'Iniciando actualizacion...');
+        var body = _updDownloadUrl ? JSON.stringify({ download_url: _updDownloadUrl }) : '{}';
+        fetch('/actualizar', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window._csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+          body: body
+        })
+        .then(function(r) { if (r.status===403) throw new Error('CSRF/Autorizacion fallida'); return r.json().catch(function(){return {};}); })
+        .then(function(d) {
+          if (d.ok) {
+            _pollTimer = setTimeout(_pollUpdProgreso, 2000);
+          } else {
+            _updShow('updEstadoError');
+            document.getElementById('updErrorMsg').textContent = d.error || 'No se pudo iniciar la actualizacion';
+            _updBtn('updBtnCerrar', true);
+          }
+        })
+        .catch(function(e) {
+          _updShow('updEstadoError');
+          document.getElementById('updErrorMsg').textContent = e.message;
+          _updBtn('updBtnCerrar', true);
+        });
+      });
+    };
+
+    function _pollUpdProgreso() {
       fetch('/api/actualizacion/progreso', { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
           if (d.fase === 'inactivo') {
-            // El updater aun no escribe su estado, o ya termino y el server
-            // (reiniciado) borro el archivo. Solo recargar si YA vimos avance.
-            if (window._vistoProgreso) {
+            // El updater aun no escribe; reintentar
+            window._updIntentos = (window._updIntentos || 0) + 1;
+            if (window._updIntentos > 25) {
               clearTimeout(_pollTimer);
-              window._esperarServerYRecargar();
-            } else {
-              window._pollIntentos = (window._pollIntentos || 0) + 1;
-              if (window._pollIntentos > 15) {
-                // El script no escribio nada en ~20s: fallo al lanzar el updater
-                clearTimeout(_pollTimer);
-                window._ocultarBarra();
-                mostrarToast('error', 'No se pudo iniciar la actualizacion. Intente de nuevo.');
-                var btn = document.getElementById('btnUpd');
-                if (btn) { btn.disabled = false; btn.style.display = 'inline-flex'; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
-                return;
-              }
-              clearTimeout(_pollTimer);
-              _pollTimer = setTimeout(window._pollProgreso, 1500);
+              _updShow('updEstadoError');
+              document.getElementById('updErrorMsg').textContent = 'El proceso de actualizacion no respondio. Intente de nuevo.';
+              _updBtn('updBtnCerrar', true);
+              return;
             }
+            _pollTimer = setTimeout(_pollUpdProgreso, 1500);
             return;
           }
-          window._vistoProgreso = true;
-          window._pollIntentos = 0;
-          window._mostrarBarra(d.porcentaje || 0, d.mensaje || d.fase);
+          window._updIntentos = 0;
+          _updFill(d.porcentaje || 0, d.mensaje || d.fase);
           if (d.fase === 'listo') {
             clearTimeout(_pollTimer);
-            window._esperarServerYRecargar();
-          } else if (d.fase === 'rollback' || d.fase === 'error' || (d.error && d.porcentaje === 100)) {
+            _updShow('updEstadoListo');
+            _updBtn('updBtnCerrar', false);
+            _updBtn('updBtnReiniciar', true);
+            _esperarServer();
+          } else if (d.fase === 'rollback' || d.fase === 'error') {
             clearTimeout(_pollTimer);
-            var txt = document.getElementById('upTxt');
-            if (txt) { txt.textContent = 'Error en la actualizacion (rollback aplicado)'; txt.classList.remove('upd-disponible'); }
-            mostrarToast('error', 'La actualizacion fallo; se restauro la version anterior.');
-            window._ocultarBarra();
-            var btn = document.getElementById('btnUpd');
-            if (btn) { btn.disabled = false; btn.style.display = 'inline-flex'; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
+            _updShow('updEstadoError');
+            document.getElementById('updErrorMsg').textContent = d.mensaje || 'Error durante la actualizacion. Se restauro la version anterior.';
+            _updBtn('updBtnCerrar', true);
           } else {
-            clearTimeout(_pollTimer);
-            _pollTimer = setTimeout(window._pollProgreso, 1200);
+            _pollTimer = setTimeout(_pollUpdProgreso, 1200);
           }
         })
-        .catch(function () {
-          // Server caido durante update: reintentar (volvera al subir)
-          clearTimeout(_pollTimer);
-          _pollTimer = setTimeout(window._pollProgreso, 2000);
-        });
-    };
-    // Polling hasta que el server responda /api/version (server listo)
-    window._esperarServerYRecargar = function () {
+        .catch(function() { _pollTimer = setTimeout(_pollUpdProgreso, 2000); });
+    }
+
+    function _esperarServer() {
       var intentos = 0;
-      var max = 120;
-      var txt = document.getElementById('upTxt');
-      if (txt) { txt.textContent = 'Servidor reiniciando...'; txt.classList.remove('upd-disponible'); }
-      mostrarToast('info', 'Actualizacion completada. Reanudando servidor...');
-      var check = function () {
+      var check = function() {
         intentos++;
         fetch('/api/version', { credentials: 'same-origin' })
-          .then(function (r) { return r.json(); })
-          .then(function () {
+          .then(function(r) { return r.json(); })
+          .then(function() {
             sessionStorage.removeItem(_CLAVE_CACHE);
-            mostrarToast('success', 'Servidor listo. Recargando...');
-            setTimeout(function () { location.replace('/'); }, 1000);
+            mostrarToast('success', 'Servidor actualizado listo.');
           })
-          .catch(function () {
-            if (intentos < max) {
-              setTimeout(check, 3000);
-            } else {
-              if (txt) { txt.textContent = 'Actualizacion completada. Recarga manual.'; }
-              mostrarToast('warning', 'Servidor tardando en iniciar. Recargue manualmente.');
-              window._ocultarBarra();
-            }
+          .catch(function() {
+            if (intentos < 60) setTimeout(check, 3000);
           });
       };
       check();
+    }
+
+    window.reiniciarApp = function () {
+      sessionStorage.removeItem(_CLAVE_CACHE);
+      location.replace('/');
     };
-    window.actualizarSistema = function () {
-      var btn = document.getElementById('btnUpd');
-      var txt = document.getElementById('upTxt');
-      window._vistoProgreso = false;
-      window._pollIntentos = 0;
-      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-arrow-down-loading"></i> Instalando...'; }
-      if (txt) { txt.textContent = 'Instalando...'; txt.classList.remove('upd-disponible'); }
-      window._mostrarBarra(0, 'Iniciando actualizacion...');
-      fetch('/actualizar', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'X-CSRF-Token': window._csrfToken(),
-                   'X-Requested-With': 'XMLHttpRequest' }
-      })
-        .then(function (r) {
-          if (r.status === 403 || r.redirected) throw new Error('CSRF/Autorizacion fallida');
-          return r.json().catch(function () { return {}; });
+
+    // Auto-check en dashboard (solo muestra toast discreto si hay actualizacion)
+    window._checkAuto = function () {
+      if (window.location.pathname.replace(/\/$/,'') !== '') return;
+      fetch('/api/actualizacion', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          sessionStorage.setItem(_CLAVE_CACHE, JSON.stringify(d));
+          if (d.disponible) mostrarToast('info', 'Hay una actualizacion disponible (v' + window._tagLimpio(d.tag) + ').');
         })
-        .then(function (d) {
-          if (btn) { btn.disabled = true; btn.style.display = 'none'; }
-          if (d.ok) {
-            // Iniciar polling de progreso
-            _pollTimer = setTimeout(window._pollProgreso, 1500);
-          } else {
-            mostrarToast('error', d.error || 'No se pudo aplicar la actualizacion');
-            if (btn) { btn.disabled = false; btn.style.display = 'inline-flex'; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
-            window._ocultarBarra();
-          }
-        })
-        .catch(function (e) {
-          mostrarToast('error', 'Error al aplicar la actualizaci\u00F3n: ' + e.message);
-          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Instalar'; }
-          window._ocultarBarra();
-        });
+        .catch(function(){});
     };
-    // Publicar nueva version (SOLO Administrador / Cuenta Principal): bump + commit + push + workflow_dispatch
-    // 1) Abrir modal con inputs (version + mensaje)
-    // 2) Al confirmar -> confirmPopup (SI/NO) -> si acepta, fetch POST /api/actualizar-publicar
+    document.addEventListener('DOMContentLoaded', function () { window._checkAuto(); });
+
+    // --- Publicar nueva version (Super Usuario) ---
     window.abrirModalPublicar = function () {
       var m = document.getElementById('modalPub');
       if (!m) return;
@@ -262,100 +247,65 @@
       var m = document.getElementById('modalPub');
       if (m) m.classList.remove('active');
     };
-    window.publicarNuevaVersion = function () {
-      window.abrirModalPublicar();
-    };
+    window.publicarNuevaVersion = function () { window.abrirModalPublicar(); };
     window._enviarPublicar = function () {
       var ver = (document.getElementById('pubVer').value || "").trim();
       if (!ver) { mostrarToast('error', 'Ingrese la nueva version (ej 1.0.2).'); return; }
-      if (!/^\d+\.\d+\.\d+$/.test(ver)) {
-        mostrarToast('error', 'Formato invalido. Use X.Y.Z (ej 1.0.2).');
-        return;
-      }
+      if (!/^\d+\.\d+\.\d+$/.test(ver)) { mostrarToast('error', 'Formato invalido. Use X.Y.Z (ej 1.0.2).'); return; }
       var msj = (document.getElementById('pubMsj').value || "").trim();
       window.cerrarModalPublicar();
       confirmarPopup({
         titulo: 'Publicar nueva version ' + ver,
-        mensaje: 'Se creara el release v' + ver + ' en GitHub: commit + push y disparo del workflow de build. Otras instalaciones podran instalar esta version. <strong>Estas de acuerdo con la publicacion?</strong>',
-        colorOk: 'btn-upd',
-        icono: 'info'
+        mensaje: 'Se creara el release v' + ver + ' en GitHub: commit + push y disparo del workflow de build. <strong>Estas de acuerdo?</strong>',
+        colorOk: 'btn-upd', icono: 'info'
       }).then(function (acepto) {
         if (!acepto) return;
         var btn = document.getElementById('btnPub');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-upload"></i> Publicando...'; }
         window._pubVersion = ver;
         fetch('/api/actualizar-publicar', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json',
-                     'X-CSRF-Token': window._csrfToken(),
-                     'X-Requested-With': 'XMLHttpRequest' },
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window._csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
           body: JSON.stringify({ version: ver, mensaje: msj })
         })
-          .then(function (r) { return r.json().catch(function () { return {}; }); })
-          .then(function (d) {
-            if (d.ok) {
-              window._mostrarBarra(5, 'Iniciando publicación de v' + ver + '...');
-              clearTimeout(_pubTimer);
-              _pubTimer = setTimeout(window._pollPublicar, 1000);
-            } else {
-              if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
-              mostrarToast('error', d.error || 'No se pudo publicar');
-              window._ocultarBarra();
-            }
-          })
-          .catch(function (e) {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
-            mostrarToast('error', 'Error publicando: ' + e.message);
-            window._ocultarBarra();
-          });
-      });
-    };
-    // Polling del progreso de publicacion (release GitHub)
-    window._pollPublicar = function () {
-      fetch('/api/actualizar-publicar/progreso', { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (d.fase === 'inactivo') {
+        .then(function(r) { return r.json().catch(function(){return {};}); })
+        .then(function(d) {
+          if (d.ok) {
+            mostrarToast('info', 'Publicacion de v' + ver + ' en curso...');
             clearTimeout(_pubTimer);
-            _pubTimer = setTimeout(window._pollPublicar, 1200);
-            return;
-          }
-          if (d.fase === 'listo') {
-            clearTimeout(_pubTimer);
-            window._mostrarBarra(100, d.mensaje || 'Nueva versión publicada.');
-            var btn = document.getElementById('btnPub');
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
-            mostrarToast('success', d.mensaje || 'Nueva versión publicada.');
-            sessionStorage.removeItem(_CLAVE_CACHE);
-            var txt = document.getElementById('upTxt');
-            if (txt) {
-              txt.textContent = 'Versión publicada (v' + window._pubVersion + ')';
-              txt.classList.remove('upd-disponible');
-            }
-            var btnUpd = document.getElementById('btnUpd');
-            if (btnUpd) btnUpd.style.display = 'none';
-            window._vistoProgreso = false;
-            setTimeout(window._ocultarBarra, 6000);
-          } else if (d.fase === 'error') {
-            clearTimeout(_pubTimer);
-            var btn2 = document.getElementById('btnPub');
-            if (btn2) { btn2.disabled = false; btn2.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
-            mostrarToast('error', 'Error publicando: ' + (d.mensaje || ''));
-            window._ocultarBarra();
+            _pubTimer = setTimeout(_pollPublicar, 1000);
           } else {
-            window._mostrarBarra(d.porcentaje || 0, d.mensaje || d.fase);
-            clearTimeout(_pubTimer);
-            _pubTimer = setTimeout(window._pollPublicar, 1200);
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+            mostrarToast('error', d.error || 'No se pudo publicar');
           }
         })
-        .catch(function () {
-          clearTimeout(_pubTimer);
-          _pubTimer = setTimeout(window._pollPublicar, 2000);
+        .catch(function(e) {
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+          mostrarToast('error', 'Error publicando: ' + e.message);
         });
+      });
     };
-    // Chequear SOLO al iniciar (dashboard); en otras paginas solo renderiza el cache
-    document.addEventListener('DOMContentLoaded', function () { window.buscarActualizacion(); });
+    function _pollPublicar() {
+      fetch('/api/actualizar-publicar/progreso', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.fase === 'listo') {
+            clearTimeout(_pubTimer);
+            mostrarToast('success', d.mensaje || 'Version publicada.');
+            sessionStorage.removeItem(_CLAVE_CACHE);
+            var btn = document.getElementById('btnPub');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+          } else if (d.fase === 'error') {
+            clearTimeout(_pubTimer);
+            mostrarToast('error', 'Error: ' + (d.mensaje || ''));
+            var btn2 = document.getElementById('btnPub');
+            if (btn2) { btn2.disabled = false; btn2.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+          } else {
+            _pubTimer = setTimeout(_pollPublicar, 1200);
+          }
+        })
+        .catch(function() { _pubTimer = setTimeout(_pollPublicar, 2000); });
+    }
   </script>{% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version_actual }}">
@@ -435,14 +385,9 @@
         <div class="credit-version">Versi&oacute;n {{ version_actual }}</div>
         {% if es_admin_actual() %}
         <div class="credit-update" id="upChk">
-          <span class="credit-update-txt" id="upTxt">Buscar actualizaciones</span>
-          <button id="btnUpd" type="button" class="btn-upd" onclick="actualizarSistema();">
-            <i class="bi bi-arrow-down-circle"></i> Instalar
+          <button id="btnUpd" type="button" class="btn-upd" onclick="abrirModalActualizacion();">
+            <i class="bi bi-arrow-repeat"></i> Buscar Actualizaci&oacute;n
           </button>
-          <div class="upd-progress" id="updProg" style="display:none;">
-            <div class="upd-progress-bar" id="updBar"><div class="upd-progress-fill" id="updFill"></div></div>
-            <span class="upd-progress-txt" id="updMsg"></span>
-          </div>
         </div>
         {% endif %}
       </div>
@@ -961,6 +906,67 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal: Buscar / Aplicar Actualizacion -->
+  <div id="modalUpd" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalUpdTitle">
+    <div class="modal-pub" role="document">
+      <div class="modal-head">
+        <h3 id="modalUpdTitle"><i class="bi bi-arrow-repeat"></i> Actualizaci&oacute;n del Sistema</h3>
+        <button type="button" class="modal-close" aria-label="Cerrar" onclick="cerrarModalActualizacion();">&times;</button>
+      </div>
+      <div class="modal-body" id="updModalBody">
+        <!-- Estado: Buscando -->
+        <div id="updEstadoBuscando" class="upd-estado">
+          <div class="upd-spinner"></div>
+          <p>Buscando actualizaciones en GitHub...</p>
+        </div>
+        <!-- Estado: Sin actualizacion -->
+        <div id="updEstadoNoHay" class="upd-estado" style="display:none;">
+          <div class="upd-ok-icon"><i class="bi bi-check-circle-fill"></i></div>
+          <p class="upd-ok-msg">Tu versi&oacute;n est&aacute; actualizada</p>
+          <p class="upd-ok-ver" id="updVerLocal"></p>
+        </div>
+        <!-- Estado: Hay actualizacion disponible -->
+        <div id="updEstadoDisponible" class="upd-estado" style="display:none;">
+          <div class="upd-info-row"><span class="upd-info-label">Versi&oacute;n actual:</span> <span id="updVerActual"></span></div>
+          <div class="upd-info-row"><span class="upd-info-label">Nueva versi&oacute;n:</span> <span class="upd-new-ver" id="updVerNueva"></span></div>
+          <div class="upd-info-row"><span class="upd-info-label">Publicada:</span> <span id="updFecha"></span></div>
+          <div class="upd-info-row" id="updAssetRow"><span class="upd-info-label">Paquete:</span> <span id="updAsset"></span></div>
+        </div>
+        <!-- Estado: Descargando / Instalando -->
+        <div id="updEstadoProgreso" class="upd-estado" style="display:none;">
+          <div class="upd-progress-modal">
+            <div class="upd-progress-bar-modal"><div class="upd-progress-fill-modal" id="updFillModal"></div></div>
+            <span class="upd-progress-pct" id="updPctModal">0%</span>
+          </div>
+          <p class="upd-progress-msg" id="updMsgModal">Preparando...</p>
+        </div>
+        <!-- Estado: Completado -->
+        <div id="updEstadoListo" class="upd-estado" style="display:none;">
+          <div class="upd-ok-icon green"><i class="bi bi-check-circle-fill"></i></div>
+          <p class="upd-ok-msg">Actualizaci&oacute;n instalada correctamente</p>
+          <p class="upd-ok-sub">La nueva versi&oacute;n est&aacute; lista para usar.</p>
+        </div>
+        <!-- Estado: Error -->
+        <div id="updEstadoError" class="upd-estado" style="display:none;">
+          <div class="upd-ok-icon red"><i class="bi bi-x-octagon-fill"></i></div>
+          <p class="upd-ok-msg">Error en la actualizaci&oacute;n</p>
+          <p class="upd-ok-sub" id="updErrorMsg"></p>
+        </div>
+      </div>
+      <div class="modal-foot" id="updModalFoot">
+        <!-- Botones dinamicos segun estado -->
+        <button type="button" class="btn btn-ghost" onclick="cerrarModalActualizacion();" id="updBtnCerrar">Cerrar</button>
+        <button type="button" class="btn btn-upd" onclick="ejecutarActualizacion();" id="updBtnInstalar" style="display:none;">
+          <i class="bi bi-download"></i> Instalar Ahora
+        </button>
+        <button type="button" class="btn btn-primary" onclick="reiniciarApp();" id="updBtnReiniciar" style="display:none;">
+          <i class="bi bi-arrow-clockwise"></i> Reiniciar Aplicaci&oacute;n
+        </button>
+      </div>
+    </div>
+  </div>
+
   <style>
     .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.52); display:none; align-items:center; justify-content:center; z-index:9000; }
     .modal-overlay.active { display:flex !important; }
@@ -976,6 +982,26 @@
     .modal-help { font-size:12px; color:#6b7280; margin:10px 0 0; line-height:1.4; }
     .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:12px 20px; border-top:1px solid #eee; background:#fafafa; border-radius:0 0 10px 10px; }
     .btn-ghost { background:#f3f4f6; color:#374151; }
+    /* Update modal extras */
+    .upd-estado { text-align:center; padding:10px 0; }
+    .upd-estado p { margin:6px 0; font-size:14px; color:#374151; }
+    .upd-spinner { width:36px; height:36px; border:3px solid #e5e7eb; border-top-color:#1f4e79; border-radius:50%; animation: spin .8s linear infinite; margin:0 auto 10px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .upd-ok-icon { font-size:42px; margin-bottom:6px; }
+    .upd-ok-icon i { color:#16a34a; }
+    .upd-ok-icon.green i { color:#16a34a; }
+    .upd-ok-icon.red i { color:#dc2626; }
+    .upd-ok-msg { font-weight:700; font-size:16px; color:#1f2937; }
+    .upd-ok-ver { font-size:13px; color:#6b7280; }
+    .upd-ok-sub { font-size:12px; color:#6b7280; margin-top:4px; }
+    .upd-info-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #f3f4f6; font-size:13px; }
+    .upd-info-label { font-weight:600; color:#4b5563; }
+    .upd-new-ver { color:#1f4e79; font-weight:700; }
+    .upd-progress-modal { margin:10px 0; }
+    .upd-progress-bar-modal { height:10px; background:#e5e7eb; border-radius:5px; overflow:hidden; }
+    .upd-progress-fill-modal { height:100%; width:0%; background:linear-gradient(90deg,#1f4e79,#2980b9); border-radius:5px; transition:width .4s ease; }
+    .upd-progress-pct { font-size:13px; font-weight:700; color:#1f4e79; }
+    .upd-progress-msg { font-size:12px; color:#6b7280; margin-top:4px; }
   </style>
 </body>
 </html>

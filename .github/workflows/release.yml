@@ -42,7 +42,7 @@ jobs:
           echo "VERSION=$ver" >> $env:GITHUB_ENV
           echo "SHA=$sha" >> $env:GITHUB_ENV
           $zip = "$env:GITHUB_WORKSPACE\informe-web-$ver-$sha.zip"
-          Compress-Archive -Path informe_web, *.bat, *.vbs, Logo.png, Logo.ico, .gitignore, actualizar.ps1, abrir_puerto_firewall.bat -DestinationPath $zip -Force
+          Compress-Archive -Path informe_web, *.bat, *.vbs, Logo.png, Logo.ico, .gitignore, actualizar.ps1, abrir_puerto_firewall.bat, Rubro.txt, Recursos.txt -DestinationPath $zip -Force
           echo "ARTIFACT_ZIP=$zip" >> $env:GITHUB_ENV
           Write-Host "ZIP:$zip VERSION:$ver SHA:$sha"
 

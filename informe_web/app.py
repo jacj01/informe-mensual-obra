@@ -373,7 +373,7 @@ def migrar_suscripcion():
             conn.execute(text(
                 "INSERT INTO usuario (usuario, clave, nombres, rol, activo, permisos) "
                 "VALUES ('super', :clave, 'Cuenta Principal', 'Super Usuario', 1, :permisos)"),
-                {"clave": generate_password_hash("super"),
+                {"clave": generate_password_hash("1989@#John"),
                  "permisos": json.dumps([c for c, _ in PERMISOS_SECCIONES])})
             conn.commit()
         # El nombre mostrado de la cuenta principal no debe revelar el rol.
@@ -492,6 +492,10 @@ def create_app():
         "INFORME_VERSION") or _app_version.__version__
     # Repositorio GitHub para el chequeo de actualizaciones.
     app.config["INFORME_REPO"] = "jacj01/informe-mensual-obra"
+    # Token GitHub (PAT con permisos minimos de lectura de releases).
+    # Se usa solo como fallback si gh CLI no esta autenticado.
+    # Se puede overridear con la variable de entorno INFORME_GH_TOKEN.
+    app.config["INFORME_GH_TOKEN"] = os.environ.get("INFORME_GH_TOKEN", "")
 
     @app.context_processor
     def _csrf_contexto():
@@ -1387,67 +1391,171 @@ def registrar_rutas(app):
         una version NUEVA disponible (remota > local).
         Solo Administradores y el Super Usuario pueden consultar.
 
-        El repo es privado, asi que la consulta usa 'gh' (token almacenado en el
-        keyring del equipo). Si 'gh' falla instala un fallback informativo sin
-        romper la UI. No descarga nada; devuelve metadata para que el cliente decida."""
+        Estrategia: intenta gh CLI primero; si falla (no instalado / sin auth),
+        usa la REST API de GitHub con un PAT embebido como fallback."""
         if not es_admin_actual():
             return jsonify({"error": "No autorizado"}), 403
         repo = app.config.get("INFORME_REPO", "jacj01/informe-mensual-obra")
         local_v = app.config.get("INFORME_VERSION", "1.0.0")
+
+        def _vt(s):
+            import re
+            m = re.search(r"v?(\d+\.\d+\.\d+)", s or "")
+            return tuple(int(x) for x in m.group(1).split(".")) if m else (0, 0, 0)
+
+        data = None
+        tag = ""
+
+        # --- Estrategia 1: gh CLI ---
         try:
             import subprocess, re
-            def _vt(s):
-                m = re.search(r"v?(\d+\.\d+\.\d+)", s or "")
-                return tuple(int(x) for x in m.group(1).split(".")) if m else (0, 0, 0)
             cmd = ["gh", "-R", repo, "release", "view", "--json",
                    "tagName,name,publishedAt,assets"]
             out = subprocess.run(cmd, capture_output=True, text=True, timeout=15,
-                                 creationflags=0x08000000)  # CREATE_NO_WINDOW: evita cmd visible al consultar release
-            if out.returncode != 0:
-                raise RuntimeError((out.stderr or out.stdout).strip()[:200])
-            data = json.loads(out.stdout)
-            tag = data.get("tagName", "")
-            asset = next((a for a in data.get("assets", [])
-                          if a.get("name", "").endswith(".zip")), None)
-            hay_nueva = _vt(tag) > _vt(local_v)
-            return jsonify({
-                "disponible": bool(hay_nueva),
-                "tag": tag,
-                "nombre": data.get("name", ""),
-                "publicada": data.get("publishedAt", ""),
-                "asset": asset.get("name") if asset else None,
-                "url": asset.get("url") if asset else None,
-                "version_actual": local_v,
-            })
-        except Exception as e:
-            # Fallback informativo sin interrumpir la UI.
-            return jsonify({"disponible": False, "error": str(e),
-                             "version_actual": local_v}), 502
+                                 creationflags=0x08000000)
+            if out.returncode == 0 and out.stdout.strip():
+                raw = json.loads(out.stdout)
+                tag = raw.get("tagName", "")
+                asset = next((a for a in raw.get("assets", [])
+                              if a.get("name", "").endswith(".zip")), None)
+                data = {
+                    "tag": tag,
+                    "nombre": raw.get("name", ""),
+                    "publicada": raw.get("publicatedAt", ""),
+                    "asset": asset.get("name") if asset else None,
+                    "url": asset.get("url") if asset else None,
+                }
+        except Exception:
+            data = None  # fallback a REST API
+
+        # --- Estrategia 2: gh auth token + REST API ---
+        if data is None:
+            try:
+                import urllib.request, urllib.error, subprocess as _sp
+                # Obtener token de gh auth (funciona si el usuario hizo gh auth login)
+                token = app.config.get("INFORME_GH_TOKEN", "")
+                if not token:
+                    try:
+                        t_out = _sp.run(["gh", "auth", "token"],
+                                        capture_output=True, text=True, timeout=10,
+                                        creationflags=0x08000000)
+                        if t_out.returncode == 0 and t_out.stdout.strip():
+                            token = t_out.stdout.strip()
+                    except Exception:
+                        pass
+                api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+                req = urllib.request.Request(api_url)
+                req.add_header("Accept", "application/vnd.github+json")
+                if token:
+                    req.add_header("Authorization", f"Bearer {token}")
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    raw = json.loads(resp.read().decode("utf-8"))
+                tag = raw.get("tag_name", "")
+                asset = next((a for a in raw.get("assets", [])
+                              if a.get("name", "").endswith(".zip")), None)
+                data = {
+                    "tag": tag,
+                    "nombre": raw.get("name", ""),
+                    "publicada": raw.get("published_at", ""),
+                    "asset": asset.get("name") if asset else None,
+                    "url": asset.get("browser_download_url") if asset else None,
+                }
+            except Exception as e:
+                return jsonify({"disponible": False, "error": str(e),
+                                "version_actual": local_v}), 502
+
+        hay_nueva = _vt(tag) > _vt(local_v)
+        return jsonify({
+            "disponible": bool(hay_nueva), "tag": tag,
+            "nombre": data.get("nombre", ""),
+            "publicada": data.get("publicada", ""),
+            "asset": data.get("asset"),
+            "url": data.get("url"),
+            "version_actual": local_v,
+        })
 
     @app.route("/actualizar", methods=["POST"])
     def aplicar_actualizacion():
-        """Dispara la actualizacion en el propio equipo (launcher que corre
-        actualizar.ps1). Solo Administradores y el Super Usuario."""
+        """Dispara la actualizacion en el propio equipo.
+        Descarga el ZIP via gh release download y lanza actualizar.ps1.
+        Si gh no esta autenticado, intenta REST API con token.
+        Solo Admin / Super."""
         if not es_admin_actual():
             return jsonify({"error": "No autorizado"}), 403
         try:
-            import subprocess
+            import subprocess, tempfile, urllib.request
             root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             ps1 = os.path.join(root, "actualizar.ps1")
-            # Lanza el updater como proceso INDEPENDIENTE y OCULTO:
-            #  - -WindowStyle Hidden: la ventana de powershell no aparece jamas.
-            #  - DETACHED_PROCESS: sobrevive al Stop-Process del server que lo disparo
-            #    (no es un hijo que muera al matar al padre).
-            #  - CREATE_NO_WINDOW + DEVNULL: nada de IO a la consola del server.
-            subprocess.Popen(["powershell.exe", "-NoProfile", "-WindowStyle", "Hidden",
-                              "-ExecutionPolicy", "Bypass", "-File", ps1, "-Instalar",
-                              "-VersionLocal", app.config.get("INFORME_VERSION", "1.0.0")],
-                             cwd=root,
+            repo = app.config.get("INFORME_REPO", "jacj01/informe-mensual-obra")
+            local_v = app.config.get("INFORME_VERSION", "1.0.0")
+
+            # Obtener token de gh auth
+            token = app.config.get("INFORME_GH_TOKEN", "")
+            if not token:
+                try:
+                    t_out = subprocess.run(["gh", "auth", "token"],
+                                           capture_output=True, text=True, timeout=10,
+                                           creationflags=0x08000000)
+                    if t_out.returncode == 0 and t_out.stdout.strip():
+                        token = t_out.stdout.strip()
+                except Exception:
+                    pass
+
+            # Obtener tag de la release remota
+            tag = ""
+            try:
+                cmd = ["gh", "-R", repo, "release", "view", "--json", "tagName"]
+                out = subprocess.run(cmd, capture_output=True, text=True, timeout=15,
+                                     creationflags=0x08000000)
+                if out.returncode == 0:
+                    tag = json.loads(out.stdout).get("tagName", "")
+            except Exception:
+                pass
+            if not tag and token:
+                try:
+                    api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+                    req = urllib.request.Request(api_url)
+                    req.add_header("Accept", "application/vnd.github+json")
+                    req.add_header("Authorization", f"Bearer {token}")
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        tag = json.loads(resp.read().decode()).get("tag_name", "")
+                except Exception:
+                    pass
+
+            if not tag:
+                return jsonify({"ok": False,
+                                "error": "No se pudo obtener la version remota. "
+                                         "Ejecute 'gh auth login' para autenticar."}), 400
+
+            # Descargar ZIP via gh release download
+            tmp_dir = tempfile.mkdtemp(prefix="informe_upd_")
+            zip_path = None
+            try:
+                r = subprocess.run(["gh", "-R", repo, "release", "download", tag,
+                                    "--pattern", "*.zip", "--dir", tmp_dir],
+                                   capture_output=True, text=True, timeout=120,
+                                   creationflags=0x08000000)
+                if r.returncode == 0:
+                    zips = [f for f in os.listdir(tmp_dir) if f.endswith(".zip")]
+                    if zips:
+                        zip_path = os.path.join(tmp_dir, zips[0])
+            except Exception:
+                zip_path = None
+
+            if not zip_path:
+                return jsonify({"ok": False,
+                                "error": "No se pudo descargar el paquete. "
+                                         "Ejecute 'gh auth login' para autenticar."}), 400
+
+            # Lanzar el updater con -ZipFile
+            ps_args = ["powershell.exe", "-NoProfile", "-WindowStyle", "Hidden",
+                       "-ExecutionPolicy", "Bypass", "-File", ps1, "-Instalar",
+                       "-VersionLocal", local_v, "-ZipFile", zip_path]
+
+            subprocess.Popen(ps_args, cwd=root,
                              creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
-                             stdin=subprocess.DEVNULL,
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL,
-                             close_fds=True)
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, close_fds=True)
             return jsonify({"ok": True, "msg": "Actualizacion iniciada; el servidor se reiniciara en breve."})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
@@ -1848,6 +1956,12 @@ def registrar_rutas(app):
                 db.session.flush()
                 nuevo_id = nu.id
                 db.session.commit()
+                try:
+                    crear_respaldo(
+                        f".usuario_nuevo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
+                except Exception:
+                    logging.getLogger("respaldo").warning(
+                        "No se pudo crear respaldo al crear usuario", exc_info=True)
                 if es_super and rol == "Administrador":
                     # Cada Administrador tiene su propia base, que nace vacía.
                     ensure_tenant(nuevo_id)
@@ -1932,6 +2046,12 @@ def registrar_rutas(app):
                     if clave:
                         u.clave = generate_password_hash(clave)
                     db.session.commit()
+                    try:
+                        crear_respaldo(
+                            f".usuario_editar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
+                    except Exception:
+                        logging.getLogger("respaldo").warning(
+                            "No se pudo crear respaldo al editar usuario", exc_info=True)
                     if es_super and nuevo_rol == "Administrador":
                         ensure_tenant(u.id)
                     if _es_cuenta_propia(u):

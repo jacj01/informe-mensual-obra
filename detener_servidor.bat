@@ -1,24 +1,20 @@
 @echo off
-chcp 65001 >nul
-title Detener servidor Informe Mensual de Obra
-cd /d "%~dp0informe_web"
+setlocal enabledelayedexpansion
 
-if not exist servidor.pid (
-  echo [AVISO] No se encontro servidor.pid. No hay un servidor oculto en ejecucion.
-  echo          Si el servidor sigue respondiendo, use el Administrador de tareas
-  echo          para finalizar el proceso pythonw.exe relacionado.
-  pause
-  exit /b 1
+:: Detener servidor por PID si existe
+if exist "%~dp0informe_web\servidor.pid" (
+    set /p PID=<"%~dp0informe_web\servidor.pid"
+    if not "!PID!"=="" (
+        taskkill /PID !PID! /F >nul 2>&1
+    )
+    del "%~dp0informe_web\servidor.pid" >nul 2>&1
 )
 
-set /p PID=<servidor.pid
-echo Deteniendo servidor (PID %PID%)...
-taskkill /PID %PID% /F >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] No se pudo detener el proceso. Verifiquelo en el Administrador de tareas.
-  pause
-  exit /b 1
-)
-del servidor.pid >nul 2>&1
-echo [OK] Servidor detenido.
-pause
+:: Forzar cierre de pythonw.exe y python.exe
+taskkill /IM pythonw.exe /F >nul 2>&1
+taskkill /IM python.exe /F >nul 2>&1
+
+:: Esperar a que liberen archivos
+ping -n 3 127.0.0.1 >nul 2>&1
+
+exit /b 0

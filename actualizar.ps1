@@ -17,7 +17,8 @@
 param(
     [switch]$Instalar,
     [string]$OwnerRepo = "jacj01/informe-mensual-obra",
-    [string]$VersionLocal = ""  # Permite al server pasar su version en ejecucion
+    [string]$VersionLocal = "",
+    [string]$ZipFile = ""  # Ruta local al ZIP ya descargado (evita usar gh)
 )
 
 $ErrorActionPreference = "Stop"
@@ -107,12 +108,50 @@ if (-not $Instalar) {
 Write-Host "Aplicando actualizacion a $tag ..."
 Escribir-Progreso "descargando" 5 "Descargando $tag de GitHub..."
 
-# 8) Descargar paquete (gh usa tu token del keyring: funciona en repo privado)
+# 8) Descargar paquete: usar ZIP local si se proporciono, si gh, o Invoke-WebRequest con token
 New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
-Write-Host "Descargando $tag ..."
-Escribir-Progreso "descargando" 10 "Descargando $tag..."
-gh release download "$tag" -R $OwnerRepo --pattern "*.zip" --dir $tmpDir
-Escribir-Progreso "descargando" 25 "Descargado. Descomprimiendo paquete..."
+
+if ($ZipFile -and (Test-Path $ZipFile)) {
+    Write-Host "Usando ZIP local: $ZipFile"
+    Escribir-Progreso "descargando" 15 "Usando paquete local..."
+    Copy-Item -Path $ZipFile -Destination (Join-Path $tmpDir "update.zip") -Force
+    $zipPath = Join-Path $tmpDir "update.zip"
+} elseif (gh-ok) {
+    Write-Host "Descargando $tag via gh..."
+    Escribir-Progreso "descargando" 10 "Descargando $tag via gh..."
+    gh release download "$tag" -R $OwnerRepo --pattern "*.zip" --dir $tmpDir
+    $zipPath = (Get-ChildItem $tmpDir -Filter "*.zip" | Select-Object -First 1).FullName
+} else {
+    # Fallback: Invoke-WebRequest con token (extraer de gh auth o env var)
+    Write-Host "gh no disponible para descarga. Usando Invoke-WebRequest..."
+    Escribir-Progreso "descargando" 10 "Descargando $tag via web..."
+    $token = $env:INFORME_GH_TOKEN
+    if (-not $token) {
+        # Intentar extraer token de gh auth login
+        try {
+            $ghAuth = & gh auth token 2>$null
+            if ($LASTEXITCODE -eq 0 -and $ghAuth) { $token = $ghAuth.Trim() }
+        } catch {}
+    }
+    if (-not $token) {
+        # Intentar leer token del config de la app
+        $cfgPy = Join-Path $Raiz "informe_web\app.py"
+        if (Test-Path $cfgPy) {
+            $cfgContent = Get-Content $cfgPy -Raw
+            if ($cfgContent -match 'INFORME_GH_TOKEN.*?"([^"]+)"') { $token = $Matches[1] }
+        }
+    }
+    $headers = @{ "Accept" = "application/vnd.github+json" }
+    if ($token) { $headers["Authorization"] = "Bearer $token" }
+    $apiUrl = "https://api.github.com/repos/$OwnerRepo/releases/latest"
+    $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers -TimeoutSec 15
+    $asset = $release.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+    if (-not $asset) { Escribir-Progreso "error" 100 "No se encontro asset ZIP en la release."; exit 2 }
+    $dlHeaders = @{ "Accept" = "application/octet-stream" }
+    if ($token) { $dlHeaders["Authorization"] = "Bearer $token" }
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile (Join-Path $tmpDir "update.zip") -Headers $dlHeaders -TimeoutSec 120
+    $zipPath = Join-Path $tmpDir "update.zip"
+}
 
 $zipPath = (Get-ChildItem $tmpDir -Filter "*.zip" | Select-Object -First 1).FullName
 if (-not $zipPath) { Write-Error "No se encontro el asset zip descargado"; exit 2 }
