@@ -517,8 +517,9 @@ def create_app():
         resp.headers.setdefault("Referrer-Policy", "same-origin")
         resp.headers.setdefault("Content-Security-Policy",
             "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-            "font-src 'self' data:; connect-src 'self'")
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "img-src 'self' data:; "
+            "font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'")
         return resp
 
     _GZIP_TIPOS = {"text/html", "text/css", "text/plain", "application/javascript",
@@ -1634,20 +1635,31 @@ def registrar_rutas(app):
     @app.route("/sitemap.xml")
     def sitemap():
         base = request.url_root.rstrip("/")
-        urls = ["", "/ordenes", "/gastos", "/almacen", "/tareo", "/formatos",
-                "/configuracion", "/cabecera"]
+        urls = [
+            ("", "1.0", "daily"),
+            ("/dashboard", "0.9", "daily"),
+            ("/cabecera", "0.8", "weekly"),
+            ("/ordenes", "0.8", "weekly"),
+            ("/gastos", "0.8", "weekly"),
+            ("/almacen", "0.8", "weekly"),
+            ("/tareo", "0.8", "weekly"),
+            ("/inventario", "0.7", "monthly"),
+            ("/formatos", "0.7", "monthly"),
+            ("/configuracion", "0.5", "monthly"),
+        ]
         today = date.today().isoformat()
         items = "".join(
             f"  <url>\n"
             f"    <loc>{base}{u}</loc>\n"
             f"    <lastmod>{today}</lastmod>\n"
-            f"    <changefreq>monthly</changefreq>\n"
-            f"    <priority>{'1.0' if u == '' else '0.8'}</priority>\n"
+            f"    <changefreq>{cf}</changefreq>\n"
+            f"    <priority>{p}</priority>\n"
             f"  </url>\n"
-            for u in urls
+            for u, p, cf in urls
         )
         xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
-               '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+               '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n'
+               '        xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'
                f"{items}</urlset>\n")
         return Response(xml, mimetype="application/xml")
 

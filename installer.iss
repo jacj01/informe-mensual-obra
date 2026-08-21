@@ -3,7 +3,7 @@
 ; El usuario final ejecuta el .exe y queda todo listo para usar.
 
 #define MyAppName "Informe Mensual de Obra"
-#define MyAppVersion "1.0.9"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C."
 #define MyAppURL "https://github.com/jacj01/informe-mensual-obra"
 #define MyAppExeName "iniciar_sin_consola.vbs"
@@ -50,8 +50,8 @@ Source: ".gitignore"; DestDir: "{app}"; Flags: ignoreversion
 ; Archivos de datos para combobox
 Source: "Rubro.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Recursos.txt"; DestDir: "{app}"; Flags: ignoreversion
-; La app completa
-Source: "informe_web\*"; DestDir: "{app}\informe_web"; Flags: ignoreversion recursesubdirs createallsubdirs
+; La app completa (excluir instance/ para no sobreescribir la DB del usuario)
+Source: "informe_web\*"; DestDir: "{app}\informe_web"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "informe_web\instance\*"
 
 [Icons]
 Name: "{group}\Abrir Informe de Obra"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Logo.ico"

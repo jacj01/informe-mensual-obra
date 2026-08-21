@@ -13,12 +13,17 @@
   <link rel="canonical" href="{{ request.base_url }}">
   <link rel="icon" href="{{ url_for('static', filename='img/Logo.png', v=4) }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/Logo.png', v=4) }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap" rel="stylesheet">
   <meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}">
   <meta property="og:description" content="{{ _pag_desc or 'Registro y exportación del informe financiero mensual de obra en administración directa.' }}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ request.url }}">
   <meta property="og:site_name" content="Informe Mensual de Obra">
   <meta property="og:image" content="{{ url_for('static', filename='img/Logo.png', _external=True, v=4) }}">
+  <meta property="og:image:width" content="857">
+  <meta property="og:image:height" content="683">
   <meta property="og:locale" content="es_PE">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="{% block twitter_title %}{{ self.title() }}{% endblock %}">
@@ -39,10 +44,19 @@
     "offers": {
       "@type": "Offer",
       "category": "SoftwareSubscription"
-    }
-    {% if p and p.entidad %},
+    },
     "publisher": {
       "@type": "Organization",
+      "name": "INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C.",
+      "url": "https://github.com/jacj01/informe-mensual-obra",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "{{ url_for('static', filename='img/Logo.png', _external=True, v=4) }}"
+      }
+    }
+    {% if p and p.entidad %},
+    "mainEntity": {
+      "@type": "Project",
       "name": "{{ p.entidad }}"
     }
     {% endif %}
