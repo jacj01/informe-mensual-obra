@@ -3,7 +3,7 @@
 ; El usuario final ejecuta el .exe y queda todo listo para usar.
 
 #define MyAppName "Informe Mensual de Obra"
-#define MyAppVersion "1.0.8"
+#define MyAppVersion "1.0.9"
 #define MyAppPublisher "INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C."
 #define MyAppURL "https://github.com/jacj01/informe-mensual-obra"
 #define MyAppExeName "iniciar_sin_consola.vbs"
