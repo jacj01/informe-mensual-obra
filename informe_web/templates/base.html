@@ -113,7 +113,11 @@
         .then(function(r) { if (r.status===403||r.redirected) throw new Error('No autorizado'); return r.json(); })
         .then(function(d) {
           sessionStorage.setItem(_CLAVE_CACHE, JSON.stringify(d));
-          if (d.disponible) {
+          if (d.error) {
+            document.getElementById('updErrorMsg').textContent = 'Error: ' + d.error;
+            _updShow('updEstadoError');
+            _updBtn('updBtnInstalar', false);
+          } else if (d.disponible) {
             document.getElementById('updVerActual').textContent = window._tagLimpio(d.version_actual);
             document.getElementById('updVerNueva').textContent = window._tagLimpio(d.tag);
             document.getElementById('updFecha').textContent = d.publicada ? new Date(d.publicada).toLocaleDateString('es-PE') : '-';
@@ -242,6 +246,7 @@
         .then(function(r) { return r.json(); })
         .then(function(d) {
           sessionStorage.setItem(_CLAVE_CACHE, JSON.stringify(d));
+          if (d.error) return;
           if (d.disponible) mostrarToast('info', 'Hay una actualizacion disponible (v' + window._tagLimpio(d.tag) + ').');
         })
         .catch(function(){});

@@ -1429,27 +1429,17 @@ def registrar_rutas(app):
         except Exception:
             data = None  # fallback a REST API
 
-        # --- Estrategia 2: gh auth token + REST API ---
+        # --- Estrategia 2: REST API de GitHub (sin auth, repo publico) ---
         if data is None:
             try:
-                import urllib.request, urllib.error, subprocess as _sp
-                # Obtener token de gh auth (funciona si el usuario hizo gh auth login)
-                token = app.config.get("INFORME_GH_TOKEN", "")
-                if not token:
-                    try:
-                        t_out = _sp.run(["gh", "auth", "token"],
-                                        capture_output=True, text=True, timeout=10,
-                                        creationflags=0x08000000)
-                        if t_out.returncode == 0 and t_out.stdout.strip():
-                            token = t_out.stdout.strip()
-                    except Exception:
-                        pass
+                import urllib.request, urllib.error, ssl
                 api_url = f"https://api.github.com/repos/{repo}/releases/latest"
                 req = urllib.request.Request(api_url)
                 req.add_header("Accept", "application/vnd.github+json")
-                if token:
-                    req.add_header("Authorization", f"Bearer {token}")
-                with urllib.request.urlopen(req, timeout=15) as resp:
+                req.add_header("User-Agent", "InformeObra/1.0")
+                # Crear contexto SSL que intente certificados del sistema
+                ctx = ssl.create_default_context()
+                with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
                     raw = json.loads(resp.read().decode("utf-8"))
                 tag = raw.get("tag_name", "")
                 asset = next((a for a in raw.get("assets", [])
@@ -1462,7 +1452,8 @@ def registrar_rutas(app):
                     "url": asset.get("browser_download_url") if asset else None,
                 }
             except Exception as e:
-                return jsonify({"disponible": False, "error": str(e),
+                Log('[UPDATE] REST API fallo: ' + str(e))
+                return jsonify({"disponible": None, "error": str(e),
                                 "version_actual": local_v}), 502
 
         hay_nueva = _vt(tag) > _vt(local_v)
@@ -1478,32 +1469,21 @@ def registrar_rutas(app):
     @app.route("/actualizar", methods=["POST"])
     def aplicar_actualizacion():
         """Dispara la actualizacion en el propio equipo.
-        Descarga el ZIP via gh release download y lanza actualizar.ps1.
-        Si gh no esta autenticado, intenta REST API con token.
+        Descarga el ZIP via gh release download (si gh esta disponible) o
+        via REST API directa (repo publico). Lanza actualizar.ps1.
         Solo Admin / Super."""
         if not es_admin_actual():
             return jsonify({"error": "No autorizado"}), 403
         try:
-            import subprocess, tempfile, urllib.request
+            import subprocess, tempfile, urllib.request, ssl
             root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             ps1 = os.path.join(root, "actualizar.ps1")
             repo = app.config.get("INFORME_REPO", "jacj01/informe-mensual-obra")
             local_v = app.config.get("INFORME_VERSION", "1.0.0")
 
-            # Obtener token de gh auth
-            token = app.config.get("INFORME_GH_TOKEN", "")
-            if not token:
-                try:
-                    t_out = subprocess.run(["gh", "auth", "token"],
-                                           capture_output=True, text=True, timeout=10,
-                                           creationflags=0x08000000)
-                    if t_out.returncode == 0 and t_out.stdout.strip():
-                        token = t_out.stdout.strip()
-                except Exception:
-                    pass
-
             # Obtener tag de la release remota
             tag = ""
+            # Estrategia 1: gh CLI
             try:
                 cmd = ["gh", "-R", repo, "release", "view", "--json", "tagName"]
                 out = subprocess.run(cmd, capture_output=True, text=True, timeout=15,
@@ -1512,13 +1492,15 @@ def registrar_rutas(app):
                     tag = json.loads(out.stdout).get("tagName", "")
             except Exception:
                 pass
-            if not tag and token:
+            # Estrategia 2: REST API publica
+            if not tag:
                 try:
                     api_url = f"https://api.github.com/repos/{repo}/releases/latest"
                     req = urllib.request.Request(api_url)
                     req.add_header("Accept", "application/vnd.github+json")
-                    req.add_header("Authorization", f"Bearer {token}")
-                    with urllib.request.urlopen(req, timeout=15) as resp:
+                    req.add_header("User-Agent", "InformeObra/1.0")
+                    ctx = ssl.create_default_context()
+                    with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
                         tag = json.loads(resp.read().decode()).get("tag_name", "")
                 except Exception:
                     pass
@@ -1526,11 +1508,12 @@ def registrar_rutas(app):
             if not tag:
                 return jsonify({"ok": False,
                                 "error": "No se pudo obtener la version remota. "
-                                         "Ejecute 'gh auth login' para autenticar."}), 400
+                                         "Verifique su conexion a internet."}), 400
 
-            # Descargar ZIP via gh release download
+            # Descargar ZIP: intentar gh primero, luego REST API directa
             tmp_dir = tempfile.mkdtemp(prefix="informe_upd_")
             zip_path = None
+            # Intento 1: gh release download
             try:
                 r = subprocess.run(["gh", "-R", repo, "release", "download", tag,
                                     "--pattern", "*.zip", "--dir", tmp_dir],
@@ -1542,6 +1525,32 @@ def registrar_rutas(app):
                         zip_path = os.path.join(tmp_dir, zips[0])
             except Exception:
                 zip_path = None
+            # Intento 2: REST API directa (repo publico)
+            if not zip_path:
+                try:
+                    api_dl = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+                    req2 = urllib.request.Request(api_dl)
+                    req2.add_header("Accept", "application/vnd.github+json")
+                    req2.add_header("User-Agent", "InformeObra/1.0")
+                    ctx2 = ssl.create_default_context()
+                    with urllib.request.urlopen(req2, timeout=15, context=ctx2) as resp2:
+                        rel = json.loads(resp2.read().decode())
+                    zip_asset = next((a for a in rel.get("assets", [])
+                                      if a.get("name", "").endswith(".zip")), None)
+                    if zip_asset:
+                        dl_url = zip_asset.get("browser_download_url")
+                        req3 = urllib.request.Request(dl_url)
+                        req3.add_header("User-Agent", "InformeObra/1.0")
+                        with urllib.request.urlopen(req3, timeout=120, context=ctx2) as dl_resp:
+                            zip_path = os.path.join(tmp_dir, zip_asset["name"])
+                            with open(zip_path, "wb") as f:
+                                while True:
+                                    chunk = dl_resp.read(65536)
+                                    if not chunk:
+                                        break
+                                    f.write(chunk)
+                except Exception:
+                    zip_path = None
 
             if not zip_path:
                 return jsonify({"ok": False,
