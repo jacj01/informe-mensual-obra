@@ -1558,14 +1558,18 @@ def registrar_rutas(app):
                                          "Ejecute 'gh auth login' para autenticar."}), 400
 
             # Lanzar el updater con -ZipFile
-            ps_args = ["powershell.exe", "-NoProfile", "-WindowStyle", "Hidden",
-                       "-ExecutionPolicy", "Bypass", "-File", ps1, "-Instalar",
+            ps_args = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                       "-File", ps1, "-Instalar",
                        "-VersionLocal", local_v, "-ZipFile", zip_path]
 
+            _si = subprocess.STARTUPINFO()
+            _si.dwFlags = subprocess.STARTF_USESHOWWINDOW
+            _si.wShowWindow = 0  # SW_HIDE
             subprocess.Popen(ps_args, cwd=root,
-                             creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                             startupinfo=_si,
+                             creationflags=subprocess.CREATE_NO_WINDOW,
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL, close_fds=True)
+                             stderr=subprocess.DEVNULL)
             return jsonify({"ok": True, "msg": "Actualizacion iniciada; el servidor se reiniciara en breve."})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
@@ -1822,7 +1826,7 @@ def registrar_rutas(app):
             if ep not in ("usuarios", "usuario_nuevo", "usuario_editar",
                           "usuario_eliminar", "respaldo", "suscripcion",
                           "suscripcion_renovar", "suscripcion_pausar",
-                          "actualizar", "api_actualizacion", "publicar_nueva_version",
+                          "aplicar_actualizacion", "api_actualizacion", "publicar_nueva_version",
                           "progreso_publicacion", "progreso_actualizacion"):
                 flash("La cuenta principal gestiona cuentas y licencia; "
                       "esta sección corresponde a los datos de un proyecto.",

@@ -692,7 +692,7 @@ body.modal-open { overflow: hidden; }
 
 /* ---------------- Confirmación tipo popup ---------------- */
 .confirm-popup {
-  position: fixed; inset: 0; z-index: 200;
+  position: fixed; inset: 0; z-index: 10000;
   display: none; align-items: center; justify-content: center; padding: 20px;
 }
 .confirm-popup.open { display: flex; }
@@ -1304,3 +1304,41 @@ h1, .hero-title, .brand-title, .login-brand-title,
   body { font-size: 11pt; }
   .content { padding: 16px; }
 }
+
+/* ---------------- MODAL / OVERLAY ---------------- */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.52); display: none; align-items: center; justify-content: center; z-index: 9000; }
+.modal-overlay.active { display: flex !important; }
+.modal-pub { background: #fff; border-radius: 10px; width: 92%; max-width: 460px; box-shadow: 0 18px 40px rgba(0,0,0,.22); color: #333; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 12px; border-bottom: 1px solid #eee; }
+.modal-head h3 { margin: 0; font-size: 18px; font-weight: 600; color: #1f2937; }
+.modal-close { background: none; border: 0; font-size: 24px; color: #888; cursor: pointer; line-height: 1; padding: 0 4px; }
+.modal-body { padding: 18px 20px; }
+.modal-body .form-group { margin-bottom: 14px; }
+.modal-body .form-group label { display: block; font-size: 13px; font-weight: 600; color: #4b5563; margin-bottom: 5px; }
+.modal-body .form-group small { color: #9ca3af; font-weight: 400; }
+.modal-body .form-group input { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+.modal-help { font-size: 12px; color: #6b7280; margin: 10px 0 0; line-height: 1.4; }
+.modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px; border-top: 1px solid #eee; background: #fafafa; border-radius: 0 0 10px 10px; }
+.btn-ghost { background: #f3f4f6; color: #374151; }
+/* Update modal extras */
+.upd-estado { text-align: center; padding: 10px 0; }
+.upd-estado p { margin: 6px 0; font-size: 14px; color: #374151; }
+.upd-spinner { width: 36px; height: 36px; border: 3px solid #e5e7eb; border-top-color: #1f4e79; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.upd-ok-icon { font-size: 42px; margin-bottom: 6px; }
+.upd-ok-icon i { color: #16a34a; }
+.upd-ok-icon.green i { color: #16a34a; }
+.upd-ok-icon.red i { color: #dc2626; }
+.upd-ok-msg { font-weight: 700; font-size: 16px; color: #1f2937; }
+.upd-ok-ver { font-size: 13px; color: #6b7280; }
+.upd-ok-sub { font-size: 12px; color: #6b7280; margin-top: 4px; }
+.upd-info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+.upd-info-label { font-weight: 600; color: #4b5563; }
+.upd-new-ver { color: #1f4e79; font-weight: 700; }
+.upd-progress-modal { margin: 10px 0; }
+.upd-progress-bar-modal { height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; }
+.upd-progress-fill-modal { height: 100%; width: 0%; background: linear-gradient(90deg, #1f4e79, #2980b9); border-radius: 5px; transition: width .4s ease; }
+.upd-progress-pct { font-size: 13px; font-weight: 700; color: #1f4e79; }
+.upd-progress-msg { font-size: 12px; color: #6b7280; margin-top: 4px; }
+/* Confirm icon info variant */
+.confirm-icon.info { background: #DBEAFE; color: #1E40AF; }
