@@ -336,7 +336,7 @@
     }
   </script>{% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version_actual }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version_actual }}.3">
 </head>
 <body>
   <aside class="sidebar" id="sidebar">
@@ -1007,6 +1007,21 @@
     </div>
   </div>
 
-  <!-- modal/update/confirm styles: static/css/style.css -->
+  <style>
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.52); display:none; align-items:center; justify-content:center; z-index:9000; }
+    .modal-overlay.active { display:flex !important; }
+    .modal-pub { background:#fff; border-radius:10px; width:92%; max-width:460px; box-shadow:0 18px 40px rgba(0,0,0,.22); color:#333; }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid #eee; }
+    .modal-head h3 { margin:0; font-size:18px; font-weight:600; color:#1f2937; }
+    .modal-close { background:none; border:0; font-size:24px; color:#888; cursor:pointer; line-height:1; padding:0 4px; }
+    .modal-body { padding:18px 20px; }
+    .modal-body .form-group { margin-bottom:14px; }
+    .modal-body .form-group label { display:block; font-size:13px; font-weight:600; color:#4b5563; margin-bottom:5px; }
+    .modal-body .form-group small { color:#9ca3af; font-weight:400; }
+    .modal-body .form-group input { width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px; }
+    .modal-help { font-size:12px; color:#6b7280; margin:10px 0 0; line-height:1.4; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:12px 20px; border-top:1px solid #eee; background:#fafafa; border-radius:0 0 10px 10px; }
+    .btn-ghost { background:#f3f4f6; color:#374151; }
+  </style>
 </body>
 </html>
