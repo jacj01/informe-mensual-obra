@@ -16,7 +16,8 @@ from datetime import date, datetime, timedelta
 from functools import wraps
 
 from flask import (Flask, render_template, request, redirect, url_for,
-                   flash, jsonify, session, abort, Response)
+                   flash, jsonify, session, abort, Response, send_file)
+import io
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
 
@@ -943,7 +944,7 @@ def permiso_requerido(ep):
         return "cabecera"
     if ep == "formatos":
         return "formatos"
-    if ep == "imprimir_manifiesto":
+    if ep in ("imprimir_manifiesto", "manifiesto_excel"):
         return "formatos"
     if ep in ("imprimir_fe05", "imprimir_fe06", "imprimir_panel"):
         return "formatos"
@@ -3754,6 +3755,447 @@ def registrar_rutas(app):
                                MESES=MESES, hdr=hdr, secciones=secciones,
                                total_gral=total_gral)
 
+    @app.route("/formatos/manifiesto/excel")
+    def manifiesto_excel():
+        """Genera archivo .xlsx del Manifiesto de Gasto fiel a la hoja de impresión."""
+        import math
+        from openpyxl import Workbook
+        from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side,
+                                     numbers)
+        from openpyxl.drawing.image import Image as XlImage
+        from openpyxl.utils import get_column_letter
+
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+
+        ubicacion = " - ".join(x for x in [p.distrito, p.provincia, p.departamento] if x)
+        n_manifiesto = max(1, mes - mes_inicio_manifiesto(anio) + 1)
+        hdr = {
+            "entidad": p.entidad or "",
+            "unidad": p.unidad_ejecutora or "",
+            "proyecto": p.nombre or "",
+            "cui": p.cui or "",
+            "meta": p.meta or "",
+            "fuente": p.fuente or "",
+            "ubicacion": ubicacion,
+            "modalidad": "ADMINISTRACION DIRECTA",
+            "residente": p.residente or "",
+            "supervisor": p.supervisor or "",
+            "asistente": p.asistente or "",
+            "periodo": f"{MESES[mes-1]} - {anio}",
+            "n_manifiesto": f"{n_manifiesto:03d}",
+            "logo_path": p.logo_path or "",
+            "cip_supervisor": p.cip_supervisor or "",
+            "cip_residente": p.cip_residente or "",
+        }
+
+        orden_comp = ["Costo Directo", "Gastos Generales", "Gastos de Supervisión",
+                      "Elaboración de Expediente Técnico", "Liquidación de Obra"]
+        grupos = {}
+        for g in gastos_mes(mes, anio, devengado=True):
+            key = (g.componente or "", g.clasificador or "")
+            gr = grupos.setdefault(key, {"componente": g.componente or "",
+                                         "clasificador": g.clasificador or "",
+                                         "filas": [], "subtotal": 0.0})
+            clave_orden = (g.siaf or "", g.tipo_doc or "", g.num_doc or "",
+                           g.proveedor or "")
+            first = gr.get("_ultima_orden") != clave_orden
+            gr["_ultima_orden"] = clave_orden
+            for idx_d, d in enumerate(g.detalles):
+                gr["filas"].append({
+                    "fecha": g.fecha, "siaf": g.siaf or "", "tipo_doc": g.tipo_doc or "",
+                    "num_doc": g.num_doc or "", "proveedor": g.proveedor or "",
+                    "detalle": d.detalle, "und": d.und or "",
+                    "cantidad": d.cantidad, "pu": d.precio_unitario,
+                    "importe": d.importe, "prov_first": first and idx_d == 0,
+                })
+                gr["subtotal"] += d.importe
+
+        def orden_seccion(item):
+            comp, clas = item
+            ci = orden_comp.index(comp) if comp in orden_comp else len(orden_comp)
+            return (ci, clas)
+
+        secciones = []
+        for key in sorted(grupos, key=orden_seccion):
+            gr = grupos[key]
+            gr.pop("_ultima_orden", None)
+            gr["subtotal"] = round(gr["subtotal"], 2)
+            gr["label"] = (f"{gr['componente'].upper()} - "
+                           f"{cls_nombre(p, gr['clasificador'])}")
+            prov_cont = 0
+            for fila in gr["filas"]:
+                if fila["prov_first"]:
+                    prov_cont += 1
+                fila["prov_num"] = prov_cont
+            secciones.append(gr)
+
+        total_gral = round(total_gastos_mes(mes, anio, devengado=True), 2)
+
+        # ── Colores fiels al print.css ──
+        AZUL = "1F4E79"
+        AZUL_OSC = "14355A"
+        BG = "F1F5F9"
+        BLANCO = "FFFFFF"
+
+        thin = Side(style="thin", color=AZUL_OSC)
+        border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
+        thin_gray = Side(style="thin", color="C3CCD8")
+        border_grid = Border(left=thin_gray, right=thin_gray, top=thin_gray, bottom=thin_gray)
+
+        fill_azul = PatternFill("solid", fgColor=AZUL)
+        fill_azul_osc = PatternFill("solid", fgColor=AZUL_OSC)
+        fill_bg = PatternFill("solid", fgColor=BG)
+        fill_rubro = PatternFill("solid", fgColor="E3EAF2")
+        fill_white = PatternFill("solid", fgColor=BLANCO)
+
+        font_title = Font(name="Arial", size=16, bold=True, color=AZUL)
+        font_entity = Font(name="Arial", size=11, bold=True, color=AZUL_OSC)
+        font_sub = Font(name="Arial", size=9, color="64748B")
+        font_periodo = Font(name="Arial", size=10, bold=True, color=AZUL)
+        font_num_doc = Font(name="Arial", size=10, bold=True, color=AZUL)
+        font_label = Font(name="Arial", size=8, bold=True, color=AZUL_OSC)
+        font_val = Font(name="Arial", size=10)
+        font_th = Font(name="Arial", size=8, bold=True, color=BLANCO)
+        font_td = Font(name="Arial", size=9)
+        font_rubro = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
+        font_subtotal = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
+        font_total = Font(name="Arial", size=10, bold=True, color=BLANCO)
+        font_firma_nom = Font(name="Arial", size=10, bold=True)
+        font_firma_cargo = Font(name="Arial", size=8, bold=True, color=AZUL_OSC)
+        font_firma_reg = Font(name="Arial", size=8, color="64748B")
+
+        align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        align_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        align_right = Alignment(horizontal="right", vertical="center", wrap_text=True)
+        align_right_num = Alignment(horizontal="right", vertical="center")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Manifiesto"
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.page_margins.left = 0.4
+        ws.page_margins.right = 0.4
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.5
+        ws.print_options.horizontalCentered = True
+        ws.sheet_view.view = "pageBreakPreview"
+        ws.sheet_view.showGridLines = False
+        ws.print_title_rows = "17:17"
+
+        col_widths = {"A": 6, "B": 14, "C": 12, "D": 8, "E": 10,
+                      "F": 28, "G": 38, "H": 8, "I": 8, "J": 14, "K": 16}
+        for letter, w in col_widths.items():
+            ws.column_dimensions[letter].width = w
+
+        # ── ENCABEZADO ──
+        thin_line = Side(style="medium", color=AZUL)
+        
+        # Logo
+        logo_file = os.path.join(app.root_path, "static", hdr["logo_path"]) if hdr["logo_path"] else None
+        if logo_file and os.path.isfile(logo_file):
+            try:
+                img = XlImage(logo_file)
+                img.width = 70
+                img.height = 70
+                ws.add_image(img, "A1")
+            except Exception:
+                pass
+
+        # Borde inferior en encabezado (línea azul de 3px como en print.css)
+        header_border_bottom = Border(bottom=Side(style="medium", color=AZUL))
+        
+        ws.merge_cells("B1:J1")
+        c = ws["B1"]
+        c.value = hdr["entidad"]
+        c.font = font_entity
+        c.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+        c.border = header_border_bottom
+
+        ws.merge_cells("B2:J2")
+        c2 = ws["B2"]
+        c2.value = hdr["unidad"]
+        c2.font = font_sub
+        c2.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        c2.border = header_border_bottom
+
+        ws.merge_cells("B3:J3")
+        c3 = ws["B3"]
+        c3.value = "MANIFIESTO DE GASTO"
+        c3.font = font_title
+        c3.alignment = Alignment(horizontal="center", vertical="top")
+        c3.border = header_border_bottom
+
+        ws.merge_cells("B4:J4")
+        c4 = ws["B4"]
+        c4.value = hdr["modalidad"]
+        c4.font = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
+        c4.alignment = Alignment(horizontal="center", vertical="center")
+        c4.border = header_border_bottom
+
+        ws["K1"].value = f"N° {hdr['n_manifiesto']}"
+        ws["K1"].font = font_num_doc
+        ws["K1"].alignment = Alignment(horizontal="right", vertical="center")
+        ws["K1"].border = border_all
+
+        ws["K2"].value = "PERÍODO:"
+        ws["K2"].font = Font(name="Arial", size=9, bold=True, color=AZUL)
+        ws["K2"].alignment = Alignment(horizontal="right", vertical="center")
+        ws["K2"].border = border_all
+
+        ws["K3"].value = hdr["periodo"]
+        ws["K3"].font = font_periodo
+        ws["K3"].alignment = Alignment(horizontal="right", vertical="center")
+        ws["K3"].border = border_all
+
+        # Alturas de fila para encabezado (ajustadas para texto envuelto)
+        ws.row_dimensions[1].height = 24
+        ws.row_dimensions[2].height = 20
+        ws.row_dimensions[3].height = 32
+        ws.row_dimensions[4].height = 20
+
+        # ── DATOS GENERALES (fila 6-15) ──
+        datos = [
+            ("PROYECTO", hdr["proyecto"], True),
+            ("CÓDIGO ÚNICO", hdr["cui"], False),
+            ("CORRELATIVO META", hdr["meta"], False),
+            ("FUENTE FINANCIAMIENTO", hdr["fuente"], False),
+            ("MODALIDAD", hdr["modalidad"], False),
+            ("UBICACIÓN", hdr["ubicacion"], False),
+            ("RESIDENTE DE OBRA", hdr["residente"], False),
+            ("SUPERVISOR DE OBRA", hdr["supervisor"], False),
+            ("ADMIN. DE OBRA", hdr["asistente"], False),
+            ("PERÍODO", hdr["periodo"], True),
+        ]
+
+        for i, (label, valor, full_width) in enumerate(datos):
+            r = 6 + i
+            # Alturas de fila: full_width (C:K = 144 chars) casi nunca envuelve
+            if full_width:
+                ws.row_dimensions[r].height = 24 if len(valor) > 60 else 20
+            else:
+                # C:E merge = 32 chars, texto puede envolver
+                lineas = max(1, 1 + len(valor) // 28)
+                ws.row_dimensions[r].height = max(20, 15 * lineas)
+            if full_width:
+                ws.merge_cells(f"A{r}:B{r}")
+                c_lbl = ws.cell(row=r, column=1, value=label)
+                c_lbl.font = font_label
+                c_lbl.fill = fill_bg
+                c_lbl.alignment = align_left
+                c_lbl.border = border_grid
+                ws.cell(row=r, column=2).border = border_grid
+                ws.cell(row=r, column=2).fill = fill_bg
+                ws.merge_cells(f"C{r}:K{r}")
+                c_val = ws.cell(row=r, column=3, value=valor)
+                c_val.font = font_val
+                c_val.alignment = align_left
+                c_val.border = border_grid
+            else:
+                c_lbl = ws.cell(row=r, column=1, value=label)
+                c_lbl.font = font_label
+                c_lbl.fill = fill_bg
+                c_lbl.alignment = align_left
+                c_lbl.border = border_grid
+                ws.merge_cells(f"A{r}:B{r}")
+                ws.merge_cells(f"C{r}:E{r}")
+                c_val = ws.cell(row=r, column=3, value=valor)
+                c_val.font = font_val
+                c_val.alignment = align_left
+                c_val.border = border_grid
+                for col in range(4, 6):
+                    ws.cell(row=r, column=col).border = border_grid
+
+        # ── TABLA FINANCIERA ──
+        tabla_start = 17
+
+        headers = ["N°", "Fecha", "SIAF", "Tipo Doc", "N°",
+                    "Nombre / Proveedor", "Detalle del Gasto", "Und.",
+                    "Cant.", "P. Unitario", "Total"]
+        for j, h in enumerate(headers, 1):
+            c = ws.cell(row=tabla_start, column=j, value=h)
+            c.font = font_th
+            c.fill = fill_azul
+            c.alignment = align_center
+            c.border = border_all
+        ws.row_dimensions[tabla_start].height = 22
+
+        r = tabla_start + 1
+        subtotal_rows = []
+        for s in secciones:
+            # Fila de rubro
+            ws.merge_cells(f"A{r}:K{r}")
+            c = ws.cell(row=r, column=1, value=s["label"])
+            c.font = font_rubro
+            c.fill = fill_rubro
+            c.alignment = align_left
+            c.border = border_all
+            ws.row_dimensions[r].height = 20
+            r += 1
+
+            sec_data_start = r
+            for f in s["filas"]:
+                prov_num = f["prov_num"] if f["prov_first"] else ""
+                fecha_str = f["fecha"].strftime("%d/%m/%Y") if f["prov_first"] and f["fecha"] else ""
+                siaf = f["siaf"] if f["prov_first"] else ""
+                tipo_doc = f["tipo_doc"] if f["prov_first"] else ""
+                num_doc = f["num_doc"] if f["prov_first"] else ""
+                proveedor = f["proveedor"] if f["prov_first"] else ""
+
+                vals = [prov_num, fecha_str, siaf, tipo_doc, num_doc,
+                        proveedor, f["detalle"], f["und"],
+                        f["cantidad"], f["pu"], f"=ROUND(I{r}*J{r},2)"]
+                aligns = [align_center, align_left, align_left, align_center,
+                          align_center, align_left, align_left, align_center,
+                          align_right_num, align_right_num, align_right_num]
+
+                for j, (v, al) in enumerate(zip(vals, aligns), 1):
+                    c = ws.cell(row=r, column=j, value=v)
+                    c.font = font_td
+                    c.alignment = al
+                    # Solo aplicar borde si la celda tiene contenido
+                    if v is not None and v != "":
+                        c.border = border_grid
+                    if j in (9, 10, 11) and v:
+                        c.number_format = '#,##0.00'
+                # Height: ceil(len / 38) lines × 14pt/line, min 18
+                v_texto = str(f["detalle"] or "")
+                v_prov = str(proveedor or "")
+                h_texto = math.ceil(len(v_texto) / 38) * 14 if v_texto else 0
+                h_prov = math.ceil(len(v_prov) / 30) * 14 if v_prov else 0
+                ws.row_dimensions[r].height = max(h_texto, h_prov, 18)
+                r += 1
+
+            # Subtotal
+            ws.merge_cells(f"A{r}:J{r}")
+            c_lbl = ws.cell(row=r, column=1,
+                            value=f"SUBTOTAL {s['componente'].upper()} S/.")
+            c_lbl.font = font_subtotal
+            c_lbl.fill = fill_bg
+            c_lbl.alignment = Alignment(horizontal="right", vertical="center")
+            c_lbl.border = border_all
+            for col in range(2, 11):
+                ws.cell(row=r, column=col).fill = fill_bg
+                ws.cell(row=r, column=col).border = border_all
+            c_val = ws.cell(row=r, column=11,
+                            value=f"=SUM(K{sec_data_start}:K{r-1})")
+            c_val.font = font_subtotal
+            c_val.fill = fill_bg
+            c_val.alignment = align_right_num
+            c_val.border = border_all
+            c_val.number_format = '#,##0.00'
+            subtotal_rows.append(r)
+            ws.row_dimensions[r].height = 20
+            r += 1
+
+        if not secciones:
+            ws.merge_cells(f"A{r}:K{r}")
+            c = ws.cell(row=r, column=1,
+                        value="SIN GASTOS DEVENGADOS PARA EL PERÍODO")
+            c.font = font_rubro
+            c.fill = fill_rubro
+            c.alignment = align_center
+            c.border = border_all
+            r += 1
+
+        # Total general
+        ws.merge_cells(f"A{r}:J{r}")
+        c_lbl = ws.cell(row=r, column=1, value="TOTAL GENERAL S/.")
+        c_lbl.font = font_total
+        c_lbl.fill = fill_azul_osc
+        c_lbl.alignment = Alignment(horizontal="right", vertical="center")
+        c_lbl.border = border_all
+        for col in range(2, 11):
+            ws.cell(row=r, column=col).fill = fill_azul_osc
+            ws.cell(row=r, column=col).border = border_all
+        # Suma todas las filas de subtotales
+        grand_val = (f"=SUM(" + ",".join(f"K{sr}" for sr in subtotal_rows) + ")"
+                     ) if subtotal_rows else total_gral
+        c_val = ws.cell(row=r, column=11, value=grand_val)
+        c_val.font = font_total
+        c_val.fill = fill_azul_osc
+        c_val.alignment = align_right_num
+        c_val.border = border_all
+        c_val.number_format = '#,##0.00'
+        ws.row_dimensions[r].height = 24
+        r += 1
+
+        # ── FIRMAS ──
+        firmas_row = r + 3
+        # Espacio antes de las firmas (p.ej. fila 40 → 45pt)
+        ws.row_dimensions[firmas_row - 3].height = 45
+        firmas = [
+            (hdr["residente"], "Residente de Obra",
+             f"CIP: {hdr['cip_residente']}" if hdr["cip_residente"] else ""),
+            (hdr["supervisor"], "Supervisor de Obra",
+             f"CIP: {hdr['cip_supervisor']}" if hdr["cip_supervisor"] else ""),
+            (p.administrador_obra or p.asistente or "",
+             "V°B° Administración / Entidad", ""),
+        ]
+        for idx, (nombre, cargo, reg) in enumerate(firmas):
+            col = 1 + idx * 4
+            ws.merge_cells(start_row=firmas_row, start_column=col,
+                           end_row=firmas_row, end_column=col + 2)
+
+            # Línea de firma (borde superior para simular la línea)
+            c_line = ws.cell(row=firmas_row, column=col)
+            c_line.border = Border(
+                top=Side(style="thin", color=AZUL),
+                bottom=Side(style=None)
+            )
+            # Apply border to all cells in merged range
+            for merge_col in range(col, col + 3):
+                ws.cell(row=firmas_row, column=merge_col).border = Border(
+                    top=Side(style="thin", color=AZUL)
+                )
+
+            # Línea de firma compacta (8pt)
+            ws.row_dimensions[firmas_row].height = 8
+
+            # Nombre
+            r_nom = firmas_row + 1
+            ws.merge_cells(start_row=r_nom, start_column=col,
+                           end_row=r_nom, end_column=col + 2)
+            c_nom = ws.cell(row=r_nom, column=col, value=nombre)
+            c_nom.font = font_firma_nom
+            c_nom.alignment = Alignment(horizontal="center", vertical="bottom",
+                                        wrap_text=True)
+            ws.row_dimensions[r_nom].height = 20
+
+            # Cargo
+            r_cargo = r_nom + 1
+            ws.merge_cells(start_row=r_cargo, start_column=col,
+                           end_row=r_cargo, end_column=col + 2)
+            c_cargo = ws.cell(row=r_cargo, column=col, value=cargo)
+            c_cargo.font = font_firma_cargo
+            c_cargo.alignment = Alignment(horizontal="center", vertical="top")
+            ws.row_dimensions[r_cargo].height = 16
+
+            # Registro
+            if reg:
+                r_reg = r_cargo + 1
+                ws.merge_cells(start_row=r_reg, start_column=col,
+                               end_row=r_reg, end_column=col + 2)
+                c_reg = ws.cell(row=r_reg, column=col, value=reg)
+                c_reg.font = font_firma_reg
+                c_reg.alignment = Alignment(horizontal="center", vertical="top")
+                ws.row_dimensions[r_reg].height = 14
+
+        # ── Ajustes finales ──
+        ws.print_area = f"A1:K{firmas_row + 4}"
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        filename = f"Manifiesto_Gasto_{hdr['periodo'].replace(' ', '_')}.xlsx"
+        return send_file(buf, as_attachment=True, download_name=filename,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     # ------------------------- CONFIGURACION --------------------------
     @app.route("/configuracion", methods=["GET", "POST"])
     def configuracion():
@@ -3929,6 +4371,375 @@ def registrar_rutas(app):
                                MESES=MESES, secciones=secciones, total=total,
                                clasif_cols=clasif_cols)
 
+    @app.route("/formatos/fe05/excel")
+    def fe05_excel():
+        """Genera archivo .xlsx del FE-05 Ejecucion Presupuestal Mensual fiel
+        al diseño de la hoja de impresión."""
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.drawing.image import Image as XlImage
+        from openpyxl.utils import get_column_letter
+        import math
+
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        secciones, total, clasif_cols = f05_datos(mes, anio)
+
+        # ── Colores fieles al print.css ──
+        AZUL = "1F4E79"
+        AZUL_OSC = "14355A"
+        BG = "F1F5F9"
+        BLANCO = "FFFFFF"
+
+        thin = Side(style="thin", color=AZUL_OSC)
+        border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
+        thin_gray = Side(style="thin", color="C3CCD8")
+        border_grid = Border(left=thin_gray, right=thin_gray, top=thin_gray,
+                             bottom=thin_gray)
+
+        fill_azul = PatternFill("solid", fgColor=AZUL)
+        fill_azul_osc = PatternFill("solid", fgColor=AZUL_OSC)
+        fill_bg = PatternFill("solid", fgColor=BG)
+        fill_rubro = PatternFill("solid", fgColor="E3EAF2")
+
+        font_entity = Font(name="Arial", size=11, bold=True, color=AZUL_OSC)
+        font_sub = Font(name="Arial", size=9, color="64748B")
+        font_title = Font(name="Arial", size=16, bold=True, color=AZUL)
+        font_periodo = Font(name="Arial", size=10, bold=True, color=AZUL)
+        font_label = Font(name="Arial", size=8, bold=True, color=AZUL_OSC)
+        font_val = Font(name="Arial", size=10)
+        font_th = Font(name="Arial", size=8, bold=True, color=BLANCO)
+        font_td = Font(name="Arial", size=9)
+        font_td_b = Font(name="Arial", size=9, bold=True)
+        font_rubro = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
+        font_subtotal = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
+        font_total = Font(name="Arial", size=10, bold=True, color=BLANCO)
+
+        align_center = Alignment(horizontal="center", vertical="center",
+                                 wrap_text=True)
+        align_left = Alignment(horizontal="left", vertical="center",
+                               wrap_text=True)
+        align_right_num = Alignment(horizontal="right", vertical="center")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "FE-05"
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.page_margins.left = 0.4
+        ws.page_margins.right = 0.4
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.5
+        ws.print_options.horizontalCentered = True
+        ws.sheet_view.view = "pageBreakPreview"
+        ws.sheet_view.showGridLines = False
+        ws.print_title_rows = "14:14"
+        ws.freeze_panes = "A15"
+
+        ncols = 15 + len(clasif_cols)
+
+        # Anchos proporcionales — calibrados para que el total quede
+        # dentro de ~1060px (A4 landscape) y cada columna quepa su contenido.
+        ancho_clasif_px = int((1060 - 820) / len(clasif_cols)) if clasif_cols else 60
+        px = [30, 45, 65, 32, 32, 140, 195, 36, 32, 46, 65] \
+            + [ancho_clasif_px] * len(clasif_cols) + [48, 46, 42, 65]
+        for j, w in enumerate(px, 1):
+            ws.column_dimensions[get_column_letter(j)].width = max(3.0, round((w - 5) / 7, 1))
+
+        # Anchos reales de columna (después de asignar widths)
+        col_chars = {j: max(3, ws.column_dimensions[get_column_letter(j)].width or 5)
+                     for j in range(1, ncols + 1)}
+
+        # ── ENCABEZADO ──
+        header_border_bottom = Border(bottom=Side(style="medium", color=AZUL))
+        prev_col_letter = get_column_letter(ncols - 1)
+        last_col_letter = get_column_letter(ncols)
+
+        logo_file = os.path.join(app.root_path, "static", p.logo_path) if p.logo_path else None
+        if logo_file and os.path.isfile(logo_file):
+            try:
+                img = XlImage(logo_file)
+                img.width = 70
+                img.height = 70
+                ws.add_image(img, "A1")
+            except Exception:
+                pass
+
+        ws.merge_cells(f"B1:{prev_col_letter}1")
+        c = ws["B1"]
+        c.value = p.entidad or ""
+        c.font = font_entity
+        c.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+        c.border = header_border_bottom
+
+        ws.merge_cells(f"B2:{prev_col_letter}2")
+        c = ws["B2"]
+        c.value = p.unidad_ejecutora or ""
+        c.font = font_sub
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        c.border = header_border_bottom
+
+        ws.merge_cells(f"B3:{prev_col_letter}3")
+        c = ws["B3"]
+        c.value = "EJECUCION PRESUPUESTAL MENSUAL"
+        c.font = font_title
+        c.alignment = Alignment(horizontal="center", vertical="top")
+        c.border = header_border_bottom
+
+        ws.merge_cells(f"B4:{prev_col_letter}4")
+        c = ws["B4"]
+        c.value = "TOTAL COSTO DE CONSTRUCCION POR ADM. DIRECTA"
+        c.font = font_sub
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = header_border_bottom
+
+        ws.merge_cells(f"{last_col_letter}2:{last_col_letter}3")
+        c = ws[f"{last_col_letter}2"]
+        c.value = f"PERIODO: {MESES[mes-1]} - {anio}"
+        c.font = font_periodo
+        c.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True)
+        c.border = border_all
+        ws[f"{last_col_letter}3"].border = border_all
+
+        ws.row_dimensions[1].height = 24
+        ws.row_dimensions[2].height = 20
+        ws.row_dimensions[3].height = 32
+        ws.row_dimensions[4].height = 20
+
+        # ── DATOS GENERALES (filas 6-10) ──
+        datos = [
+            ("PROYECTO", p.nombre or "", True),
+            ("CODIGO UNICO", p.cui or "", False),
+            ("CORRELATIVO META", p.meta or "", False),
+            ("FUENTE FINANC.", p.fuente or "", False),
+            ("MODALIDAD", "ADMINISTRACION DIRECTA", False),
+        ]
+        for i, (label, valor, full_width) in enumerate(datos):
+            r = 6 + i
+            if full_width:
+                # Merge C:K → sum characters of cols C(3) through K(11)
+                merge_chars = sum(col_chars.get(j, 5) for j in range(3, 12))
+            else:
+                # Merge C:E → sum characters of cols C(3) through E(5)
+                merge_chars = sum(col_chars.get(j, 5) for j in range(3, 6))
+            lineas = max(1, math.ceil(len(str(valor)) / max(merge_chars, 1))) if valor else 1
+            ws.row_dimensions[r].height = max(20, lineas * 16)
+            if full_width:
+                ws.merge_cells(f"A{r}:B{r}")
+                c_lbl = ws.cell(row=r, column=1, value=label)
+                c_lbl.font = font_label
+                c_lbl.alignment = align_left
+                ws.merge_cells(f"C{r}:K{r}")
+                c_val = ws.cell(row=r, column=3, value=valor)
+                c_val.font = font_val
+                c_val.alignment = align_left
+                for col in range(1, 12):
+                    cc = ws.cell(row=r, column=col)
+                    cc.border = border_grid
+                    if col <= 2:
+                        cc.fill = fill_bg
+            else:
+                ws.merge_cells(f"A{r}:B{r}")
+                ws.merge_cells(f"C{r}:E{r}")
+                c_lbl = ws.cell(row=r, column=1, value=label)
+                c_lbl.font = font_label
+                c_lbl.alignment = align_left
+                c_val = ws.cell(row=r, column=3, value=valor)
+                c_val.font = font_val
+                c_val.alignment = align_left
+                for col in range(1, 6):
+                    cc = ws.cell(row=r, column=col)
+                    cc.border = border_grid
+                    if col <= 2:
+                        cc.fill = fill_bg
+
+        # ── RESPONSABLES (filas 11-13) ──
+        resp = [
+            ("SUPERVISOR DE OBRA", p.supervisor or ""),
+            ("RESIDENTE DE OBRA", p.residente or ""),
+            ("ADMIN. DE OBRA", p.asistente or ""),
+        ]
+        for i, (lab, val) in enumerate(resp):
+            r = 11 + i
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+            c_lab = ws.cell(row=r, column=1, value=lab)
+            c_lab.font = font_th
+            c_lab.alignment = align_left
+            ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=ncols)
+            c_v = ws.cell(row=r, column=4, value=val)
+            c_v.font = font_val
+            c_v.alignment = align_left
+            for col in range(1, ncols + 1):
+                cc = ws.cell(row=r, column=col)
+                if col <= 3:
+                    cc.fill = fill_azul
+                    cc.border = border_all
+                else:
+                    cc.border = border_grid
+            ws.row_dimensions[r].height = 20
+
+        # ── TABLA FINANCIERA ──
+        tabla_start = 14
+        headers = ["N°", "SIAF", "Fecha", "Tipo", "N°", "Proveedor", "Detalle",
+                   "Und", "Cant", "P.U", "Importe"] + list(clasif_cols) \
+                 + ["Directos", "Grales", "Superv.", "Total"]
+        for j, h in enumerate(headers, 1):
+            c = ws.cell(row=tabla_start, column=j, value=h)
+            c.font = font_th
+            c.fill = fill_azul
+            c.alignment = align_center
+            c.border = border_all
+        ws.row_dimensions[tabla_start].height = 30
+
+        r = tabla_start + 1
+        subtotal_rows = []
+        for s in secciones:
+            # Fila de rubro (.fila-rubro)
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols)
+            c = ws.cell(row=r, column=1, value=s["label"])
+            c.font = font_rubro
+            c.alignment = align_left
+            for col in range(1, ncols + 1):
+                cc = ws.cell(row=r, column=col)
+                cc.fill = fill_rubro
+                cc.border = border_all
+            ws.row_dimensions[r].height = 18
+            r += 1
+            sec_start = r
+
+            for f in s["filas"]:
+                pf = f["prov_first"]
+                g, d = f["g"], f["d"]
+                vals = [
+                    f["prov_num"] if pf else "",
+                    g.siaf or "" if pf else "",
+                    g.fecha.strftime("%d/%m/%Y") if pf and g.fecha else "",
+                    g.tipo_doc or "" if pf else "",
+                    g.num_doc or "" if pf else "",
+                    g.proveedor or "" if pf else "",
+                    d.detalle or "",
+                    d.und or "",
+                    d.cantidad if d.cantidad else None,
+                    d.precio_unitario,
+                    d.importe,
+                ] + [f["clasif"][cl] if f["clasif"][cl] else "-"
+                     for cl in clasif_cols] + [
+                    f["directos"] if f["directos"] else "-",
+                    f["generales"] if f["generales"] else "-",
+                    f["supervision"] if f["supervision"] else "-",
+                    d.importe,
+                ]
+                aligns = [align_center, align_left, align_center, align_center,
+                          align_center, align_left, align_left, align_center]
+                for j, v in enumerate(vals, 1):
+                    c = ws.cell(row=r, column=j, value=v)
+                    # Solo aplicar borde si la celda tiene contenido
+                    if v is not None and v != "":
+                        c.border = border_grid
+                    if j <= 8:
+                        c.font = font_td
+                        c.alignment = aligns[j - 1]
+                    elif j == ncols:
+                        c.font = font_td_b
+                        c.alignment = align_right_num
+                    else:
+                        c.font = font_td
+                        c.alignment = align_right_num
+                    if isinstance(v, (int, float)):
+                        c.number_format = '#,##0.00'
+                tc = ws.cell(row=r, column=ncols, value=f"=K{r}")
+                tc.number_format = '#,##0.00'
+                # Altura basada en ancho real de columna (Arial 9: ~1.1 char/unit)
+                w_detalle = col_chars.get(7, 27) * 1.1   # col G = Detalle
+                w_proveedor = col_chars.get(6, 19) * 1.1  # col F = Proveedor
+                h_detalle = math.ceil(len(str(d.detalle or "")) / max(w_detalle, 1)) * 14
+                h_proveedor = math.ceil(len(str(g.proveedor or "")) / max(w_proveedor, 1)) * 14 \
+                    if pf else 0
+                h = max(h_detalle, h_proveedor, 18)
+                ws.row_dimensions[r].height = h
+                r += 1
+
+            # Subtotal de sección (.fila-sub)
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=10)
+            c_lbl = ws.cell(row=r, column=1, value=f"SUBTOTAL {s['label']}")
+            c_lbl.font = font_subtotal
+            c_lbl.alignment = Alignment(horizontal="right", vertical="center")
+            nums = [s["totales"]["total"]] \
+                + [s["totales"]["clasif"][cl] for cl in clasif_cols] \
+                + [s["totales"]["directos"], s["totales"]["generales"],
+                   s["totales"]["supervision"], s["totales"]["total"]]
+            for j, v in enumerate(nums):
+                col = 11 + j
+                if r > sec_start:
+                    letra = get_column_letter(col)
+                    cc = ws.cell(row=r, column=col,
+                                 value=f"=SUM({letra}{sec_start}:{letra}{r - 1})")
+                else:
+                    cc = ws.cell(row=r, column=col, value=v)
+                cc.font = font_subtotal
+                cc.alignment = align_right_num
+                cc.number_format = '#,##0.00'
+            for col in range(1, ncols + 1):
+                cc = ws.cell(row=r, column=col)
+                cc.fill = fill_bg
+                cc.border = border_all
+            ws.row_dimensions[r].height = 18
+            subtotal_rows.append(r)
+            r += 1
+
+        if not secciones:
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=ncols)
+            c = ws.cell(row=r, column=1,
+                        value="SIN GASTOS DEVENGADOS PARA EL PERÍODO")
+            c.font = font_rubro
+            c.alignment = align_left
+            for col in range(1, ncols + 1):
+                cc = ws.cell(row=r, column=col)
+                cc.fill = fill_rubro
+                cc.border = border_all
+            ws.row_dimensions[r].height = 18
+            r += 1
+
+        # Total general (.fila-total)
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=10)
+        c_lbl = ws.cell(row=r, column=1, value="TOTAL GASTO EJECUTADO")
+        c_lbl.font = font_total
+        c_lbl.alignment = Alignment(horizontal="right", vertical="center")
+        tnums = [total["total"]] + [total["clasif"][cl] for cl in clasif_cols] \
+            + [total["directos"], total["generales"], total["supervision"],
+               total["total"]]
+        for j, v in enumerate(tnums):
+            col = 11 + j
+            if subtotal_rows:
+                cc = ws.cell(row=r, column=col, value="=SUM("
+                             + ",".join(f"{get_column_letter(col)}{sr}"
+                                        for sr in subtotal_rows) + ")")
+            else:
+                cc = ws.cell(row=r, column=col, value=v)
+            cc.font = font_total
+            cc.alignment = align_right_num
+            cc.number_format = '#,##0.00'
+        for col in range(1, ncols + 1):
+            cc = ws.cell(row=r, column=col)
+            cc.fill = fill_azul_osc
+            cc.border = border_all
+        ws.row_dimensions[r].height = 22
+        r += 1
+
+        # ── Ajustes finales ──
+        ws.print_area = f"A1:{get_column_letter(ncols)}{r}"
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        filename = f"FE05_Ejecucion_{MESES[mes-1]}_{anio}.xlsx"
+        return send_file(buf, as_attachment=True, download_name=filename,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     @app.route("/formatos/fe06/imprimir")
     def imprimir_fe06():
         """Vista imprimible del FE-06 Presupuesto vs Ejecutado."""
@@ -3946,6 +4757,470 @@ def registrar_rutas(app):
                                 fe06_sintesis=sintesis,
                                 meses_activos=meses_con_ejecucion(anio),
                                 meses_vis=meses_visibles(anio, mes))
+
+    @app.route("/formatos/fe06/excel")
+    def fe06_excel():
+        """Genera archivo .xlsx del FE-06 Presupuesto vs Ejecutado fiel al
+        diseño de la hoja de impresión."""
+        from openpyxl import Workbook
+        from openpyxl.styles import (Font, PatternFill, Alignment, Border, Side,
+                                     numbers)
+        from openpyxl.drawing.image import Image as XlImage
+        from openpyxl.utils import get_column_letter
+        import math
+
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        rows = fe06_rows()
+        resumen = fe06_resumen(rows)
+        fe06_totales_mensual = [round(sum(r["mensual"][i] for r in resumen.values()), 2)
+                                for i in range(12)]
+        sintesis = fe06_sintesis(mes, anio)
+        meses_vis = meses_visibles(anio, mes)
+        incluir_anios = p.incluir_anios_anteriores
+
+        # ── Colores fieles al print.css ──
+        AZUL = "1F4E79"
+        AZUL_OSC = "14355A"
+        BG = "F1F5F9"
+        BLANCO = "FFFFFF"
+
+        thin = Side(style="thin", color=AZUL_OSC)
+        border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
+        thin_gray = Side(style="thin", color="C3CCD8")
+        border_grid = Border(left=thin_gray, right=thin_gray, top=thin_gray,
+                             bottom=thin_gray)
+
+        fill_azul = PatternFill("solid", fgColor=AZUL)
+        fill_azul_osc = PatternFill("solid", fgColor=AZUL_OSC)
+        fill_bg = PatternFill("solid", fgColor=BG)
+        fill_rubro = PatternFill("solid", fgColor="E3EAF2")
+
+        font_entity = Font(name="Arial", size=11, bold=True, color=AZUL_OSC)
+        font_sub = Font(name="Arial", size=9, color="64748B")
+        font_title = Font(name="Arial", size=16, bold=True, color=AZUL)
+        font_periodo = Font(name="Arial", size=10, bold=True, color=AZUL)
+        font_label = Font(name="Arial", size=8, bold=True, color=AZUL_OSC)
+        font_val = Font(name="Arial", size=10)
+        font_th = Font(name="Arial", size=8, bold=True, color=BLANCO)
+        font_td = Font(name="Arial", size=9)
+        font_td_b = Font(name="Arial", size=9, bold=True)
+        font_rubro = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
+        font_total = Font(name="Arial", size=10, bold=True, color=BLANCO)
+
+        align_center = Alignment(horizontal="center", vertical="center",
+                                 wrap_text=True)
+        align_left = Alignment(horizontal="left", vertical="center",
+                               wrap_text=True)
+        align_right_num = Alignment(horizontal="right", vertical="center")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "FE-06"
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.page_margins.left = 0.4
+        ws.page_margins.right = 0.4
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.5
+        ws.print_options.horizontalCentered = True
+        ws.sheet_view.view = "pageBreakPreview"
+        ws.sheet_view.showGridLines = False
+        ws.print_title_rows = "15:15"
+        ws.freeze_panes = "A16"
+
+        # ── Columnas de la tabla (segun configuracion del proyecto) ──
+        col_pim = 4 + (3 if incluir_anios else 0)
+        col_mes_ini = col_pim + 1
+        col_ejec = col_mes_ini + len(meses_vis)
+        col_pct = col_ejec + 1
+        col_saldo = col_ejec + 2
+        ncols = max(11, col_saldo + (2 if incluir_anios else 0))
+
+        anchos = {1: 15, 2: 34, 3: 12}
+        if incluir_anios:
+            anchos.update({4: 9, 5: 9, 6: 9, col_saldo + 1: 12, col_saldo + 2: 13})
+        anchos[col_pim] = 12
+        for k, _m in enumerate(meses_vis):
+            anchos[col_mes_ini + k] = 9
+        anchos[col_ejec] = 12
+        anchos[col_pct] = 7
+        anchos[col_saldo] = 12
+        for j in range(1, ncols + 1):
+            ws.column_dimensions[get_column_letter(j)].width = anchos.get(j, 10)
+        last_col = get_column_letter(ncols)
+
+        # ── ENCABEZADO (filas 1-4) ──
+        header_border_bottom = Border(bottom=Side(style="medium", color=AZUL))
+
+        logo_file = os.path.join(app.root_path, "static", p.logo_path) if p.logo_path else None
+        if logo_file and os.path.isfile(logo_file):
+            try:
+                img = XlImage(logo_file)
+                img.width = 70
+                img.height = 70
+                ws.add_image(img, "A1")
+            except Exception:
+                pass
+
+        ws.merge_cells(f"B1:{last_col}1")
+        c = ws["B1"]
+        c.value = p.entidad or ""
+        c.font = font_entity
+        c.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+
+        ws.merge_cells(f"B2:{last_col}2")
+        c = ws["B2"]
+        c.value = p.unidad_ejecutora or ""
+        c.font = font_sub
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        ws.merge_cells(f"B3:{last_col}3")
+        c = ws["B3"]
+        c.value = "CUADRO COMPARATIVO PRESUPUESTO ANALITICO APROBADO Y EJECUTADO"
+        c.font = font_title
+        c.alignment = Alignment(horizontal="center", vertical="top", wrap_text=True)
+
+        ws.merge_cells(f"B4:{last_col}4")
+        c = ws["B4"]
+        c.value = f"PERIODO: {MESES[mes-1]} - {anio}"
+        c.font = font_periodo
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = header_border_bottom
+
+        ws.row_dimensions[1].height = 24
+        ws.row_dimensions[2].height = 20
+        ws.row_dimensions[3].height = 32
+        ws.row_dimensions[4].height = 20
+
+        # ── DATOS GENERALES (filas 6-10) ──
+        datos = [
+            ("PROYECTO", p.nombre or "", True),
+            ("CODIGO UNICO", p.cui or "", False),
+            ("CORRELATIVO META", p.meta or "", False),
+            ("FUENTE FINANC.", p.fuente or "", False),
+            ("MODALIDAD", "ADMINISTRACION DIRECTA", False),
+        ]
+        for i, (label, valor, full_width) in enumerate(datos):
+            r = 6 + i
+            if full_width:
+                ws.row_dimensions[r].height = max(
+                    math.ceil(len(str(valor)) / 80) * 16, 20)
+                ws.merge_cells(f"A{r}:B{r}")
+                ws.merge_cells(f"C{r}:K{r}")
+            else:
+                lineas = max(1, 1 + len(str(valor)) // 28)
+                ws.row_dimensions[r].height = max(20, 15 * lineas)
+                ws.merge_cells(f"A{r}:B{r}")
+                ws.merge_cells(f"C{r}:E{r}")
+            c_lbl = ws.cell(row=r, column=1, value=label)
+            c_lbl.font = font_label
+            c_lbl.alignment = align_left
+            c_val = ws.cell(row=r, column=3, value=valor)
+            c_val.font = font_val
+            c_val.alignment = align_left
+            fin = 11 if full_width else 5
+            for col in range(1, fin + 1):
+                cc = ws.cell(row=r, column=col)
+                cc.border = border_grid
+                if col <= 2:
+                    cc.fill = fill_bg
+
+        # ── RESPONSABLES (filas 11-13) ──
+        resp = [
+            ("SUPERVISOR DE OBRA", p.supervisor or ""),
+            ("RESIDENTE DE OBRA", p.residente or ""),
+            ("ADMIN. DE OBRA", p.asistente or ""),
+        ]
+        for i, (lab, val) in enumerate(resp):
+            r = 11 + i
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+            c_lab = ws.cell(row=r, column=1, value=lab)
+            c_lab.font = font_th
+            c_lab.alignment = align_left
+            ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=ncols)
+            c_v = ws.cell(row=r, column=4, value=val)
+            c_v.font = font_val
+            c_v.alignment = align_left
+            for col in range(1, ncols + 1):
+                cc = ws.cell(row=r, column=col)
+                if col <= 3:
+                    cc.fill = fill_azul
+                    cc.border = border_all
+                else:
+                    cc.border = border_grid
+            ws.row_dimensions[r].height = 20
+
+        # ── TABLA PRINCIPAL (desde la fila 15) ──
+        tabla_start = 15
+        headers = ["Especif. de gasto", "Detalle", "Exp. Tecnico"]
+        if incluir_anios:
+            headers += ["2023", "2024", "2025"]
+        headers += [f"PIM {anio}"]
+        headers += [MESES[m - 1][:3] for m in meses_vis]
+        headers += [f"Ejec. {anio}", "%", f"Saldo {anio}"]
+        if incluir_anios:
+            headers += ["Acum. total", "Saldo proyecto"]
+        for j, h in enumerate(headers, 1):
+            c = ws.cell(row=tabla_start, column=j, value=h)
+            c.font = font_th
+            c.fill = fill_azul
+            c.alignment = align_center
+            c.border = border_all
+        ws.row_dimensions[tabla_start].height = 30
+
+        def valores_fila(reg, fraccion):
+            """Valores numericos de una fila segun las columnas activas."""
+            nums = [reg["et"]]
+            if incluir_anios:
+                nums += [reg["e2023"], reg["e2024"], reg["e2025"]]
+            nums.append(reg["pim"])
+            nums += [reg["mensual"][m - 1] for m in meses_vis]
+            nums += [reg["total_anio"], fraccion, reg["saldo_pim"]]
+            if incluir_anios:
+                nums += [reg["acum_total"], reg["saldo_et"]]
+            return nums
+
+        def pintar_fila(r, etiqueta, nums, fmt_pct, estilo):
+            """Fila con A:B = etiqueta merged + columnas numericas.
+
+            estilo: 'comp' (rubro), 'total' (fila-total); ambos con borde
+            azul y relleno propio."""
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+            fuente, borde, relleno = ((font_rubro, border_all, fill_rubro)
+                                      if estilo == "comp"
+                                      else (font_total, border_all,
+                                            fill_azul_osc))
+            c_lab = ws.cell(row=r, column=1, value=etiqueta)
+            c_lab.font = fuente
+            c_lab.alignment = align_left
+            for j, v in enumerate(nums, 3):
+                cc = ws.cell(row=r, column=j, value=v)
+                cc.font = fuente
+                cc.alignment = align_right_num
+                cc.number_format = fmt_pct if j == col_pct else '#,##0.00'
+            for col in range(1, ncols + 1):
+                cc = ws.cell(row=r, column=col)
+                cc.border = borde
+                cc.fill = relleno
+
+        r = tabla_start + 1
+        filas_rubro = []
+        for comp in COMPONENTES_FE06:
+            rc = resumen[comp]
+            frac_c = (rc["total_anio"] / rc["pim"]) if rc["pim"] else 0
+            fila_rubro = r
+            filas_rubro.append(r)
+            pintar_fila(r, comp.upper(), valores_fila(rc, frac_c), "0.0%", "comp")
+            ws.row_dimensions[r].height = 18
+            r += 1
+
+            # Filas de detalle (sub-clasificadores del componente)
+            det_ini = r
+            det_fin = r - 1
+            for sub in (x for x in rows if x["componente"] == comp):
+                ca = ws.cell(row=r, column=1, value=sub["clasificador"])
+                ca.font = font_td
+                ca.alignment = align_left
+                cb = ws.cell(row=r, column=2, value=sub["detalle"])
+                cb.font = font_td
+                cb.alignment = align_left
+                frac_s = (sub["total_anio"] / sub["pim"]) if sub["pim"] else 0
+                for j, v in enumerate(valores_fila(sub, frac_s), 3):
+                    cc = ws.cell(row=r, column=j, value=v)
+                    cc.font = font_td
+                    cc.alignment = align_right_num
+                    cc.number_format = '0.0%' if j == col_pct else '#,##0.00'
+                for col in range(1, ncols + 1):
+                    ws.cell(row=r, column=col).border = border_grid
+                ws.row_dimensions[r].height = 16
+                det_fin = r
+                r += 1
+
+            # El subtotal del rubro se calcula con SUM sobre sus detalles
+            if det_fin >= det_ini:
+                letra_pim = get_column_letter(col_pim)
+                letra_ejec = get_column_letter(col_ejec)
+                for col in range(3, ncols + 1):
+                    if col == col_pct:
+                        continue
+                    letra = get_column_letter(col)
+                    ws.cell(row=fila_rubro, column=col,
+                            value=f"=SUM({letra}{det_ini}:{letra}{det_fin})")
+                cpct = ws.cell(row=fila_rubro, column=col_pct)
+                cpct.value = (f"=IF({letra_pim}{fila_rubro}=0,0,"
+                              f"{letra_ejec}{fila_rubro}/{letra_pim}{fila_rubro})")
+                cpct.number_format = '0.0%'
+
+        # Fila final (.fila-total): sumatoria de todos los componentes
+        def suma(key):
+            return round(sum(v[key] for v in resumen.values()), 2)
+
+        tot_pim = suma("pim")
+        tot_anio = suma("total_anio")
+        tot_reg = {
+            "et": suma("et"),
+            "e2023": suma("e2023"), "e2024": suma("e2024"),
+            "e2025": suma("e2025"),
+            "pim": tot_pim,
+            "mensual": fe06_totales_mensual,
+            "total_anio": tot_anio,
+            "saldo_pim": suma("saldo_pim"),
+            "acum_total": suma("acum_total"),
+            "saldo_et": suma("saldo_et"),
+        }
+        frac_t = (tot_anio / tot_pim) if tot_pim else 0
+        total_row = r
+        pintar_fila(r, "TOTAL RUBRO 18", valores_fila(tot_reg, frac_t),
+                    "0.00%", "total")
+        letra_pim = get_column_letter(col_pim)
+        letra_ejec = get_column_letter(col_ejec)
+        for col in range(3, ncols + 1):
+            if col == col_pct:
+                continue
+            letra = get_column_letter(col)
+            refs = ",".join(f"{letra}{fr}" for fr in filas_rubro)
+            ws.cell(row=total_row, column=col).value = f"=SUM({refs})"
+        cpct = ws.cell(row=total_row, column=col_pct)
+        cpct.value = (f"=IF({letra_pim}{total_row}=0,0,"
+                      f"{letra_ejec}{total_row}/{letra_pim}{total_row})")
+        cpct.number_format = '0.00%'
+        ws.row_dimensions[r].height = 20
+        r += 1
+
+        # ── RESUMEN A NIVEL PIM ──
+        r += 1
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=4)
+        c = ws.cell(row=r, column=1, value="RESUMEN A NIVEL PIM")
+        c.font = font_th
+        c.alignment = align_left
+        for col in range(1, 5):
+            cc = ws.cell(row=r, column=col)
+            cc.fill = fill_azul
+            cc.border = border_all
+        ws.row_dimensions[r].height = 18
+        r += 1
+
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+        c = ws.cell(row=r, column=1, value="DESCRIPCION")
+        c.font = font_label
+        c.alignment = align_left
+        c2 = ws.cell(row=r, column=3, value="S/.")
+        c2.font = font_label
+        c2.alignment = align_right_num
+        c3 = ws.cell(row=r, column=4, value="%")
+        c3.font = font_label
+        c3.alignment = align_center
+        for col in range(1, 5):
+            cc = ws.cell(row=r, column=col)
+            cc.fill = fill_bg
+            cc.border = border_grid
+        ws.row_dimensions[r].height = 18
+        r += 1
+
+        pim_v = sintesis["pim"]
+
+        def pct_de(num):
+            return (num / pim_v) if pim_v else 0
+
+        ini_pim = r
+        filas_pim = [
+            (f"PIM ASIGNADO {anio}", pim_v, 1.0, "0%", True),
+            (f"GASTO EJECUTADO {anio}",
+             f"={get_column_letter(col_ejec)}{total_row}",
+             f"=IF(C{ini_pim}=0,0,C{ini_pim + 1}/C{ini_pim})", "0.00%", False),
+            (f"GASTO FINANCIERO MES DE {MESES[mes-1]}", sintesis["mes_actual"],
+             pct_de(sintesis["mes_actual"]), "0.00%", False),
+            (f"SALDO {anio}", sintesis["saldo_pim"],
+             pct_de(sintesis["saldo_pim"]), "0.00%", True),
+        ]
+        for desc, sval, fracc, fmt, strong in filas_pim:
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+            c = ws.cell(row=r, column=1, value=desc)
+            c.font = font_td_b if strong else font_td
+            c.alignment = align_left
+            cs = ws.cell(row=r, column=3, value=sval)
+            cs.font = font_td_b if strong else font_td
+            cs.alignment = align_right_num
+            cs.number_format = '#,##0.00'
+            cp = ws.cell(row=r, column=4, value=fracc)
+            cp.font = font_td
+            cp.alignment = align_right_num
+            cp.number_format = fmt
+            for col in range(1, 5):
+                ws.cell(row=r, column=col).border = border_grid
+            ws.row_dimensions[r].height = 16
+            r += 1
+
+        # ── RESUMEN A NIVEL DE EXPEDIENTE ──
+        r += 1
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+        c = ws.cell(row=r, column=1, value="RESUMEN A NIVEL DE EXPEDIENTE")
+        c.font = font_th
+        c.alignment = align_left
+        for col in range(1, 4):
+            cc = ws.cell(row=r, column=col)
+            cc.fill = fill_azul
+            cc.border = border_all
+        ws.row_dimensions[r].height = 18
+        r += 1
+
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+        c = ws.cell(row=r, column=1, value="DESCRIPCION")
+        c.font = font_label
+        c.alignment = align_left
+        c2 = ws.cell(row=r, column=3, value="S/.")
+        c2.font = font_label
+        c2.alignment = align_right_num
+        for col in range(1, 4):
+            cc = ws.cell(row=r, column=col)
+            cc.fill = fill_bg
+            cc.border = border_grid
+        ws.row_dimensions[r].height = 18
+        r += 1
+
+        filas_exp = [("PRESUPUESTO TOTAL DE OBRA", sintesis["et"], True)]
+        if incluir_anios:
+            filas_exp += [("GASTO EJECUTADO 2023", sintesis["e2023"], False),
+                          ("GASTO EJECUTADO 2024", sintesis["e2024"], False),
+                          ("GASTO EJECUTADO 2025", sintesis["e2025"], False)]
+            filas_exp.append((f"GASTO EJECUTADO AL MES DE {MESES[mes-1]} {anio}",
+                              sintesis["ejec_anio"], False))
+        else:
+            filas_exp.append((f"GASTO EJECUTADO {anio}",
+                              sintesis["ejec_anio"], False))
+        if incluir_anios:
+            filas_exp.append((f"SALDO {anio}", sintesis["saldo_proyecto"], True))
+        else:
+            filas_exp.append(("SALDO A NIVEL DE EXPEDIENTE TECNICO",
+                              sintesis["saldo_proyecto"], True))
+        for desc, sval, strong in filas_exp:
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+            c = ws.cell(row=r, column=1, value=desc)
+            c.font = font_td_b if strong else font_td
+            c.alignment = align_left
+            cs = ws.cell(row=r, column=3, value=sval)
+            cs.font = font_td_b if strong else font_td
+            cs.alignment = align_right_num
+            cs.number_format = '#,##0.00'
+            for col in range(1, 4):
+                ws.cell(row=r, column=col).border = border_grid
+            ws.row_dimensions[r].height = 16
+            r += 1
+
+        # ── Ajustes finales ──
+        ws.print_area = f"A1:{get_column_letter(ncols)}{r}"
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        filename = f"FE06_Presupuesto_{MESES[mes-1]}_{anio}.xlsx"
+        return send_file(buf, as_attachment=True, download_name=filename,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     @app.route("/formatos/panel/imprimir")
     def imprimir_panel():

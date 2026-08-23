@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="Reporte imprimible FE-06 de presupuesto vs ejecutado de obra en administración directa - {{ anio }}.">
+<meta name="description" content="Reporte imprimible FE-06 Presupuesto vs Ejecutado: comparación presupuesto-ejecución de obra en administración directa. Detalle de rubros, %, ejecuci%c3%b3n real, PIM y observaciones. Imprimir con totales y firma del administrador.">
 <title>FE-06 Presupuesto vs Ejecutado - {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=2) }}">
 <style>
   .hoja { padding: 8mm 7mm; }
   @media print { .hoja { padding: 0; } @page { size: A4 landscape; margin: 7mm 6mm 8mm; } }
@@ -31,6 +31,7 @@
 <div class="toolbar">
   <h2>FE-06 Presupuesto vs Ejecutado</h2>
   <div class="spacer"></div>
+  <a class="btn-excel" href="{{ url_for('fe06_excel', mes=mes, anio=anio) }}">Exportar a Excel</a>
   <button type="button" onclick="window.print()">Imprimir</button>
   <a class="volver" href="{{ url_for('formatos', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
 </div>

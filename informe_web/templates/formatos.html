@@ -33,7 +33,10 @@
 <div class="tab-panel active" id="tab-f05">
   <div class="card">
     <div class="card-head between"><h3>EJECUCIÓN PRESUPUESTAL MENSUAL - {{ MESES[mes-1] }} {{ anio }}</h3>
-      <a class="btn btn-primary" href="{{ url_for('imprimir_fe05', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
+      <div style="display:flex;gap:8px">
+        <a class="btn btn-primary" href="{{ url_for('fe05_excel', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+        <a class="btn btn-primary" href="{{ url_for('imprimir_fe05', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
+      </div>
     </div>
     {% for sec in secciones %}
     <div class="grupo">
@@ -96,7 +99,10 @@
 <div class="tab-panel" id="tab-f06">
   <div class="card">
     <div class="card-head between"><h3>CUADRO COMPARATIVO PRESUPUESTO ANALÍTICO APROBADO Y EJECUTADO</h3>
-      <a class="btn btn-primary" href="{{ url_for('imprimir_fe06', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
+      <div style="display:flex;gap:8px">
+        <a class="btn btn-primary" href="{{ url_for('fe06_excel', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+        <a class="btn btn-primary" href="{{ url_for('imprimir_fe06', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
+      </div>
     </div>
     <div class="table-scroll">
     <table class="table table-compact">

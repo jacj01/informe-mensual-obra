@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="Manifiesto de gasto de obra en administración directa{% if hdr and hdr.periodo %} - {{ hdr.periodo }}{% endif %}.">
+<meta name="description" content="Manifiesto de gasto de obra en administración directa con detalle por gasto, clasificadores, cuentas por pagar y firmas. Imprimible en formato A4 con encabezado de proyecto, tabla de gastos y sección de legal representación. Reporte financiero oficial.">
 <title>MANIFIESTO DE GASTO - {{ hdr.periodo if hdr else '' }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
@@ -19,6 +19,9 @@
   <div class="spacer"></div>
   <span class="nota">Vista de impresión del Manifiesto de Gasto.</span>
   <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="btn-download" href="{{ url_for('manifiesto_excel', mes=mes, anio=anio) }}">
+    <button type="button">Exportar a Excel</button>
+  </a>
   <a class="volver" href="{{ url_for('gastos', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
 </div>
 
@@ -123,6 +126,8 @@
       <div class="reg"></div>
     </div>
   </div>
+
+<div>
 
 </div>
 
