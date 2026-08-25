@@ -20,11 +20,11 @@
     </div>
     <div class="form-grid">
       <div class="field full">
-        <label>Detalle</label>
-        <textarea name="detalle" rows="2" required>{{ d.detalle }}</textarea>
+        <label for="f-om-detalle">Detalle</label>
+        <textarea name="detalle" id="f-om-detalle" rows="2" required>{{ d.detalle }}</textarea>
       </div>
       <div class="field">
-        <label>Und Med</label>
+        <label for="und">Und Med</label>
         <input type="text" name="und" id="und"
                value="{{ 'SERV' if g.tipo_doc == 'O/S' else d.und }}"
                {{ 'readonly' if g.tipo_doc == 'O/S' }}

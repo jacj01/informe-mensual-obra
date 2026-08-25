@@ -1438,10 +1438,19 @@ def registrar_rutas(app):
                 req = urllib.request.Request(api_url)
                 req.add_header("Accept", "application/vnd.github+json")
                 req.add_header("User-Agent", "InformeObra/1.0")
-                # Crear contexto SSL que intente certificados del sistema
-                ctx = ssl.create_default_context()
-                with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-                    raw = json.loads(resp.read().decode("utf-8"))
+                # Intentar con certificados del sistema; si falla (Python
+                # embebido sin CA certs), usar contexto no verificado.
+                try:
+                    ctx = ssl.create_default_context()
+                except Exception:
+                    ctx = ssl._create_unverified_context()
+                try:
+                    with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                        raw = json.loads(resp.read().decode("utf-8"))
+                except (ssl.SSLError, OSError):
+                    ctx2 = ssl._create_unverified_context()
+                    with urllib.request.urlopen(req, timeout=15, context=ctx2) as resp:
+                        raw = json.loads(resp.read().decode("utf-8"))
                 tag = raw.get("tag_name", "")
                 asset = next((a for a in raw.get("assets", [])
                               if a.get("name", "").endswith(".zip")), None)
@@ -1500,9 +1509,17 @@ def registrar_rutas(app):
                     req = urllib.request.Request(api_url)
                     req.add_header("Accept", "application/vnd.github+json")
                     req.add_header("User-Agent", "InformeObra/1.0")
-                    ctx = ssl.create_default_context()
-                    with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-                        tag = json.loads(resp.read().decode()).get("tag_name", "")
+                    try:
+                        ctx = ssl.create_default_context()
+                    except Exception:
+                        ctx = ssl._create_unverified_context()
+                    try:
+                        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                            tag = json.loads(resp.read().decode()).get("tag_name", "")
+                    except (ssl.SSLError, OSError):
+                        ctx2 = ssl._create_unverified_context()
+                        with urllib.request.urlopen(req, timeout=15, context=ctx2) as resp:
+                            tag = json.loads(resp.read().decode()).get("tag_name", "")
                 except Exception:
                     pass
 
@@ -1533,9 +1550,17 @@ def registrar_rutas(app):
                     req2 = urllib.request.Request(api_dl)
                     req2.add_header("Accept", "application/vnd.github+json")
                     req2.add_header("User-Agent", "InformeObra/1.0")
-                    ctx2 = ssl.create_default_context()
-                    with urllib.request.urlopen(req2, timeout=15, context=ctx2) as resp2:
-                        rel = json.loads(resp2.read().decode())
+                    try:
+                        ctx2 = ssl.create_default_context()
+                    except Exception:
+                        ctx2 = ssl._create_unverified_context()
+                    try:
+                        with urllib.request.urlopen(req2, timeout=15, context=ctx2) as resp2:
+                            rel = json.loads(resp2.read().decode())
+                    except (ssl.SSLError, OSError):
+                        ctx2 = ssl._create_unverified_context()
+                        with urllib.request.urlopen(req2, timeout=15, context=ctx2) as resp2:
+                            rel = json.loads(resp2.read().decode())
                     zip_asset = next((a for a in rel.get("assets", [])
                                       if a.get("name", "").endswith(".zip")), None)
                     if zip_asset:
@@ -1783,7 +1808,7 @@ def registrar_rutas(app):
     def verificar_login():
         ep = request.endpoint or ""
         if ep in ("login", "logout", "static", "robots", "sitemap",
-                  "api_version"):
+                  "api_version", "api_actualizacion"):
             return None
         # Cierre de sesión por inactividad (respaldo al temporizador del navegador).
         ahora = time.time()

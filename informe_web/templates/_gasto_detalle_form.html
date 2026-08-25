@@ -20,23 +20,23 @@
     </div>
     <div class="form-grid">
       <div class="field full">
-        <label>Detalle del gasto</label>
-        <textarea name="detalle" rows="2" required>{{ d.detalle }}</textarea>
+        <label for="f-gd-detalle">Detalle del gasto</label>
+        <textarea name="detalle" id="f-gd-detalle" rows="2" required>{{ d.detalle }}</textarea>
       </div>
       <div class="field">
-        <label>Unidad de medida</label>
+        <label for="und">Unidad de medida</label>
         <input type="text" name="und" id="und" value="{{ d.und }}">
       </div>
       <div class="field">
-        <label>Cantidad</label>
+        <label for="cantidad">Cantidad</label>
         <input type="number" step="0.01" name="cantidad" id="cantidad" value="{{ d.cantidad }}" min="0">
       </div>
       <div class="field">
-        <label>Precio unitario (S/)</label>
+        <label for="precio">Precio unitario (S/)</label>
         <input type="text" inputmode="decimal" class="monto" name="precio_unitario" id="precio" value="{{ d.precio_unitario }}" min="0" autocomplete="off">
       </div>
       <div class="field">
-        <label>Importe (S/)</label>
+        <label for="importe">Importe (S/)</label>
         <input type="text" id="importe" readonly value="{{ "S/ {:,.2f}".format(d.importe) }}">
       </div>
     </div>

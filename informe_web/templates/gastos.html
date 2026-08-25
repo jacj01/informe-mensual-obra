@@ -9,7 +9,7 @@
 <div class="card">
   <div class="card-head between">
     <form method="get" class="filters">
-      <select name="mes" onchange="guardarScrollY(); this.form.submit()">
+      <select name="mes" aria-label="Mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
@@ -55,6 +55,7 @@
       </div>
       <div class="table-scroll">
       <table class="table table-prov">
+        <caption class="sr-only">Gastos registrados del mes</caption>
         <colgroup>
           <col style="width:40px"><col style="width:520px"><col style="width:60px">
           <col style="width:72px"><col style="width:84px"><col style="width:90px">

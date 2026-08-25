@@ -11,15 +11,15 @@
     {% endif %}
     <div class="form-grid">
       <div class="field">
-        <label>Usuario (para ingresar)</label>
-        <input type="text" name="usuario" value="{{ u.usuario }}" required autocomplete="off">
+        <label for="f-uf-usuario">Usuario (para ingresar)</label>
+        <input type="text" name="usuario" id="f-uf-usuario" value="{{ u.usuario }}" required autocomplete="off">
       </div>
       <div class="field">
-        <label>Nombres completos</label>
-        <input type="text" name="nombres" value="{{ u.nombres }}">
+        <label for="f-uf-nombres">Nombres completos</label>
+        <input type="text" name="nombres" id="f-uf-nombres" value="{{ u.nombres }}">
       </div>
       <div class="field">
-        <label>Rol</label>
+        <label for="rol">Rol</label>
         <select name="rol" id="rol" {{ 'disabled' if es_cuenta_propia and not es_super }}>
           <option value="Usuario" {{ 'selected' if u.rol == 'Usuario' }}>Usuario</option>
           {% if es_super or (es_cuenta_propia and u.rol in ('Administrador', 'Super Usuario')) %}
@@ -32,8 +32,8 @@
         {% endif %}
       </div>
       <div class="field">
-        <label>Contraseña {{ '(opcional)' if es_edicion }}</label>
-        <input type="password" name="clave" {{ 'data-no-validar' if es_edicion else 'required' }} minlength="6" autocomplete="new-password">
+        <label for="f-uf-clave">Contraseña {{ '(opcional)' if es_edicion }}</label>
+        <input type="password" name="clave" id="f-uf-clave" {{ 'data-no-validar' if es_edicion else 'required' }} minlength="6" autocomplete="new-password">
         {% if es_edicion %}
         <div class="field-hint">Dejar en blanco para mantener la contraseña actual.</div>
         {% endif %}

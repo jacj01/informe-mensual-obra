@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Suscripción{% endblock %}
+{% block meta_description %}Gestión de suscripciones y planes del sistema de informe financiero mensual de obra. Control de vigencia: planes mensual, trimestral y anual.{% endblock %}
 {% block heading %}Suscripción del aplicativo{% endblock %}
 {% block subheading %}Control de vigencia: planes mensual, trimestral y anual{% endblock %}
 
@@ -44,8 +45,8 @@
   <form method="post" action="{{ url_for('suscripcion_renovar') }}" class="form-panel">
     <div class="form-grid">
       <div class="field">
-        <label>Plan</label>
-        <select name="plan">
+        <label for="f-sr-plan">Plan</label>
+        <select name="plan" id="f-sr-plan">
           {% for nombre, meses in PLANES.items() %}
           <option value="{{ nombre }}" {{ 'selected' if s and s.plan == nombre }}>{{ nombre }} ({{ meses }} mes{{ 'es' if meses != 1 }})</option>
           {% endfor %}
@@ -55,8 +56,8 @@
         </div>
       </div>
       <div class="field full">
-        <label>Nota (opcional)</label>
-        <textarea name="nota" rows="2" data-no-validar placeholder="Ej.: renovación por transferencia, ticket, etc."></textarea>
+        <label for="f-sr-nota">Nota (opcional)</label>
+        <textarea name="nota" id="f-sr-nota" rows="2" data-no-validar placeholder="Ej.: renovación por transferencia, ticket, etc."></textarea>
       </div>
     </div>
     <div class="form-actions">
@@ -70,16 +71,16 @@
   <form method="post" action="{{ url_for('licencia_generar') }}" class="form-panel">
     <div class="form-grid">
       <div class="field">
-        <label>Plan contratado</label>
-        <select name="plan">
+        <label for="f-sl-plan">Plan contratado</label>
+        <select name="plan" id="f-sl-plan">
           {% for nombre, meses in PLANES.items() %}
           <option value="{{ nombre }}">{{ nombre }} ({{ meses }} mes{{ 'es' if meses != 1 }})</option>
           {% endfor %}
         </select>
       </div>
       <div class="field">
-        <label>Usuario (Administrador) para la licencia</label>
-        <select name="usuario_id" required>
+        <label for="f-sl-usuario_id">Usuario (Administrador) para la licencia</label>
+        <select name="usuario_id" id="f-sl-usuario_id" required>
           {% for adm in admins %}
           <option value="{{ adm.id }}">{{ adm.usuario }}{% if adm.nombres %} — {{ adm.nombres }}{% endif %}</option>
           {% endfor %}

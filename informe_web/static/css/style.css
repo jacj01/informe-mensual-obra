@@ -479,7 +479,7 @@ body {
   background: #fff; color: var(--texto);
 }
 .presup-input:focus {
-  outline: none; border-color: var(--azul);
+  border-color: var(--azul);
   box-shadow: 0 0 0 3px rgba(31, 78, 121, .12);
 }
 .presup-total-card {
@@ -509,7 +509,7 @@ body {
   transition: all .25s cubic-bezier(.4,0,.2,1);
 }
 .field input:focus, .field select:focus, .field textarea:focus {
-  outline: none; border-color: var(--azul);
+  border-color: var(--azul);
   box-shadow: 0 0 0 4px rgba(31,78,121,.1);
   background: #FAFCFF;
 }
@@ -606,7 +606,7 @@ input[readonly] { background: #F1F5F9; color: var(--texto2); cursor: not-allowed
   font-size: 13.5px; font-family: inherit; background: #fff; color: var(--texto);
 }
 .oc-buscar input:focus {
-  outline: none; border-color: var(--azul); box-shadow: 0 0 0 3px rgba(31,78,121,.12);
+  border-color: var(--azul); box-shadow: 0 0 0 3px rgba(31,78,121,.12);
 }
 
 /* Quick actions */
@@ -1007,11 +1007,25 @@ body.modal-open { overflow: hidden; }
 .perm-item input:disabled { accent-color: var(--azul); cursor: not-allowed; }
 .perm-item:has(input:disabled) { opacity: .65; }
 
+/* ------------------ UTILIDADES DE ACCESIBILIDAD ------------------ */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
 /* ------------------ ACCESIBILIDAD / RESPONSIVE ------------------ */
 :focus-visible {
   outline: 2px solid var(--azul);
   outline-offset: 2px;
   border-radius: 4px;
+}
+/* Focus ring visible on dark backgrounds (sidebar, hero) */
+.sidebar .nav-link:focus-visible,
+.sidebar .btn:focus-visible,
+.hero-card .btn:focus-visible,
+.topbar .toggle:focus-visible {
+  outline-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.5);
 }
 
 /* Contenedor de tabla con desplazamiento horizontal en pantallas pequeñas */
@@ -1275,7 +1289,6 @@ select:not([disabled]) {
 }
 select:not([disabled])::-webkit-inner-spin-button { display: none !important; }
 select:not([disabled"])::-ms-expand { display: none !important; }
-select:focus { outline: none; }
 
 /* ---------------- TYPOGRAPHY: Display & Scale ---------------- */
 :root {

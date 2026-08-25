@@ -71,7 +71,7 @@
 <div class="hoja">
   <div class="encabezado">
     <div class="logo-box">
-      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
     </div>
     <div class="enc-cen">
       <div class="entidad">{{ p.entidad or '' }}</div>

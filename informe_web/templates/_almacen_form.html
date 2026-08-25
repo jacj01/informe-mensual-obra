@@ -17,7 +17,7 @@
     </div>
     <div class="form-grid">
       <div class="field full">
-        <label>Descripción del insumo / material</label>
+        <label for="desc-input">Descripción del insumo / material</label>
         <div class="autocomplete-wrap">
           <input type="text" name="descripcion" id="desc-input" value="{{ m.descripcion }}" autocomplete="off" placeholder="Escriba para buscar un material..." required {% if bloquear_descripcion %}readonly{% endif %}>
           <div class="autocomplete-list" id="desc-list"></div>
@@ -30,7 +30,7 @@
         </div>
       </div>
       <div class="field">
-        <label>Tipo</label>
+        <label for="tipo-sel">Tipo</label>
         <select name="tipo" id="tipo-sel">
           {% if tipo_fijo %}
           <option value="{{ tipo_fijo }}" selected>{{ 'ENTRADA' if tipo_fijo == 'E' else 'SALIDA' }}</option>
@@ -41,11 +41,11 @@
         </select>
       </div>
       <div class="field">
-        <label>Fecha</label>
-        <input type="date" name="fecha" value="{{ m.fecha.strftime('%Y-%m-%d') if m.fecha else '' }}" required>
+        <label for="f-af-fecha">Fecha</label>
+        <input type="date" name="fecha" id="f-af-fecha" value="{{ m.fecha.strftime('%Y-%m-%d') if m.fecha else '' }}" required>
       </div>
       <div class="field">
-        <label>Unidad de medida</label>
+        <label for="und-input">Unidad de medida</label>
         <input type="text" name="und" id="und-input" value="{{ m.und }}" list="lista-unds">
         <datalist id="lista-unds">
           {% for u in ['UND', 'KG', 'M', 'M2', 'M3', 'GLN', 'BOLSA', 'U'] %}
@@ -54,11 +54,11 @@
         </datalist>
       </div>
       <div class="field">
-        <label>Cantidad</label>
-        <input type="number" step="0.01" name="cantidad" value="{{ m.cantidad }}" min="0">
+        <label for="f-af-cantidad">Cantidad</label>
+        <input type="number" step="0.01" name="cantidad" id="f-af-cantidad" value="{{ m.cantidad }}" min="0">
       </div>
       <div class="field">
-        <label>Precio unitario (S/)</label>
+        <label for="precio-input">Precio unitario (S/)</label>
         <div class="precio-wrapper">
           <input type="text" inputmode="decimal" class="monto" min="0" name="precio_unitario" id="precio-input" value="{{ m.precio_unitario or '' }}" autocomplete="off">
           <select name="precio_unitario" id="precio-select" style="display:none"></select>
@@ -66,42 +66,42 @@
         <div class="field-hint">Precio completado automáticamente según el material seleccionado.</div>
       </div>
       <div class="field campo-entrada">
-        <label>N° OC</label>
+        <label for="numero-doc-input">N° OC</label>
         <input type="text" name="numero_doc" id="numero-doc-input" value="{{ m.numero_doc }}" placeholder="Ej.: 44">
         <div class="field-hint" id="oc-hint" style="display:none"></div>
       </div>
       <div class="field campo-entrada" id="siaf-field" style="{{ '' if m.numero_siaf else 'display:none' }}">
-        <label>N° SIAF</label>
+        <label for="numero-siaf-input">N° SIAF</label>
         <input type="text" name="numero_siaf" id="numero-siaf-input" value="{{ m.numero_siaf }}" placeholder="Ej.: 2026-123456">
       </div>
       <div class="field campo-entrada">
-        <label>N° de Pecosa o Guía de Remisión</label>
-        <input type="text" name="pecosa_guia" value="{{ m.pecosa_guia }}" placeholder="Ej.: P-0001">
+        <label for="f-af-pecosa">N° de Pecosa o Guía de Remisión</label>
+        <input type="text" name="pecosa_guia" id="f-af-pecosa" value="{{ m.pecosa_guia }}" placeholder="Ej.: P-0001">
       </div>
       <div class="field campo-entrada">
-        <label>Razón social del proveedor (entrada)</label>
-        <input type="text" name="proveedor" value="{{ m.proveedor }}">
+        <label for="f-af-proveedor">Razón social del proveedor (entrada)</label>
+        <input type="text" name="proveedor" id="f-af-proveedor" value="{{ m.proveedor }}">
       </div>
       <div class="field full">
-        <label id="lbl-responsable">{{ 'Nombre quien recepciona' if es_entrada else 'Nombre quien recibe' }}</label>
+        <label for="resp-input" id="lbl-responsable">{{ 'Nombre quien recepciona' if es_entrada else 'Nombre quien recibe' }}</label>
         <input type="text" name="responsable" id="resp-input" value="{{ m.responsable }}" {% if es_entrada %}readonly{% endif %}>
         <div class="field-hint" id="resp-hint" {% if not es_entrada %}style="display:none"{% endif %}>Corresponde al responsable de almacén configurado en la cabecera del proyecto.</div>
       </div>
       <div class="field full campo-salida">
-        <label>Actividad o partida (salida)</label>
-        <input type="text" name="actividad" value="{{ m.actividad }}">
+        <label for="f-af-actividad">Actividad o partida (salida)</label>
+        <input type="text" name="actividad" id="f-af-actividad" value="{{ m.actividad }}">
       </div>
       <div class="field">
-        <label>Mes</label>
-        <select name="mes">
+        <label for="f-af-mes">Mes</label>
+        <select name="mes" id="f-af-mes">
           {% for mm in MESES %}
           <option value="{{ loop.index }}" {{ 'selected' if loop.index == m.mes }}>{{ mm }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="field">
-        <label>Año <i class="bi bi-lock-fill lock-ico"></i></label>
-        <input type="number" name="anio" value="{{ m.anio }}" readonly>
+        <label for="f-af-anio">Año <i class="bi bi-lock-fill lock-ico"></i></label>
+        <input type="number" name="anio" id="f-af-anio" value="{{ m.anio }}" readonly>
         <div class="field-hint">Año configurado en la cabecera del proyecto.</div>
       </div>
     </div>

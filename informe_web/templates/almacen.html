@@ -9,7 +9,7 @@
 <div class="card">
   <div class="card-head between">
     <form method="get" class="filters">
-      <select name="mes" onchange="guardarScrollY(); this.form.submit()">
+      <select name="mes" aria-label="Mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
@@ -29,12 +29,12 @@
   </div>
 </div>
 
-<div class="tabs">
-  <button class="tab active" data-tab="f07">FE-07 Movimiento diario</button>
-  <button class="tab" data-tab="f08">FE-08 Almacén valorizado</button>
+<div class="tabs" role="tablist" aria-label="Reportes de almacén">
+  <button class="tab active" data-tab="f07" role="tab" aria-selected="true" aria-controls="tab-f07">FE-07 Movimiento diario</button>
+  <button class="tab" data-tab="f08" role="tab" aria-selected="false" aria-controls="tab-f08">FE-08 Almacén valorizado</button>
 </div>
 
-<div class="tab-panel active" id="tab-f07">
+<div class="tab-panel active" id="tab-f07" role="tabpanel">
   <div class="card resumen-card">
     <div class="resumen-title">
       <span><i class="bi bi-graph-up"></i> RESUMEN DE MOVIMIENTOS - {{ MESES[mes-1] }} {{ anio }}</span>
@@ -151,7 +151,7 @@
   {% endfor %}
 </div>
 
-<div class="tab-panel" id="tab-f08">
+<div class="tab-panel" id="tab-f08" role="tabpanel">
   <div class="card">
     <div class="card-head between"><h3><i class="bi bi-cash-stack"></i> MOVIMIENTO DE ALMACÉN VALORIZADO - {{ MESES[mes-1] }} {{ anio }}</h3>
       <a class="btn btn-primary" href="{{ url_for('imprimir_fe08', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
@@ -208,9 +208,10 @@
 <script>
   document.querySelectorAll('.tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
+      btn.setAttribute('aria-selected','true');
       document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
       var nuevo = document.getElementById('btnNuevoMaterial');
       if (nuevo) nuevo.style.display = btn.dataset.tab === 'f08' ? 'none' : '';

@@ -77,9 +77,10 @@
               <label class="dia-check" title="{{ d.nombre }} {{ d.dia }}">
                 <input type="checkbox" class="cb-dia {{ 'cb-domingo' if d.es_domingo else '' }} {{ 'cb-feriado' if d.es_feriado else '' }}"
                        name="dias_{{ t.id }}" value="{{ d.dia }}" data-dia="{{ d.dia }}"
+                       aria-label="{{ t.nombre }} — {{ d.nombre }} {{ d.dia }}"
                        {{ 'checked' if d.dia in t.dias_lista else '' }}>
-                {% if d.es_domingo %}<span class="mk">D</span>
-                {% elif d.es_feriado %}<span class="mk">F</span>{% endif %}
+                {% if d.es_domingo %}<span class="mk" aria-hidden="true">D</span>
+                {% elif d.es_feriado %}<span class="mk" aria-hidden="true">F</span>{% endif %}
               </label>
             </td>
             {% else %}
@@ -187,7 +188,7 @@
     </form>
     {% endif %}
     <form method="get" class="filters" style="display:inline-flex;gap:8px;align-items:center">
-      <select name="mes" onchange="guardarScrollY(); this.form.submit()">
+      <select name="mes" aria-label="Mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
@@ -197,16 +198,16 @@
   </div>
 </div>
 
-<div class="tabs">
-  <button class="tab active" data-tab="obrero"><i class="bi bi-person-wrench"></i> Personal Obrero</button>
-  <button class="tab" data-tab="tecnico"><i class="bi bi-person-gear"></i> Personal Técnico</button>
+<div class="tabs" role="tablist" aria-label="Tipo de personal">
+  <button class="tab active" data-tab="obrero" role="tab" aria-selected="true" aria-controls="tab-obrero"><i class="bi bi-person-wrench"></i> Personal Obrero</button>
+  <button class="tab" data-tab="tecnico" role="tab" aria-selected="false" aria-controls="tab-tecnico"><i class="bi bi-person-gear"></i> Personal Técnico</button>
 </div>
 
-<div class="tab-panel active" id="tab-obrero">
+<div class="tab-panel active" id="tab-obrero" role="tabpanel">
   {{ pan_tareo('Personal Obrero', 'bi-person-wrench', obreros, resumen_obreros, total_dias_obreros, 'OBRERO', 'Nuevo obrero', dev_obreros) }}
 </div>
 
-<div class="tab-panel" id="tab-tecnico">
+<div class="tab-panel" id="tab-tecnico" role="tabpanel">
   {{ pan_tareo('Personal Técnico', 'bi-person-gear', tecnicos, resumen_tecnicos, total_dias_tecnicos, 'TECNICO', 'Nuevo técnico', dev_tecnicos) }}
 </div>
 
@@ -362,11 +363,11 @@
   }
 
   function activarTabTareo(nombre) {
-    document.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
     document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
     var btn = document.querySelector('.tab[data-tab="' + nombre + '"]');
     var panel = document.getElementById('tab-' + nombre);
-    if (btn) btn.classList.add('active');
+    if (btn) { btn.classList.add('active'); btn.setAttribute('aria-selected','true'); }
     if (panel) panel.classList.add('active');
   }
 

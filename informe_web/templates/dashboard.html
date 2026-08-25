@@ -142,6 +142,7 @@
   </div>
   <div class="table-scroll">
   <table class="table">
+    <caption class="sr-only">Resumen financiero del proyecto</caption>
     <thead>
       <tr>
         <th>Fecha</th><th>SIAF</th><th>Documento</th><th>Proveedor</th>
@@ -172,6 +173,7 @@
     <div class="card-head"><h3><i class="bi bi-diagram-3"></i> Ejecución por componente</h3></div>
     <div class="table-scroll">
     <table class="table">
+      <caption class="sr-only">Ejecución por componente</caption>
       <thead><tr><th>Componente</th><th class="num">Ejecutado</th><th class="num">PIM</th><th class="num">%</th></tr></thead>
       <tbody>
         {% for comp, dato in fe06_resumen.items() %}

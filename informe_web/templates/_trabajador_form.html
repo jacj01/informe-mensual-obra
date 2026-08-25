@@ -12,29 +12,29 @@
     </div>
     <div class="form-grid">
       <div class="field full">
-        <label>Nombre completo</label>
-        <input type="text" name="nombre" value="{{ t.nombre }}" required autocomplete="off">
+        <label for="f-tw-nombre">Nombre completo</label>
+        <input type="text" name="nombre" id="f-tw-nombre" value="{{ t.nombre }}" required autocomplete="off">
       </div>
       <div class="field">
-        <label>DNI</label>
-        <input type="text" name="dni" value="{{ t.dni }}" maxlength="8" inputmode="numeric"
+        <label for="f-tw-dni">DNI</label>
+        <input type="text" name="dni" id="f-tw-dni" value="{{ t.dni }}" maxlength="8" inputmode="numeric"
                pattern="[0-9]{8}" title="Debe tener 8 dígitos" required>
       </div>
       <div class="field">
-        <label>Fecha de nacimiento</label>
-        <input type="date" name="fecha_nacimiento" value="{{ t.fecha_nacimiento.strftime('%Y-%m-%d') if t.fecha_nacimiento }}" required>
+        <label for="f-tw-fnac">Fecha de nacimiento</label>
+        <input type="date" name="fecha_nacimiento" id="f-tw-fnac" value="{{ t.fecha_nacimiento.strftime('%Y-%m-%d') if t.fecha_nacimiento }}" required>
       </div>
       <div class="field">
-        <label>Sexo</label>
-        <select name="sexo">
+        <label for="f-tw-sexo">Sexo</label>
+        <select name="sexo" id="f-tw-sexo">
           <option value="M" {{ 'selected' if t.sexo != 'F' }}>Masculino</option>
           <option value="F" {{ 'selected' if t.sexo == 'F' }}>Femenino</option>
         </select>
       </div>
       {% set cargos = CARGOS_OBRERO if t.tipo == 'OBRERO' else CARGOS_TECNICO %}
       <div class="field">
-        <label>Cargo</label>
-        <select name="cargo" required>
+        <label for="f-tw-cargo">Cargo</label>
+        <select name="cargo" id="f-tw-cargo" required>
           {% for c in cargos %}
           <option value="{{ c }}" {{ 'selected' if t.cargo == c }}>{{ c }}</option>
           {% endfor %}
@@ -44,32 +44,32 @@
         </select>
       </div>
       <div class="field">
-        <label>Fecha de inicio</label>
-        <input type="date" name="fecha_inicio" value="{{ t.fecha_inicio.strftime('%Y-%m-%d') if t.fecha_inicio }}" required>
+        <label for="f-tw-finicio">Fecha de inicio</label>
+        <input type="date" name="fecha_inicio" id="f-tw-finicio" value="{{ t.fecha_inicio.strftime('%Y-%m-%d') if t.fecha_inicio }}" required>
       </div>
       <div class="field">
-        <label>Mes a tarear</label>
-        <select name="mes">
+        <label for="f-tw-mes">Mes a tarear</label>
+        <select name="mes" id="f-tw-mes">
           {% for m in MESES %}
           <option value="{{ loop.index }}" {{ 'selected' if loop.index == t.mes }}>{{ m }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="field">
-        <label>Año <i class="bi bi-lock-fill lock-ico"></i></label>
-        <input type="number" name="anio" value="{{ p.anio }}" readonly>
+        <label for="f-tw-anio">Año <i class="bi bi-lock-fill lock-ico"></i></label>
+        <input type="number" name="anio" id="f-tw-anio" value="{{ p.anio }}" readonly>
         <div class="field-hint">Año configurado en la cabecera del proyecto.</div>
       </div>
       <div class="field">
-        <label>Aporte Obligatorio</label>
-        <select name="aporte">
+        <label for="f-tw-aporte">Aporte Obligatorio</label>
+        <select name="aporte" id="f-tw-aporte">
           <option value="AFP" {{ 'selected' if t.aporte == 'AFP' }}>AFP</option>
           <option value="ONP" {{ 'selected' if t.aporte == 'ONP' }}>ONP</option>
         </select>
       </div>
       <div class="field">
-        <label>Sueldo mensual (S/) <i class="bi bi-question-circle" title="Solo para personal técnico/administrativo (D.L. 728)"></i></label>
-        <input type="text" class="monto" name="sueldo_mensual" value="{{ '%.2f'|format(t.sueldo_mensual) if t.sueldo_mensual else '' }}"
+        <label for="f-tw-sueldo">Sueldo mensual (S/) <i class="bi bi-question-circle" title="Solo para personal técnico/administrativo (D.L. 728)"></i></label>
+        <input type="text" class="monto" name="sueldo_mensual" id="f-tw-sueldo" value="{{ '%.2f'|format(t.sueldo_mensual) if t.sueldo_mensual else '' }}"
                min="0" inputmode="decimal" placeholder="0.00" autocomplete="off">
       </div>
       <div class="field full">

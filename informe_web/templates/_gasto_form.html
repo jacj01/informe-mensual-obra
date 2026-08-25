@@ -11,47 +11,47 @@
     </div>
     <div class="form-grid">
       <div class="field">
-        <label>Fecha</label>
-        <input type="date" name="fecha" value="{{ g.fecha.strftime('%Y-%m-%d') if g.fecha else '' }}" required>
+        <label for="f-gf-fecha">Fecha</label>
+        <input type="date" name="fecha" id="f-gf-fecha" value="{{ g.fecha.strftime('%Y-%m-%d') if g.fecha else '' }}" required>
       </div>
       <div class="field">
-        <label>SIAF</label>
-        <input type="number" name="siaf" value="{{ g.siaf }}">
+        <label for="f-gf-siaf">SIAF</label>
+        <input type="number" name="siaf" id="f-gf-siaf" value="{{ g.siaf }}">
       </div>
       <div class="field">
-        <label>Tipo de documento</label>
-        <select name="tipo_doc">
+        <label for="f-gf-tipo_doc">Tipo de documento</label>
+        <select name="tipo_doc" id="f-gf-tipo_doc">
           <option value="O/C" {{ 'selected' if g.tipo_doc == 'O/C' }}>O/C (Orden de compra)</option>
           <option value="O/S" {{ 'selected' if g.tipo_doc == 'O/S' }}>O/S (Orden de servicio)</option>
         </select>
       </div>
       <div class="field">
-        <label>N° de documento</label>
-        <input type="number" name="num_doc" value="{{ g.num_doc }}">
+        <label for="f-gf-num_doc">N° de documento</label>
+        <input type="number" name="num_doc" id="f-gf-num_doc" value="{{ g.num_doc }}">
       </div>
       <div class="field full">
-        <label>Proveedor</label>
-        <input type="text" name="proveedor" value="{{ g.proveedor }}">
+        <label for="f-gf-proveedor">Proveedor</label>
+        <input type="text" name="proveedor" id="f-gf-proveedor" value="{{ g.proveedor }}">
       </div>
       <div class="field">
-        <label>Clasificador</label>
-        <select name="clasificador">
+        <label for="f-gf-clasificador">Clasificador</label>
+        <select name="clasificador" id="f-gf-clasificador">
           {% for code, det in clasificadores %}
           <option value="{{ code }}" {{ 'selected' if g.clasificador == code }}>{{ code }} - {{ det }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="field">
-        <label>Componente</label>
-        <select name="componente">
+        <label for="f-gf-componente">Componente</label>
+        <select name="componente" id="f-gf-componente">
           {% for comp in COMPONENTES %}
           <option value="{{ comp }}" {{ 'selected' if g.componente == comp }}>{{ comp }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="field">
-        <label>N° Pecosa</label>
-        <input type="text" name="pecosa" value="{{ g.pecosa }}">
+        <label for="f-gf-pecosa">N° Pecosa</label>
+        <input type="text" name="pecosa" id="f-gf-pecosa" value="{{ g.pecosa }}">
       </div>
       <div class="field">
         <label>Mes <i class="bi bi-lock-fill lock-ico"></i></label>

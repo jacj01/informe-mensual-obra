@@ -9,7 +9,7 @@
 <div class="card">
   <div class="card-head between">
     <form method="get" class="filters">
-      <select name="mes" onchange="guardarScrollY(); this.form.submit()">
+      <select name="mes" aria-label="Mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
@@ -25,12 +25,12 @@
   </div>
 </div>
 
-<div class="tabs">
-  <button class="tab active" data-tab="f05">FE-05 Ejecución mensual</button>
-  <button class="tab" data-tab="f06">FE-06 Presupuesto vs ejecutado</button>
+<div class="tabs" role="tablist" aria-label="Formatos financieros">
+  <button class="tab active" data-tab="f05" role="tab" aria-selected="true" aria-controls="tab-f05">FE-05 Ejecución mensual</button>
+  <button class="tab" data-tab="f06" role="tab" aria-selected="false" aria-controls="tab-f06">FE-06 Presupuesto vs ejecutado</button>
 </div>
 
-<div class="tab-panel active" id="tab-f05">
+<div class="tab-panel active" id="tab-f05" role="tabpanel">
   <div class="card">
     <div class="card-head between"><h3>EJECUCIÓN PRESUPUESTAL MENSUAL - {{ MESES[mes-1] }} {{ anio }}</h3>
       <div style="display:flex;gap:8px">
@@ -96,7 +96,7 @@
   </div>
 </div>
 
-<div class="tab-panel" id="tab-f06">
+<div class="tab-panel" id="tab-f06" role="tabpanel">
   <div class="card">
     <div class="card-head between"><h3>CUADRO COMPARATIVO PRESUPUESTO ANALÍTICO APROBADO Y EJECUTADO</h3>
       <div style="display:flex;gap:8px">
@@ -260,9 +260,10 @@
 <script>
   document.querySelectorAll('.tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
+      btn.setAttribute('aria-selected','true');
       document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     });
   });

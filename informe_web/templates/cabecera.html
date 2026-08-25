@@ -44,12 +44,12 @@
     <div class="card-head"><h3><i class="bi bi-1-circle"></i> Período del informe</h3></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field span2">
-        <label>Año</label>
-        <input type="number" name="anio" value="{{ p.anio }}">
+        <label for="f-anio">Año</label>
+        <input type="number" name="anio" id="f-anio" value="{{ p.anio }}">
       </div>
       <div class="field span2">
-        <label>Mes de trabajo (por defecto)</label>
-        <select name="mes_actual">
+        <label for="f-mes_actual">Mes de trabajo (por defecto)</label>
+        <select name="mes_actual" id="f-mes_actual">
           {% for m in MESES %}
           <option value="{{ loop.index }}" {{ 'selected' if loop.index == p.mes_actual }}>{{ m }}</option>
           {% endfor %}
@@ -62,40 +62,40 @@
     <div class="card-head"><h3><i class="bi bi-2-circle"></i> Datos del proyecto</h3></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field full">
-        <label>Nombre del proyecto</label>
-        <textarea name="nombre" rows="2" required>{{ p.nombre }}</textarea>
+        <label for="f-nombre">Nombre del proyecto</label>
+        <textarea name="nombre" id="f-nombre" rows="2" required>{{ p.nombre }}</textarea>
       </div>
       <div class="field">
-        <label>Código único de inversión (CUI)</label>
-        <input type="text" name="cui" value="{{ p.cui }}">
+        <label for="f-cui">Código único de inversión (CUI)</label>
+        <input type="text" name="cui" id="f-cui" value="{{ p.cui }}">
       </div>
       <div class="field">
-        <label>Correlativo de meta</label>
-        <input type="text" name="meta" value="{{ p.meta }}">
+        <label for="f-meta">Correlativo de meta</label>
+        <input type="text" name="meta" id="f-meta" value="{{ p.meta }}">
       </div>
       <div class="field">
-        <label>Distrito</label>
-        <input type="text" name="distrito" value="{{ p.distrito }}">
+        <label for="f-distrito">Distrito</label>
+        <input type="text" name="distrito" id="f-distrito" value="{{ p.distrito }}">
       </div>
       <div class="field">
-        <label>Provincia</label>
-        <input type="text" name="provincia" value="{{ p.provincia }}">
+        <label for="f-provincia">Provincia</label>
+        <input type="text" name="provincia" id="f-provincia" value="{{ p.provincia }}">
       </div>
       <div class="field">
-        <label>Departamento</label>
-        <input type="text" name="departamento" value="{{ p.departamento }}">
+        <label for="f-departamento">Departamento</label>
+        <input type="text" name="departamento" id="f-departamento" value="{{ p.departamento }}">
       </div>
       <div class="field">
-        <label>Entidad ejecutora</label>
-        <input type="text" name="entidad" value="{{ p.entidad }}">
+        <label for="f-entidad">Entidad ejecutora</label>
+        <input type="text" name="entidad" id="f-entidad" value="{{ p.entidad }}">
       </div>
       <div class="field span2">
-        <label>Unidad ejecutora</label>
-        <input type="text" name="unidad_ejecutora" value="{{ p.unidad_ejecutora }}">
+        <label for="f-unidad_ejecutora">Unidad ejecutora</label>
+        <input type="text" name="unidad_ejecutora" id="f-unidad_ejecutora" value="{{ p.unidad_ejecutora }}">
       </div>
       <div class="field span2">
-        <label>Rubro</label>
-        <select name="rubro">
+        <label for="f-rubro">Rubro</label>
+        <select name="rubro" id="f-rubro">
           {% if p.rubro and p.rubro not in rubros %}
           <option value="{{ p.rubro }}" selected>{{ p.rubro }}</option>
           {% endif %}
@@ -105,8 +105,8 @@
         </select>
       </div>
       <div class="field span2">
-        <label>Fuente de financiamiento</label>
-        <select name="fuente">
+        <label for="f-fuente">Fuente de financiamiento</label>
+        <select name="fuente" id="f-fuente">
           {% if p.fuente and p.fuente not in fuentes %}
           <option value="{{ p.fuente }}" selected>{{ p.fuente }}</option>
           {% endif %}
@@ -116,12 +116,12 @@
         </select>
       </div>
       <div class="field">
-        <label>Aprobación</label>
-        <input type="text" name="aprobacion" value="{{ p.aprobacion }}" placeholder="Ej.: RESOLUCION DE ALCALDIA N° 92-A-2023">
+        <label for="f-aprobacion">Aprobación</label>
+        <input type="text" name="aprobacion" id="f-aprobacion" value="{{ p.aprobacion }}" placeholder="Ej.: RESOLUCION DE ALCALDIA N° 92-A-2023">
       </div>
       <div class="field">
-        <label>Fecha de resolución</label>
-        <input type="date" name="fecha_aprobacion" value="{{ p.fecha_aprobacion.strftime('%Y-%m-%d') if p.fecha_aprobacion else '' }}">
+        <label for="f-fecha_aprobacion">Fecha de resolución</label>
+        <input type="date" name="fecha_aprobacion" id="f-fecha_aprobacion" value="{{ p.fecha_aprobacion.strftime('%Y-%m-%d') if p.fecha_aprobacion else '' }}">
       </div>
     </div>
   </div>
@@ -130,44 +130,44 @@
     <div class="card-head"><h3><i class="bi bi-3-circle"></i> Equipo de gestión</h3></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field">
-        <label>Residente de obra</label>
-        <input type="text" name="residente" value="{{ p.residente }}" data-no-validar>
+        <label for="f-residente">Residente de obra</label>
+        <input type="text" name="residente" id="f-residente" value="{{ p.residente }}" data-no-validar>
       </div>
       <div class="field">
-        <label>N° CIP Residente</label>
-        <input type="text" name="cip_residente" value="{{ p.cip_residente or '' }}" placeholder="Ej: 12345" data-no-validar>
+        <label for="f-cip_residente">N° CIP Residente</label>
+        <input type="text" name="cip_residente" id="f-cip_residente" value="{{ p.cip_residente or '' }}" placeholder="Ej: 12345" data-no-validar>
       </div>
       <div class="field">
-        <label>Supervisor de obra</label>
-        <input type="text" name="supervisor" value="{{ p.supervisor }}" data-no-validar>
+        <label for="f-supervisor">Supervisor de obra</label>
+        <input type="text" name="supervisor" id="f-supervisor" value="{{ p.supervisor }}" data-no-validar>
       </div>
       <div class="field">
-        <label>N° CIP Supervisor</label>
-        <input type="text" name="cip_supervisor" value="{{ p.cip_supervisor or '' }}" placeholder="Ej: 67890" data-no-validar>
+        <label for="f-cip_supervisor">N° CIP Supervisor</label>
+        <input type="text" name="cip_supervisor" id="f-cip_supervisor" value="{{ p.cip_supervisor or '' }}" placeholder="Ej: 67890" data-no-validar>
       </div>
       <div class="field">
-        <label>Administrador de Obra</label>
-        <input type="text" name="asistente" value="{{ p.asistente }}" data-no-validar>
+        <label for="f-asistente">Administrador de Obra</label>
+        <input type="text" name="asistente" id="f-asistente" value="{{ p.asistente }}" data-no-validar>
       </div>
       <div class="field">
-        <label>N° de Colegiatura</label>
-        <input type="text" name="colegiatura_admin" value="{{ p.colegiatura_admin or '' }}" placeholder="Ej: 12345" data-no-validar>
+        <label for="f-colegiatura_admin">N° de Colegiatura</label>
+        <input type="text" name="colegiatura_admin" id="f-colegiatura_admin" value="{{ p.colegiatura_admin or '' }}" placeholder="Ej: 12345" data-no-validar>
       </div>
       <div class="field">
-        <label>Asistente Técnico</label>
-        <input type="text" name="asistente_tecnico" value="{{ p.asistente_tecnico or '' }}" data-no-validar>
+        <label for="f-asistente_tecnico">Asistente Técnico</label>
+        <input type="text" name="asistente_tecnico" id="f-asistente_tecnico" value="{{ p.asistente_tecnico or '' }}" data-no-validar>
       </div>
       <div class="field">
-        <label>N° de DNI o CIP</label>
-        <input type="text" name="dni_cip_asistente" value="{{ p.dni_cip_asistente or '' }}" placeholder="Ej: 12345678" data-no-validar>
+        <label for="f-dni_cip_asistente">N° de DNI o CIP</label>
+        <input type="text" name="dni_cip_asistente" id="f-dni_cip_asistente" value="{{ p.dni_cip_asistente or '' }}" placeholder="Ej: 12345678" data-no-validar>
       </div>
       <div class="field span2">
-        <label>Responsable de almacén</label>
-        <input type="text" name="responsable_almacen" value="{{ p.responsable_almacen }}" data-no-validar>
+        <label for="f-responsable_almacen">Responsable de almacén</label>
+        <input type="text" name="responsable_almacen" id="f-responsable_almacen" value="{{ p.responsable_almacen }}" data-no-validar>
       </div>
       <div class="field span2">
-        <label>N° de DNI</label>
-        <input type="text" name="dni_responsable_almacen" value="{{ p.dni_responsable_almacen or '' }}" placeholder="Ej: 12345678" data-no-validar>
+        <label for="f-dni_responsable_almacen">N° de DNI</label>
+        <input type="text" name="dni_responsable_almacen" id="f-dni_responsable_almacen" value="{{ p.dni_responsable_almacen or '' }}" placeholder="Ej: 12345678" data-no-validar>
       </div>
     </div>
   </div>
@@ -212,45 +212,45 @@
     <div class="card-head"><h3><i class="bi bi-5-circle"></i> Clasificadores de gasto</h3></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field">
-        <label>Clasificador para PERSONAL</label>
+        <label for="f-clasificador_personal">Clasificador para PERSONAL</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input type="text" name="clasificador_personal" value="{{ p.clasificador_personal or '2.6.2.3.99.3' }}" style="flex:1">
+          <input type="text" name="clasificador_personal" id="f-clasificador_personal" value="{{ p.clasificador_personal or '2.6.2.3.99.3' }}" style="flex:1">
           <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'PERSONAL')"><i class="bi bi-trash"></i></button>
         </div>
       </div>
       <div class="field">
-        <label>Clasificador para BIENES</label>
+        <label for="f-clasificador_bienes">Clasificador para BIENES</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input type="text" name="clasificador_bienes" value="{{ p.clasificador_bienes or '2.6.2.3.99.4' }}" style="flex:1">
+          <input type="text" name="clasificador_bienes" id="f-clasificador_bienes" value="{{ p.clasificador_bienes or '2.6.2.3.99.4' }}" style="flex:1">
           <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'BIENES')"><i class="bi bi-trash"></i></button>
         </div>
       </div>
       <div class="field">
-        <label>Clasificador para SERVICIOS</label>
+        <label for="f-clasificador_servicios">Clasificador para SERVICIOS</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input type="text" name="clasificador_servicios" value="{{ p.clasificador_servicios or '2.6.2.3.99.5' }}" style="flex:1">
+          <input type="text" name="clasificador_servicios" id="f-clasificador_servicios" value="{{ p.clasificador_servicios or '2.6.2.3.99.5' }}" style="flex:1">
           <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'SERVICIOS')"><i class="bi bi-trash"></i></button>
         </div>
       </div>
       <div class="field">
-        <label>Clasificador para ELABORACIÓN DE EXPEDIENTE TÉCNICO</label>
+        <label for="f-clasificador_expediente">Clasificador para ELABORACIÓN DE EXPEDIENTE TÉCNICO</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input type="text" name="clasificador_expediente" value="{{ p.clasificador_expediente or '2.6.8.1.3.1' }}" style="flex:1">
+          <input type="text" name="clasificador_expediente" id="f-clasificador_expediente" value="{{ p.clasificador_expediente or '2.6.8.1.3.1' }}" style="flex:1">
           <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'ELABORACIÓN DE EXPEDIENTE TÉCNICO')"><i class="bi bi-trash"></i></button>
         </div>
       </div>
       <div class="field">
-        <label>Clasificador para LIQUIDACIÓN DE OBRA</label>
+        <label for="f-clasificador_liquidacion">Clasificador para LIQUIDACIÓN DE OBRA</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input type="text" name="clasificador_liquidacion" value="{{ p.clasificador_liquidacion or 'LIQUIDACION' }}" style="flex:1">
+          <input type="text" name="clasificador_liquidacion" id="f-clasificador_liquidacion" value="{{ p.clasificador_liquidacion or 'LIQUIDACION' }}" style="flex:1">
           <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="limpiarClasifBase(this.parentElement.querySelector('input'),'LIQUIDACIÓN DE OBRA')"><i class="bi bi-trash"></i></button>
         </div>
       </div>
       {% for ex in clasificadores_extra %}
       <div class="field extra-clasif">
-        <label>Clasificador para {{ ex.nombre }} <span style="color:var(--texto2);font-weight:400;font-size:.85em">({{ ex.componente or 'Costo Directo' }})</span></label>
+        <label for="f-extra_codigo_{{ loop.index0 }}">Clasificador para {{ ex.nombre }} <span style="color:var(--texto2);font-weight:400;font-size:.85em">({{ ex.componente or 'Costo Directo' }})</span></label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input type="text" name="extra_codigo_{{ loop.index0 }}" value="{{ ex.codigo or '' }}" style="flex:1">
+          <input type="text" name="extra_codigo_{{ loop.index0 }}" id="f-extra_codigo_{{ loop.index0 }}" value="{{ ex.codigo or '' }}" style="flex:1">
           <button type="button" class="btn btn-outline btn-sm" style="color:var(--error,#d33);flex:0 0 auto;padding:4px 6px" title="Eliminar" onclick="eliminarClasif(this)"><i class="bi bi-trash"></i></button>
         </div>
         <input type="hidden" name="extra_nombre_{{ loop.index0 }}" value="{{ ex.nombre or '' }}">
@@ -291,7 +291,7 @@
             <span class="presup-det">{{ f.etiqueta }}</span>
             <input type="text" inputmode="decimal" class="monto presup-input pres-et"
                    name="pres_et_extra_{{ ns_ex.n }}" value="{{ '{:,.2f}'.format(f.et or 0) }}"
-                   data-comp="{{ comp }}" autocomplete="off">
+                   data-comp="{{ comp }}" autocomplete="off" aria-label="{{ f.etiqueta }} — Expediente Técnico">
           </div>
           {% set ns_ex.n = ns_ex.n + 1 %}
           {% else %}
@@ -299,7 +299,7 @@
             <span class="presup-det">{{ f.etiqueta }}</span>
             <input type="text" inputmode="decimal" class="monto presup-input pres-et"
                    name="pres_et_{{ ns_idx.n }}" value="{{ '{:,.2f}'.format(f.et or 0) }}"
-                   data-comp="{{ comp }}" autocomplete="off">
+                   data-comp="{{ comp }}" autocomplete="off" aria-label="{{ f.etiqueta }} — Expediente Técnico">
           </div>
           {% set ns_idx.n = ns_idx.n + 1 %}
           {% endif %}
@@ -328,7 +328,7 @@
             <span class="presup-det">{{ f.etiqueta }}</span>
             <input type="text" inputmode="decimal" class="monto presup-input pres-pim"
                    name="pres_pim_extra_{{ ns_ex2.n }}" value="{{ '{:,.2f}'.format(f.pim or 0) }}"
-                   data-comp="{{ comp }}" autocomplete="off">
+                   data-comp="{{ comp }}" autocomplete="off" aria-label="{{ f.etiqueta }} — PIM">
           </div>
           {% set ns_ex2.n = ns_ex2.n + 1 %}
           {% else %}
@@ -336,7 +336,7 @@
             <span class="presup-det">{{ f.etiqueta }}</span>
             <input type="text" inputmode="decimal" class="monto presup-input pres-pim"
                    name="pres_pim_{{ ns_idx2.n }}" value="{{ '{:,.2f}'.format(f.pim or 0) }}"
-                   data-comp="{{ comp }}" autocomplete="off">
+                   data-comp="{{ comp }}" autocomplete="off" aria-label="{{ f.etiqueta }} — PIM">
           </div>
           {% set ns_idx2.n = ns_idx2.n + 1 %}
           {% endif %}
@@ -359,22 +359,22 @@
   </div>
 
   <!-- Modal agregar clasificador -->
-  <div class="modal" id="modalClasif">
+  <div class="modal" id="modalClasif" role="dialog" aria-modal="true" aria-labelledby="modalClasifTitle">
     <div class="modal-backdrop" onclick="cerrarModalClasif()"></div>
     <div class="modal-box" style="max-width:420px">
-      <button type="button" class="modal-close" onclick="cerrarModalClasif()"><i class="bi bi-x-lg"></i></button>
+      <button type="button" class="modal-close" onclick="cerrarModalClasif()" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
       <div class="modal-body">
-        <h3 style="margin:0 0 16px"><i class="bi bi-tag"></i> Agregar clasificador de gasto</h3>
+        <h3 style="margin:0 0 16px" id="modalClasifTitle"><i class="bi bi-tag"></i> Agregar clasificador de gasto</h3>
         <div class="field">
-          <label>Nombre del clasificador</label>
+          <label for="clasi-nombre">Nombre del clasificador</label>
           <input type="text" id="clasi-nombre" placeholder="ej. OTROS GASTOS" style="text-transform:uppercase">
         </div>
         <div class="field">
-          <label>Código del clasificador</label>
+          <label for="clasi-codigo">Código del clasificador</label>
           <input type="text" id="clasi-codigo" placeholder="ej. 2.6.2.3.99.6" style="text-transform:uppercase">
         </div>
         <div class="field">
-          <label>Componente</label>
+          <label for="clasi-componente">Componente</label>
           <select id="clasi-componente">
             {% for comp in COMPONENTES %}
             <option value="{{ comp }}">{{ comp }}</option>
@@ -390,18 +390,18 @@
   </div>
 
   <!-- Modal agregar adicional -->
-  <div class="modal" id="modalAdicional">
+  <div class="modal" id="modalAdicional" role="dialog" aria-modal="true" aria-labelledby="modalAdicionalTitle">
     <div class="modal-backdrop" onclick="cerrarModalAdicional()"></div>
     <div class="modal-box" style="max-width:480px">
-      <button type="button" class="modal-close" onclick="cerrarModalAdicional()"><i class="bi bi-x-lg"></i></button>
+      <button type="button" class="modal-close" onclick="cerrarModalAdicional()" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
       <div class="modal-body">
-        <h3 style="margin:0 0 16px"><i class="bi bi-calendar-plus"></i> Agregar adicional de obra</h3>
+        <h3 style="margin:0 0 16px" id="modalAdicionalTitle"><i class="bi bi-calendar-plus"></i> Agregar adicional de obra</h3>
         <div class="field">
-          <label>Días de ampliación</label>
+          <label for="adic-dias">Días de ampliación</label>
           <input type="number" id="adic-dias" min="0" placeholder="0">
         </div>
         <div class="field">
-          <label>N° de resolución de aprobación del adicional</label>
+          <label for="adic-resolucion">N° de resolución de aprobación del adicional</label>
           <input type="text" id="adic-resolucion" placeholder="ej. R.A. 123-2026">
         </div>
         <div class="field">
@@ -411,7 +411,7 @@
           </label>
         </div>
         <div class="field" id="adic-campo-monto" style="display:none">
-          <label>Monto de ampliación presupuestal (S/.)</label>
+          <label for="adic-monto">Monto de ampliación presupuestal (S/.)</label>
           <input type="text" inputmode="decimal" class="monto" id="adic-monto" placeholder="0.00">
         </div>
         <div class="form-actions" style="border:none;padding:16px 0 0;margin-top:8px">

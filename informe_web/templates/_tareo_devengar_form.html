@@ -15,20 +15,20 @@
     </div>
     <div class="form-grid form-grid-devengo">
       <div class="field">
-        <label>Fecha de devengado</label>
-        <input type="date" name="fecha" value="{{ g.fecha.strftime('%Y-%m-%d') if g and g.fecha else '' }}" required>
+        <label for="f-td-fecha">Fecha de devengado</label>
+        <input type="date" name="fecha" id="f-td-fecha" value="{{ g.fecha.strftime('%Y-%m-%d') if g and g.fecha else '' }}" required>
       </div>
       <div class="field">
-        <label>SIAF</label>
-        <input type="number" name="siaf" value="{{ g.siaf if g else '' }}">
+        <label for="f-td-siaf">SIAF</label>
+        <input type="number" name="siaf" id="f-td-siaf" value="{{ g.siaf if g else '' }}">
       </div>
       <div class="field">
-        <label>Nº Nota de Pago</label>
-        <input type="number" name="num_doc" value="{{ g.num_doc if g and g.num_doc else '' }}" min="0" step="1" placeholder="Nº de la nota de pago">
+        <label for="f-td-num_doc">Nº Nota de Pago</label>
+        <input type="number" name="num_doc" id="f-td-num_doc" value="{{ g.num_doc if g and g.num_doc else '' }}" min="0" step="1" placeholder="Nº de la nota de pago">
       </div>
       <div class="field">
-        <label>Monto de Planilla (S/)</label>
-        <input type="text" class="monto" name="monto" value="{{ g.importe if g and g.importe else '' }}"
+        <label for="f-td-monto">Monto de Planilla (S/)</label>
+        <input type="text" class="monto" name="monto" id="f-td-monto" value="{{ g.importe if g and g.importe else '' }}"
                min="0.01" inputmode="decimal" placeholder="0.00" required autocomplete="off"
                title="Importe que se reflejará en el Manifiesto de Gastos">
       </div>
@@ -40,8 +40,8 @@
         <label>Componente <i class="bi bi-lock-fill lock-ico"></i></label>
         <input type="text" value="{{ componente }}" readonly title="Obrero: Costo Directo / Técnico: Gastos Generales">
       </div>
-      <div class="field full">
-        <label>Nombre / Proveedor</label>
+      <div class="field">
+        <label for="f-td-proveedor">Nombre / Proveedor</label>
         <input type="text" name="proveedor" value="{{ g.proveedor if g else '' }}"
                placeholder="Ej. PLANILLA DE PAGO - PERSONAL {{ 'OBRERO' if tipo == 'OBRERO' else 'TECNICO' }}">
       </div>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="Reporte imprimible FE-06 Presupuesto vs Ejecutado: comparación presupuesto-ejecución de obra en administración directa. Detalle de rubros, %, ejecuci%c3%b3n real, PIM y observaciones. Imprimir con totales y firma del administrador.">
+<meta name="description" content="Reporte imprimible FE-06 Presupuesto vs Ejecutado: comparación presupuesto-ejecución de obra en administración directa. Detalle de rubros, porcentaje, ejecución real, PIM y observaciones. Imprimir con totales y firma del administrador.">
 <title>FE-06 Presupuesto vs Ejecutado - {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=2) }}">
@@ -38,7 +38,7 @@
 <div class="hoja">
   <div class="encabezado">
     <div class="logo-box">
-      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
     </div>
     <div class="enc-cen">
       <div class="entidad">{{ p.entidad or '' }}</div>

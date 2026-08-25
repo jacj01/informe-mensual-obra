@@ -10,7 +10,7 @@
   <div class="card-head">
     <h3><i class="bi bi-bag-plus"></i> Registrar orden (proveedor)</h3>
     <form method="get" class="filters">
-      <select name="mes" onchange="guardarScrollY(); this.form.submit()">
+      <select name="mes" aria-label="Mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
@@ -27,39 +27,39 @@
     <input type="hidden" name="anio" value="{{ anio }}">
     <div class="form-grid form-grid-orden">
       <div class="field">
-        <label>SIAF</label>
-        <input type="number" name="siaf">
+        <label for="f-siaf">SIAF</label>
+        <input type="number" name="siaf" id="f-siaf">
       </div>
       <div class="field">
-        <label>Fecha</label>
-        <input type="date" name="fecha" value="{{ '%04d-%02d-01' % (p.anio, p.mes_actual) }}" required>
+        <label for="f-fecha">Fecha</label>
+        <input type="date" name="fecha" id="f-fecha" value="{{ '%04d-%02d-01' % (p.anio, p.mes_actual) }}" required>
       </div>
       <div class="field">
-        <label>Tipo</label>
-        <select name="tipo_doc" id="tipo-doc-quick">
+        <label for="f-tipo_doc">Tipo</label>
+        <select name="tipo_doc" id="f-tipo_doc">
           <option value="O/C" selected>O/C</option>
           <option value="O/S">O/S</option>
         </select>
       </div>
       <div class="field">
-        <label>N° Orden</label>
-        <input type="number" name="num_doc">
+        <label for="f-num_doc">N° Orden</label>
+        <input type="number" name="num_doc" id="f-num_doc">
       </div>
       <div class="field full">
-        <label>Proveedor</label>
-        <input type="text" name="proveedor">
+        <label for="f-proveedor">Proveedor</label>
+        <input type="text" name="proveedor" id="f-proveedor">
       </div>
       <div class="field comp">
-        <label>Componente</label>
-        <select name="componente">
+        <label for="f-componente">Componente</label>
+        <select name="componente" id="f-componente">
           {% for comp in COMPONENTES %}
           <option value="{{ comp }}" {{ 'selected' if comp == 'Costo Directo' }}>{{ comp }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="field comp">
-        <label>Clasificador a usar</label>
-        <select name="clasificador">
+        <label for="f-clasificador">Clasificador a usar</label>
+        <select name="clasificador" id="f-clasificador">
           {% for code, det in clasificadores %}
           <option value="{{ code }}" {{ 'selected' if loop.first }}>{{ det }}</option>
           {% endfor %}
@@ -145,6 +145,7 @@
     </div>
     <div class="table-scroll">
     <table class="table table-prov">
+      <caption class="sr-only">Órdenes de compra y servicio del mes</caption>
       <colgroup>
         <col style="width:32px">
         <col style="width:52%">
@@ -203,7 +204,7 @@
 {% block scripts %}
 <script>
 (function () {
-  var sel = document.getElementById('tipo-doc-quick');
+  var sel = document.getElementById('f-tipo_doc');
   var btn = document.getElementById('btn-registrar-orden');
   if (!sel || !btn) return;
   function actualizarBoton() {
@@ -237,7 +238,7 @@ function mostrarModalDevengado(ordenId) {
     '<div class="modal-bg" onclick="cerrarModalDevengado(false)"></div>' +
     '<div class="modal-box" style="max-width:440px">' +
     '<div class="modal-head"><h3><i class="bi bi-check-circle"></i> Registrar Devengado</h3>' +
-    '<button class="modal-close" onclick="cerrarModalDevengado(false)">&times;</button></div>' +
+    '<button class="modal-close" onclick="cerrarModalDevengado(false)" aria-label="Cerrar">&times;</button></div>' +
     '<div style="padding:18px 20px">' +
     '<p style="margin:0 0 14px;font-size:13px;color:var(--texto2)">Ingrese los datos del devengado para esta orden:</p>' +
     '<div class="form-grid" style="grid-template-columns:1fr">' +
@@ -305,7 +306,7 @@ function mostrarConfirmacionDesdevengar(ordenId) {
     '<div class="modal-bg" onclick="cerrarModalDesdevengar(false, ' + ordenId + ')"></div>' +
     '<div class="modal-box" style="max-width:420px">' +
     '<div class="modal-head"><h3><i class="bi bi-exclamation-triangle"></i> Quitar Devengado</h3>' +
-    '<button class="modal-close" onclick="cerrarModalDesdevengar(false, ' + ordenId + ')">&times;</button></div>' +
+    '<button class="modal-close" onclick="cerrarModalDesdevengar(false, ' + ordenId + ')" aria-label="Cerrar">&times;</button></div>' +
     '<div style="padding:18px 20px">' +
     '<p style="margin:0;font-size:13.5px;color:var(--texto)">¿Está seguro de quitar el estado de <b>DEVENGADO</b> de esta orden?</p>' +
     '<p style="margin:8px 0 0;font-size:12px;color:var(--texto2)">Se eliminarán los datos de Nota de Pago y fecha asociados.</p>' +
