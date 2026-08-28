@@ -77,6 +77,24 @@ if (-not $PyExe) {
 }
 Write-Host "Python: $PyExe"
 
+# ─────────────────────────────────────────────────────────────────────────
+# MODO 1: ZIP local (descargado por el propio aplicativo, /actualizar).
+#   No requiere gh CLI ni conexión para detectar release: la app ya validó
+#   que existe una versión nueva y descargó el paquete. Se instala directo.
+# ─────────────────────────────────────────────────────────────────────────
+if ($ZipFile -and (Test-Path $ZipFile)) {
+    Write-Host "Usando ZIP local: $ZipFile"
+    $verLocal = if ($VersionLocal) { $VersionLocal } else { Version-Local }
+    Escribir-Progreso "descargando" 15 "Usando paquete local..."
+    New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+    Copy-Item -Path $ZipFile -Destination (Join-Path $tmpDir "update.zip") -Force
+    $zipPath = Join-Path $tmpDir "update.zip"
+    Escribir-Progreso "descargando" 30 "Paquete listo. Preparando instalación..."
+}
+else {
+# ─────────────────────────────────────────────────────────────────────────
+# MODO 2: verificación manual / sin ZIP (requiere gh CLI).
+# ─────────────────────────────────────────────────────────────────────────
 # 7) Detectar ultima release publicada en GitHub (usa gh: repo privado requiere auth)
 $verLocal = if ($VersionLocal) { $VersionLocal } else { Version-Local }
 Write-Host "Local: v$verLocal"
@@ -108,15 +126,10 @@ if (-not $Instalar) {
 Write-Host "Aplicando actualizacion a $tag ..."
 Escribir-Progreso "descargando" 5 "Descargando $tag de GitHub..."
 
-# 8) Descargar paquete: usar ZIP local si se proporciono, si gh, o Invoke-WebRequest con token
+# 8) Descargar paquete: si gh o Invoke-WebRequest con token
 New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
-if ($ZipFile -and (Test-Path $ZipFile)) {
-    Write-Host "Usando ZIP local: $ZipFile"
-    Escribir-Progreso "descargando" 15 "Usando paquete local..."
-    Copy-Item -Path $ZipFile -Destination (Join-Path $tmpDir "update.zip") -Force
-    $zipPath = Join-Path $tmpDir "update.zip"
-} elseif (gh-ok) {
+if (gh-ok) {
     Write-Host "Descargando $tag via gh..."
     Escribir-Progreso "descargando" 10 "Descargando $tag via gh..."
     gh release download "$tag" -R $OwnerRepo --pattern "*.zip" --dir $tmpDir
@@ -159,6 +172,7 @@ if (-not $zipPath) { Write-Error "No se encontro el asset zip descargado"; exit 
 # Descomprimir a temp (no toca la instalacion viva)
 Expand-Archive -LiteralPath $zipPath -DestinationPath $tmpDir -Force
 Escribir-Progreso "descargando" 30 "Paquete listo. Preparando instalación..."
+}
 
 # Preservar la base de datos / respaldos / uploads / logs del usuario (no viajan en el zip)
 $preservation = @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/static/uploads",

@@ -203,6 +203,57 @@ def _tipo_sql(col):
     return "TEXT"
 
 
+_CLASIFI_DEFECTO = {
+    "clasificador_personal": "2.6.2.3.99.3",
+    "clasificador_bienes": "2.6.2.3.99.4",
+    "clasificador_servicios": "2.6.2.3.99.5",
+    "clasificador_expediente": "2.6.8.1.3.1",
+    "clasificador_liquidacion": "LIQUIDACION",
+}
+
+
+def _reparar_clasificadores(eng):
+    """Garantiza que las 5 columnas de clasificador del proyecto tengan valores
+    validos y unicos (PERSONAL, BIENES, SERVICIOS, EXPEDIENTE, LIQUIDACION).
+
+    Corrige instalaciones antiguas cuyos clasificadores quedaron vacios, NULL o
+    duplicados (p.ej. SERVICIOS = BIENES), lo que hacia desaparecer la opcion
+    'SERVICIOS' del combobox 'Clasificador a usar' en otras maquinas.
+    """
+    cols_modelo = [c for c in _CLASIFI_DEFECTO]
+    with eng.connect() as con:
+        existe = con.execute(text(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='proyecto'"
+        )).first()
+        if not existe:
+            return
+        reales = [r[1] for r in con.execute(text("PRAGMA table_info(proyecto)"))]
+        # 1) Llenar vacios/NULL con su clasificador por defecto
+        for campo, cod in _CLASIFI_DEFECTO.items():
+            if campo not in reales:
+                continue
+            con.execute(text(
+                f"UPDATE proyecto SET {campo} = :c "
+                f"WHERE {campo} IS NULL OR {campo} = ''"), {"c": cod})
+        # 2) Si dos clasificadores distintos comparten codigo (colision), resolver
+        fila = con.execute(text(
+            "SELECT clasificador_personal, clasificador_bienes, "
+            "clasificador_servicios, clasificador_expediente, "
+            "clasificador_liquidacion FROM proyecto LIMIT 1"
+        )).first()
+        if fila:
+            usados = {}
+            for campo, valor in zip(cols_modelo, fila):
+                clave = (valor or "").strip().upper()
+                if clave in usados:
+                    # Duplicado: restaurar el valor por defecto propio de este campo
+                    con.execute(text(
+                        f"UPDATE proyecto SET {campo} = :c"), {"c": _CLASIFI_DEFECTO[campo]})
+                else:
+                    usados[clave] = campo
+        con.commit()
+
+
 def _renombrar_componente_supervision(eng):
     """Renombra el componente 'Gestion de Supervisión' a 'Gastos de Supervisión'
     en los datos existentes de la base del Administrador."""
@@ -232,6 +283,7 @@ def ensure_tenant(admin_id):
     _migrar_esquema_usuario(eng)
     _migrar_esquema_trabajador(eng)
     _migrar_esquema_proyecto(eng)
+    _reparar_clasificadores(eng)
     _migrar_esquema_resto(eng)
     _renombrar_componente_supervision(eng)
     return eng
