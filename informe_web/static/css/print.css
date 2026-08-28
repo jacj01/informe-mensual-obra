@@ -87,7 +87,7 @@
 .resp-val { flex: 1; padding: 4px 8px; font-size: 8.5pt; min-height: 18px; overflow-wrap: anywhere; }
 
 /* ---------- Tablas ---------- */
-table.tabla { width: 100%; border-collapse: collapse; table-layout: auto; }
+table.tabla { width: 100%; border-collapse: collapse; }
 table.tabla th, table.tabla td { border: .6px solid var(--borde); padding: 3px 4px; font-size: 7.6pt; line-height: 1.4; overflow-wrap: anywhere; }
 table.tabla thead th {
   background: var(--azul); color: #fff; font-weight: 700; text-align: center;

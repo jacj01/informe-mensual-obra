@@ -7,23 +7,29 @@
 <meta name="description" content="Reporte imprimible FE-05 Ejecución Mensual: ejecución presupuestal completa por mes de obra en administración directa. Incluye totales por rubro, clasificación de gastos, saldo disponible y firmas del representante legal. Reporte listo para imprimir en formato A4.">
 <title>FE-05 Ejecucion Mensual - {{ MESES[mes-1] }} {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=2) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=4) }}">
 <style>
-  /* Layout FIJO: todas las tablas de la hoja usan los MISMOS anchos de columna
-     (colgroup de 1062px = ancho util de la hoja A4 horizontal).
-     Asi las columnas quedan perfectamente cuadradas y alineadas en todas las secciones. */
-  table.tabla { margin-top: 3px; table-layout: fixed; width: 100%; }
+  /* FE-05: fixed layout con anchos calculados — TODAS las tablas alineadas */
+  table.tabla { margin-top: 3px; table-layout: fixed !important; width: 100% !important; border-collapse: collapse; }
   table.tabla th, table.tabla td {
     padding: 2.5px 3px; line-height: 1.35;
-    overflow-wrap: normal; word-break: normal;
+    border: .6px solid var(--borde); font-size: 7.6pt;
   }
-  /* Columnas numericas/cortas: sin salto de linea para mantener la tabla compacta */
+  /* Texto largo: envolver dentro del ancho fijo sin salirse */
+  table.tabla td.txt { word-break: break-word; overflow-wrap: anywhere; white-space: normal; }
+  /* Columnas numericas/cortas: nowrap en una sola linea */
   table.tabla td.num, table.tabla th.num { white-space: nowrap; }
-  table.tabla td.ctr, table.tabla th.ctr { white-space: nowrap; }
-  /* Cabeceras de clasificador: fuente compacta para que el codigo quepa.
-     white-space normal + overflow-wrap para que con muchos clasificadores
-     el codigo envuelva dentro del ancho disponible sin desbordar la celda. */
+  table.tabla td.ctr, table.tabla th.ctr { white-space: nowrap; text-align: center; }
+  /* Cabeceras */
+  table.tabla thead th {
+    background: var(--azul); color: #fff; font-weight: 700; text-align: center;
+    font-size: 7pt; text-transform: uppercase; letter-spacing: .2px; padding: 4.5px 3px;
+    white-space: nowrap;
+  }
   table.tabla thead th.clasif { font-size: 6.2pt; letter-spacing: -.2px; padding: 4px 2px; white-space: normal; overflow-wrap: anywhere; }
+  .fila-rubro td { background: #E3EAF2; color: var(--azul-osc); font-weight: 800; font-size: 8pt; text-transform: uppercase; letter-spacing: .3px; padding: 4px 5px; }
+  .fila-sub td { background: var(--bg); font-weight: 700; font-size: 8pt; color: var(--azul-osc); }
+  .fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 9pt; }
 </style>
 </head>
 <body>
@@ -63,20 +69,19 @@
   </div>
 
   {% set ncols = 11 + clasif_cols|length + 4 %}
-  {# Ancho util de la hoja A4 horizontal: 1062px.
-     Ancho de las columnas fijas (11 base + 4 de la derecha): 818px.
-     Lo restante se reparte por igual entre los clasificadores presentes,
-     de modo que la tabla SIEMPRE sume <= 1062px (sin desbordar la hoja). #}
-  {% set fijos_fe05 = 16 + 40 + 56 + 24 + 28 + 130 + 168 + 30 + 32 + 46 + 56 + 48 + 46 + 42 + 56 %}
-  {% set ancho_clasif = ((1062 - fijos_fe05) / clasif_cols|length) | int if clasif_cols else 58 %}
+  {# Anchos fijos calculados para caber en A4 horizontal (1123px).
+     Todos los colgroup idénticos = columnas perfectamente alineadas.
+     Clasificadores ajustados a ~58px para números como "15,000.00". #}
+  {% set fijos_fe05 = 18 + 36 + 62 + 28 + 26 + 138 + 192 + 26 + 32 + 52 + 62 + 56 + 52 + 48 + 60 %}
+  {% set ancho_clasif = ((1123 - fijos_fe05) / clasif_cols|length) | int if clasif_cols else 58 %}
   {% for sec in secciones %}
   <table class="tabla">
     <colgroup>
-      <col style="width:16px"><col style="width:40px"><col style="width:56px"><col style="width:24px"><col style="width:28px">
-      <col style="width:130px"><col style="width:168px"><col style="width:36px"><col style="width:32px">
-      <col style="width:46px"><col style="width:56px">
+      <col style="width:18px"><col style="width:36px"><col style="width:62px"><col style="width:28px"><col style="width:26px">
+      <col style="width:138px"><col style="width:192px"><col style="width:26px"><col style="width:32px">
+      <col style="width:52px"><col style="width:62px">
       {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
-      <col style="width:48px"><col style="width:46px"><col style="width:42px"><col style="width:56px">
+      <col style="width:56px"><col style="width:52px"><col style="width:48px"><col style="width:60px">
     </colgroup>
     <thead>
       <tr>
@@ -97,8 +102,8 @@
         <td class="ctr">{{ f.g.fecha.strftime("%d/%m/%Y") if f.prov_first and f.g.fecha else '' }}</td>
         <td class="ctr">{{ f.g.tipo_doc if f.prov_first else '' }}</td>
         <td class="ctr">{{ f.g.num_doc if f.prov_first else '' }}</td>
-        <td>{{ f.g.proveedor if f.prov_first else '' }}</td>
-        <td>{{ f.d.detalle }}</td>
+        <td class="txt">{{ f.g.proveedor if f.prov_first else '' }}</td>
+        <td class="txt">{{ f.d.detalle }}</td>
         <td class="ctr">{{ f.d.und }}</td>
         <td class="num">{{ "{:,.2f}".format(f.d.cantidad) if f.d.cantidad else '' }}</td>
         <td class="num">{{ "{:,.2f}".format(f.d.precio_unitario) }}</td>
@@ -124,11 +129,11 @@
   {% else %}
   <table class="tabla">
     <colgroup>
-      <col style="width:16px"><col style="width:40px"><col style="width:56px"><col style="width:24px"><col style="width:28px">
-      <col style="width:130px"><col style="width:168px"><col style="width:36px"><col style="width:32px">
-      <col style="width:46px"><col style="width:56px">
+      <col style="width:18px"><col style="width:36px"><col style="width:62px"><col style="width:28px"><col style="width:26px">
+      <col style="width:138px"><col style="width:192px"><col style="width:26px"><col style="width:32px">
+      <col style="width:52px"><col style="width:62px">
       {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
-      <col style="width:48px"><col style="width:46px"><col style="width:42px"><col style="width:56px">
+      <col style="width:56px"><col style="width:52px"><col style="width:48px"><col style="width:60px">
     </colgroup>
     <tbody>
       <tr class="fila-rubro"><td colspan="{{ ncols }}">SIN GASTOS DEVENGADOS PARA EL PERÍODO</td></tr>
@@ -138,11 +143,11 @@
 
   <table class="tabla">
     <colgroup>
-      <col style="width:16px"><col style="width:40px"><col style="width:56px"><col style="width:24px"><col style="width:28px">
-      <col style="width:130px"><col style="width:168px"><col style="width:36px"><col style="width:32px">
-      <col style="width:46px"><col style="width:56px">
+      <col style="width:18px"><col style="width:36px"><col style="width:62px"><col style="width:28px"><col style="width:26px">
+      <col style="width:138px"><col style="width:192px"><col style="width:26px"><col style="width:32px">
+      <col style="width:52px"><col style="width:62px">
       {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
-      <col style="width:48px"><col style="width:46px"><col style="width:42px"><col style="width:56px">
+      <col style="width:56px"><col style="width:52px"><col style="width:48px"><col style="width:60px">
     </colgroup>
     <tbody>
       <tr class="fila-total">

@@ -829,31 +829,42 @@ body.modal-open { overflow: hidden; }
   .main { margin-left: 76px; }
 }
 
+/* Login entrance animations */
+@keyframes loginFadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes loginFormFadeIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 /* ---------------- LOGIN (acceso al aplicativo) ---------------- */
 .login-body {
   display: flex; min-height: 100vh;
   background: var(--bg); position: relative; overflow: hidden;
 }
-/* Panel izquierdo: branding dramático */
+/* Panel izquierdo: branding con fondo técnico */
 .login-brand {
   flex: 1; position: relative; display: flex; flex-direction: column;
   justify-content: center; align-items: center; padding: 48px;
-  background: linear-gradient(160deg, #060E1A 0%, #0B1F3A 40%, #123661 100%);
-  overflow: hidden;
-}
-.login-brand::before {
-  content: ""; position: absolute; inset: 0;
-  background:
-    repeating-linear-gradient(0deg, transparent, transparent 59px, rgba(201,162,39,.06) 59px, rgba(201,162,39,.06) 60px),
-    repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(201,162,39,.06) 59px, rgba(201,162,39,.06) 60px);
-  pointer-events: none;
+  background-color: #06182d;
+  background-image: url("../img/Fondo.png");
+  background-size: contain;
+  background-position: center center;
+  background-repeat: no-repeat;
 }
 .login-brand::after {
-  content: ""; position: absolute; width: 600px; height: 600px;
-  right: -200px; top: -150px; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(circle, rgba(201,162,39,.18), transparent 65%);
+  content: ""; position: absolute; inset: 0; z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(3, 17, 32, 0.14) 0%,
+    rgba(3, 17, 32, 0.08) 45%,
+    rgba(3, 17, 32, 0.12) 100%
+  );
 }
-.login-brand-content { position: relative; z-index: 1; text-align: center; max-width: 420px; }
+.login-brand-content { position: relative; z-index: 10; text-align: center; max-width: 420px; animation: loginFadeIn 0.8s ease both; }
 .login-brand-icon {
   width: 100px; height: 100px; border-radius: 24px; margin: 0 auto 28px;
   background: #fff; border: 1.5px solid rgba(201,162,39,.35);
@@ -884,7 +895,7 @@ body.modal-open { overflow: hidden; }
 .login-brand-feat i { color: var(--oro); font-size: 16px; }
 /* Decoración arquitectónica: líneas diagonales */
 .login-brand-lines {
-  position: absolute; bottom: 0; left: 0; right: 0; height: 180px;
+  position: absolute; bottom: 0; left: 0; right: 0; height: 180px; z-index: 5;
   background: linear-gradient(to top, rgba(201,162,39,.04), transparent);
   pointer-events: none;
 }
@@ -905,6 +916,7 @@ body.modal-open { overflow: hidden; }
 }
 .login-wrap {
   width: 100%; max-width: 360px; position: relative; z-index: 1;
+  animation: loginFormFadeIn 0.6s ease 0.15s both;
 }
 .login-card {
   background: transparent; border: none; border-radius: 0;
@@ -945,6 +957,15 @@ body.modal-open { overflow: hidden; }
 }
 .login-card .field input:focus ~ .login-card .field-icon,
 .login-card .field:focus-within .field-icon { color: var(--azul); }
+.login-card .field { position: relative; }
+.login-card .field input { padding-right: 44px; }
+.login-toggle-clave {
+  position: absolute; right: 12px; bottom: 12px; z-index: 2;
+  background: none; border: none; cursor: pointer;
+  color: var(--texto2); font-size: 18px; padding: 4px;
+  transition: color .2s; line-height: 1;
+}
+.login-toggle-clave:hover { color: var(--azul); }
 .login-error { margin: 0; border-radius: 10px; }
 .login-btn {
   width: 100%; justify-content: center; margin-top: 8px; padding: 14px;
@@ -975,7 +996,6 @@ body.modal-open { overflow: hidden; }
 @media (max-width: 900px) {
   .login-body { flex-direction: column; }
   .login-brand { flex: 0 0 auto; padding: 40px 24px 32px; min-height: auto; }
-  .login-brand::after { width: 300px; height: 300px; right: -100px; top: -80px; }
   .login-brand-title { font-size: 24px; }
   .login-brand-title span { font-size: 26px; }
   .login-brand-desc { font-size: 13px; }

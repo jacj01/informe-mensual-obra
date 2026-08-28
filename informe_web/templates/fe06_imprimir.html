@@ -9,22 +9,31 @@
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=2) }}">
 <style>
-  .hoja { padding: 8mm 7mm; }
-  @media print { .hoja { padding: 0; } @page { size: A4 landscape; margin: 7mm 6mm 8mm; } }
-  table.tabla { margin-top: 3px; }
-  table.tabla th, table.tabla td { padding: 3.5px 3px; font-size: 6.6pt; line-height: 1.35; }
-  table.tabla thead th { font-size: 6pt; padding: 5px 3px; }
-  table.tabla thead th.num { text-align: center; }
-  .row-total td { background: #E3EAF2; color: var(--azul-osc); font-weight: 800; font-size: 7pt; text-transform: uppercase; padding: 4px 4px; }
-  .fila-total td { font-size: 7.5pt; padding: 5px 4px; }
-  .resumen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-  .resumen-box { border: 1px solid var(--borde); border-radius: 4px; overflow: hidden; }
-  .resumen-box h4 { margin: 0; padding: 4px 12px; background: var(--azul); color: #fff; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .3px; }
+  .hoja { min-height: 0; padding: 6mm 5mm; }
+  .encabezado { gap: 8px; border-bottom-width: 2px; padding-bottom: 4px; margin-bottom: 6px; }
+  .info-grid { gap: 4px 8px; margin: 4px 0 2px; }
+  .info-label { flex: 0 0 30%; }
+  .info-val { min-height: 14px; }
+  .responsables { gap: 4px; margin: 2px 0; }
+  .resp-label { flex: 0 0 34%; }
+  .resp-val { min-height: 14px; }
+  table.tabla td, table.tabla th { padding: 2px 3px; }
+  table.tabla thead th { padding: 3px 3px; }
+  .resumen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+  .resumen-box { border: .6px solid var(--borde); overflow: hidden; }
+  .resumen-box h4 { background: var(--azul); color: #fff; font-size: 8pt; font-weight: 700; padding: 3px 8px; margin: 0; text-transform: uppercase; letter-spacing: .3px; }
   .resumen-box table { width: 100%; border-collapse: collapse; }
-  .resumen-box th, .resumen-box td { border: .5px solid var(--borde); padding: 2px 10px; font-size: 7pt; text-align: left; line-height: 1.3; }
-  .resumen-box .num { text-align: right; }
-  .resumen-box .strong { font-weight: 700; }
-  .resumen-box thead th { background: var(--bg); color: var(--azul-osc); font-weight: 700; font-size: 6.5pt; text-transform: uppercase; padding: 3px 10px; }
+  .resumen-box th, .resumen-box td { border: .6px solid var(--borde); padding: 2px 6px; font-size: 7.6pt; line-height: 1.3; }
+  .resumen-box thead th { background: var(--azul-claro); color: #fff; font-weight: 700; font-size: 7pt; text-transform: uppercase; }
+  .resumen-box td.num, .resumen-box th.num { text-align: right; }
+  @media print {
+    @page { size: A4 landscape; margin: 5mm 5mm 5mm; }
+    .hoja { min-height: auto; padding: 5mm 5mm; }
+    .toolbar { display: none; }
+    body { background: #fff; margin: 0; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .encabezado, .info-grid, .responsables, .fila-total, .row-total, table.tabla, .resumen-grid { page-break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
@@ -38,16 +47,13 @@
 <div class="hoja">
   <div class="encabezado">
     <div class="logo-box">
-      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO]</span>{% endif %}
     </div>
     <div class="enc-cen">
       <div class="entidad">{{ p.entidad or '' }}</div>
       <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
       <div class="titulo">Cuadro Comparativo Presupuesto Analitico Aprobado y Ejecutado</div>
       <div class="subtitulo">PERIODO: {{ MESES[mes-1] }} - {{ anio }}</div>
-    </div>
-    <div class="enc-der">
-      <div class="periodo">{{ MESES[mes-1] }} {{ anio }}</div>
     </div>
   </div>
   <div class="info-grid">

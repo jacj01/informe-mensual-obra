@@ -21,7 +21,7 @@
   <link rel="icon" href="{{ url_for('static', filename='img/Logo.png', v=4) }}">
   <title>Iniciar Sesión | Informe Mensual de Obra</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version_actual }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version_actual }}.7">
 </head>
 <body class="login-body">
   <!-- Panel izquierdo: Branding -->
@@ -68,6 +68,7 @@
           <label for="inp-clave"><i class="bi bi-key"></i> Contraseña</label>
           <input type="password" id="inp-clave" name="clave" required autocomplete="current-password" placeholder="Ingrese su contraseña">
           <i class="bi bi-lock field-icon"></i>
+          <button type="button" class="login-toggle-clave" onclick="toggleClave()" aria-label="Mostrar contraseña"><i class="bi bi-eye"></i></button>
         </div>
         <button type="submit" class="btn btn-primary btn-lg login-btn">
           <i class="bi bi-box-arrow-in-right"></i> Ingresar
@@ -76,5 +77,13 @@
       <div class="login-foot">Informe Mensual de Obra · Administración Directa</div>
     </div>
   </div>
+  <script>
+  function toggleClave(){
+    var inp=document.getElementById('inp-clave');
+    var icon=document.querySelector('.login-toggle-clave i');
+    if(inp.type==='password'){inp.type='text';icon.className='bi bi-eye-slash';}
+    else{inp.type='password';icon.className='bi bi-eye';}
+  }
+  </script>
 </body>
 </html>

@@ -3780,6 +3780,234 @@ def registrar_rutas(app):
                                MESES=MESES, hdr=hdr, secciones=secciones,
                                total_gral=total_gral)
 
+    # ── Helper para headers de Excel (coincidentes con print.css) ──
+    def _build_xl_header(ws, ncols, title, subtitle, data, logosrc,
+                         info_pairs, responsables, extra_right=None,
+                         title_font_size=16, logo_w=60, logo_h=60,
+                         header_heights=None, info_cols=None):
+        """Encabezado Excel limpio en 2 secciones (como hoja de impresión).
+
+        header_heights: dict opcional {row_key: height} para sobreescribir alturas.
+            Keys: 'entity'=row1, 'sub'=row2, 'title'=row3, 'subtitle'=row4,
+                  'project'=row6 info, 'pair'=rows7-8, 'resp'=rows responsables.
+        """
+        import math, os as _os
+        from openpyxl.drawing.image import Image as XlImage
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        FN = "Calibri"
+        AZUL = "1E3A5F"; AZUL_OSC = "162D45"; BG = "F8FAFC"; TEXTO2 = "64748B"
+        BLANCO = "FFFFFF"; BORDE = "CBD5E1"
+
+        thin_o = Side(style="thin", color=AZUL_OSC)
+        border_all = Border(left=thin_o, right=thin_o, top=thin_o, bottom=thin_o)
+        thin_g = Side(style="thin", color=BORDE)
+        border_grid = Border(left=thin_g, right=thin_g, top=thin_g, bottom=thin_g)
+
+        fill_azul = PatternFill("solid", fgColor=AZUL)
+        fill_bg = PatternFill("solid", fgColor=BG)
+        fill_resp = PatternFill("solid", fgColor="E8EDF3")
+
+        font_entity = Font(name=FN, size=11, bold=True, color=AZUL_OSC)
+        font_sub = Font(name=FN, size=9, color=TEXTO2)
+        font_title = Font(name=FN, size=title_font_size, bold=True, color=AZUL)
+        font_label = Font(name=FN, size=8, bold=True, color=AZUL_OSC)
+        font_val = Font(name=FN, size=9)
+        font_resp_lab = Font(name=FN, size=7, bold=True, color=BLANCO)
+        font_resp_val = Font(name=FN, size=9)
+        font_extra = Font(name=FN, size=9, bold=True, color=AZUL)
+
+        align_c = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        align_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        align_nw = Alignment(horizontal="left", vertical="center", wrap_text=False)
+        align_r = Alignment(horizontal="right", vertical="center", wrap_text=True)
+
+        # ── Logo ──
+        if logosrc and _os.path.isfile(logosrc):
+            try:
+                img = XlImage(logosrc)
+                img.width = logo_w; img.height = logo_h
+                ws.add_image(img, "A1")
+            except Exception:
+                pass
+
+        pcol = get_column_letter(ncols - 1)
+        lcol = get_column_letter(ncols)
+
+        # ── SECCIÓN 1: Encabezado limpio sin bordes alrededor del logo ──
+        ws.merge_cells(f"B1:{pcol}1")
+        c = ws["B1"]; c.value = data.get("entidad", "")
+        c.font = font_entity
+        c.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+
+        ws.merge_cells(f"B2:{pcol}2")
+        c = ws["B2"]; c.value = data.get("unidad", "")
+        c.font = font_sub; c.alignment = align_c
+
+        ws.merge_cells(f"B3:{pcol}3")
+        c = ws["B3"]; c.value = title.upper()
+        c.font = font_title; c.alignment = Alignment(horizontal="center", vertical="top")
+
+        ws.merge_cells(f"B4:{pcol}4")
+        c = ws["B4"]; c.value = subtitle.upper()
+        c.font = font_sub; c.alignment = align_c
+
+        # Periodo / extra a la derecha — sin borde en encabezado
+        if extra_right:
+            for rn, (val, fnt) in extra_right.items():
+                c = ws.cell(row=rn, column=ncols)
+                c.value = val; c.font = fnt or font_extra
+                c.alignment = align_r
+        elif data.get("periodo"):
+            ws.merge_cells(f"{lcol}2:{lcol}3")
+            c = ws[f"{lcol}2"]; c.value = data["periodo"]
+            c.font = Font(name=FN, size=9, bold=True, color=AZUL)
+            c.alignment = align_r
+
+        # Alturas de encabezado (configurables)
+        hh = header_heights or {}
+        ws.row_dimensions[1].height = hh.get('entity', 28)
+        ws.row_dimensions[2].height = hh.get('sub', 18)
+        ws.row_dimensions[3].height = hh.get('title', 32)
+        ws.row_dimensions[4].height = hh.get('subtitle', 18)
+
+        # ── SECCIÓN 2: Info-grid con cards bordeadas ──
+        info_start = 6
+        mid = ncols // 2
+        mid_col = get_column_letter(mid)
+
+        for i, row_items in enumerate(info_pairs):
+            r = info_start + i
+            n = len(row_items)
+            if info_cols == "left":
+                # Labels A:C, values D+ (no wrap) — FE-05
+                if n == 1:
+                    lbl, val = row_items[0]
+                    ws.merge_cells(f"A{r}:C{r}")
+                    c_l = ws.cell(row=r, column=1, value=lbl)
+                    c_l.font = font_label; c_l.alignment = align_nw
+                    c_l.fill = fill_bg; c_l.border = border_grid
+                    for cc in [2, 3]:
+                        ws.cell(row=r, column=cc).fill = fill_bg
+                        ws.cell(row=r, column=cc).border = border_grid
+                    ws.merge_cells(f"D{r}:{lcol}{r}")
+                    c_v = ws.cell(row=r, column=4, value=val)
+                    c_v.font = font_val; c_v.alignment = align_nw; c_v.border = border_grid
+                    for cc in range(5, ncols + 1):
+                        ws.cell(row=r, column=cc).border = border_grid
+                else:
+                    # Dos mitades: A:C label, D:mid val | mid+1:mid+3 label, mid+4:lastcol val
+                    mid = (ncols + 1) // 2
+                    for idx, (lbl, val) in enumerate(row_items):
+                        if idx == 0:
+                            lbl_s, lbl_e = 1, 3
+                            val_s, val_e = 4, mid
+                        else:
+                            lbl_s, lbl_e = mid + 1, mid + 3
+                            val_s, val_e = mid + 4, ncols
+                        cl1, cl2 = get_column_letter(lbl_s), get_column_letter(lbl_e)
+                        cv1, cv2 = get_column_letter(val_s), get_column_letter(val_e)
+                        ws.merge_cells(f"{cl1}{r}:{cl2}{r}")
+                        c_l = ws.cell(row=r, column=lbl_s, value=lbl)
+                        c_l.font = font_label; c_l.alignment = align_nw
+                        c_l.fill = fill_bg; c_l.border = border_grid
+                        for cc in range(lbl_s + 1, lbl_e + 1):
+                            ws.cell(row=r, column=cc).fill = fill_bg
+                            ws.cell(row=r, column=cc).border = border_grid
+                        ws.merge_cells(f"{cv1}{r}:{cv2}{r}")
+                        c_v = ws.cell(row=r, column=val_s, value=val)
+                        c_v.font = font_val; c_v.alignment = align_nw; c_v.border = border_grid
+                        for cc in range(val_s + 1, val_e + 1):
+                            ws.cell(row=r, column=cc).border = border_grid
+                ws.row_dimensions[r].height = hh.get('pair', 17)
+            elif n == 1:
+                # Ancho completo: label A:B, valor C:lastcol
+                lbl, val = row_items[0]
+                ws.merge_cells(f"A{r}:B{r}")
+                c_l = ws.cell(row=r, column=1, value=lbl)
+                c_l.font = font_label; c_l.alignment = align_l
+                c_l.fill = fill_bg; c_l.border = border_grid
+                ws.cell(row=r, column=2).fill = fill_bg
+                ws.cell(row=r, column=2).border = border_grid
+                ws.merge_cells(f"C{r}:{lcol}{r}")
+                c_v = ws.cell(row=r, column=3, value=val)
+                c_v.font = font_val; c_v.alignment = align_l; c_v.border = border_grid
+                for cc in range(4, ncols + 1):
+                    ws.cell(row=r, column=cc).border = border_grid
+                v_len = len(str(val or ""))
+                nlines = max(1, math.ceil(v_len / 50))
+                ws.row_dimensions[r].height = hh.get('project', max(17, nlines * 14))
+            else:
+                # Dos mitades: par de cards lado a lado
+                # Izq: label A:B, valor C:mid   |   Der: label (mid+1):(mid+2), valor (mid+3):lastcol
+                mid = (ncols + 1) // 2  # split justo (ej: 6 para 11 cols, 10 para 19)
+                for idx, (lbl, val) in enumerate(row_items):
+                    if idx == 0:
+                        col_lbl_s, col_lbl_e = 1, 2
+                        col_val_s, col_val_e = 3, mid
+                    else:
+                        col_lbl_s, col_lbl_e = mid + 1, mid + 2
+                        col_val_s, col_val_e = mid + 3, ncols
+                    cl1 = get_column_letter(col_lbl_s)
+                    cl2 = get_column_letter(col_lbl_e)
+                    cv1 = get_column_letter(col_val_s)
+                    cv2 = get_column_letter(col_val_e)
+                    ws.merge_cells(f"{cl1}{r}:{cl2}{r}")
+                    c_l = ws.cell(row=r, column=col_lbl_s, value=lbl)
+                    c_l.font = font_label; c_l.alignment = align_l
+                    c_l.fill = fill_bg; c_l.border = border_grid
+                    ws.cell(row=r, column=col_lbl_e).fill = fill_bg
+                    ws.cell(row=r, column=col_lbl_e).border = border_grid
+                    ws.merge_cells(f"{cv1}{r}:{cv2}{r}")
+                    c_v = ws.cell(row=r, column=col_val_s, value=val)
+                    c_v.font = font_val; c_v.alignment = align_l; c_v.border = border_grid
+                    for cc in range(col_val_s + 1, col_val_e + 1):
+                        ws.cell(row=r, column=cc).border = border_grid
+                ws.row_dimensions[r].height = hh.get('pair', 17)
+
+        # ── Responsables ──
+        resp_start = info_start + len(info_pairs)
+        resp_col_end = min(5, ncols)
+        resp_merge_end = get_column_letter(resp_col_end)
+        for i, (lab, val) in enumerate(responsables):
+            r = resp_start + i
+            if info_cols == "left":
+                # Labels A:C, values D:lastcol (sin salto) — FE-05
+                ws.merge_cells(f"A{r}:C{r}")
+                c_l = ws.cell(row=r, column=1, value=lab)
+                c_l.font = font_resp_lab; c_l.alignment = align_nw
+                c_l.fill = fill_azul; c_l.border = border_all
+                for cc in [2, 3]:
+                    ws.cell(row=r, column=cc).fill = fill_azul
+                    ws.cell(row=r, column=cc).border = border_all
+                ws.merge_cells(f"D{r}:{lcol}{r}")
+                c_v = ws.cell(row=r, column=4, value=val)
+                c_v.font = font_resp_val; c_v.alignment = align_nw
+                c_v.fill = fill_resp; c_v.border = border_all
+                for cc in range(5, ncols + 1):
+                    ws.cell(row=r, column=cc).fill = fill_resp
+                    ws.cell(row=r, column=cc).border = border_all
+            else:
+                ws.merge_cells(f"A{r}:B{r}")
+                c_l = ws.cell(row=r, column=1, value=lab)
+                c_l.font = font_resp_lab; c_l.alignment = align_l
+                c_l.fill = fill_azul; c_l.border = border_all
+                ws.cell(row=r, column=2).fill = fill_azul
+                ws.cell(row=r, column=2).border = border_all
+                ws.merge_cells(f"C{r}:{resp_merge_end}{r}")
+                c_v = ws.cell(row=r, column=3, value=val)
+                c_v.font = font_resp_val; c_v.alignment = align_l
+                c_v.fill = fill_resp; c_v.border = border_all
+            for cc in range(4, resp_col_end + 1):
+                ws.cell(row=r, column=cc).fill = fill_resp
+                ws.cell(row=r, column=cc).border = border_all
+            for cc in range(resp_col_end + 1, ncols + 1):
+                ws.cell(row=r, column=cc).border = border_grid
+            ws.row_dimensions[r].height = hh.get('resp', 19)
+
+        return resp_start + len(responsables) + 1
+
     @app.route("/formatos/manifiesto/excel")
     def manifiesto_excel():
         """Genera archivo .xlsx del Manifiesto de Gasto fiel a la hoja de impresión."""
@@ -3858,15 +4086,18 @@ def registrar_rutas(app):
 
         total_gral = round(total_gastos_mes(mes, anio, devengado=True), 2)
 
-        # ── Colores fiels al print.css ──
-        AZUL = "1F4E79"
-        AZUL_OSC = "14355A"
-        BG = "F1F5F9"
+        # ── Colores fieles al print.css ──
+        AZUL = "1E3A5F"
+        AZUL_OSC = "162D45"
+        AZUL_CLARO = "2C527A"
+        BG = "F8FAFC"
+        TEXTO2 = "64748B"
         BLANCO = "FFFFFF"
+        BORDE = "CBD5E1"
 
         thin = Side(style="thin", color=AZUL_OSC)
         border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
-        thin_gray = Side(style="thin", color="C3CCD8")
+        thin_gray = Side(style="thin", color=BORDE)
         border_grid = Border(left=thin_gray, right=thin_gray, top=thin_gray, bottom=thin_gray)
 
         fill_azul = PatternFill("solid", fgColor=AZUL)
@@ -3875,26 +4106,29 @@ def registrar_rutas(app):
         fill_rubro = PatternFill("solid", fgColor="E3EAF2")
         fill_white = PatternFill("solid", fgColor=BLANCO)
 
-        font_title = Font(name="Arial", size=16, bold=True, color=AZUL)
-        font_entity = Font(name="Arial", size=11, bold=True, color=AZUL_OSC)
-        font_sub = Font(name="Arial", size=9, color="64748B")
-        font_periodo = Font(name="Arial", size=10, bold=True, color=AZUL)
-        font_num_doc = Font(name="Arial", size=10, bold=True, color=AZUL)
-        font_label = Font(name="Arial", size=8, bold=True, color=AZUL_OSC)
-        font_val = Font(name="Arial", size=10)
-        font_th = Font(name="Arial", size=8, bold=True, color=BLANCO)
-        font_td = Font(name="Arial", size=9)
-        font_rubro = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
-        font_subtotal = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
-        font_total = Font(name="Arial", size=10, bold=True, color=BLANCO)
-        font_firma_nom = Font(name="Arial", size=10, bold=True)
-        font_firma_cargo = Font(name="Arial", size=8, bold=True, color=AZUL_OSC)
-        font_firma_reg = Font(name="Arial", size=8, color="64748B")
+        FN = "Calibri"
+        font_title = Font(name=FN, size=16, bold=True, color=AZUL)
+        font_entity = Font(name=FN, size=11, bold=True, color=AZUL_OSC)
+        font_sub = Font(name=FN, size=9, color=TEXTO2)
+        font_periodo = Font(name=FN, size=10, bold=True, color=AZUL)
+        font_num_doc = Font(name=FN, size=10, bold=True, color=AZUL)
+        font_label = Font(name=FN, size=8, bold=True, color=AZUL_OSC)
+        font_val = Font(name=FN, size=10)
+        font_th = Font(name=FN, size=8, bold=True, color=BLANCO)
+        font_td = Font(name=FN, size=9)
+        font_rubro = Font(name=FN, size=9, bold=True, color=AZUL_OSC)
+        font_subtotal = Font(name=FN, size=9, bold=True, color=AZUL_OSC)
+        font_total = Font(name=FN, size=10, bold=True, color=BLANCO)
+        font_firma_nom = Font(name=FN, size=10, bold=True)
+        font_firma_cargo = Font(name=FN, size=8, bold=True, color=AZUL_OSC)
+        font_firma_reg = Font(name=FN, size=8, color=TEXTO2)
 
         align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
         align_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
         align_right = Alignment(horizontal="right", vertical="center", wrap_text=True)
         align_right_num = Alignment(horizontal="right", vertical="center")
+        align_center_nw = Alignment(horizontal="center", vertical="center")
+        align_left_nw = Alignment(horizontal="left", vertical="center")
 
         wb = Workbook()
         ws = wb.active
@@ -3904,140 +4138,54 @@ def registrar_rutas(app):
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
-        ws.page_margins.left = 0.4
-        ws.page_margins.right = 0.4
+        ws.page_margins.left = 1.0
+        ws.page_margins.right = 1.0
         ws.page_margins.top = 0.4
         ws.page_margins.bottom = 0.5
-        ws.print_options.horizontalCentered = True
+        ws.print_options.horizontalCentered = False
         ws.sheet_view.view = "pageBreakPreview"
         ws.sheet_view.showGridLines = False
         ws.print_title_rows = "17:17"
 
-        col_widths = {"A": 6, "B": 14, "C": 12, "D": 8, "E": 10,
-                      "F": 28, "G": 38, "H": 8, "I": 8, "J": 14, "K": 16}
+        # Columnas ampliadas para ocupar todo el ancho de la hoja A4
+        # (1" margen izq/der => ancho util ~9.7in) sin verse comprimidas
+        col_widths = {"A": 4, "B": 9, "C": 8, "D": 7, "E": 6,
+                      "F": 22, "G": 34, "H": 5, "I": 7, "J": 11, "K": 14}
         for letter, w in col_widths.items():
             ws.column_dimensions[letter].width = w
 
-        # ── ENCABEZADO ──
-        thin_line = Side(style="medium", color=AZUL)
-        
-        # Logo
+        # ── ENCABEZADO (fiel al print.css) ──
         logo_file = os.path.join(app.root_path, "static", hdr["logo_path"]) if hdr["logo_path"] else None
-        if logo_file and os.path.isfile(logo_file):
-            try:
-                img = XlImage(logo_file)
-                img.width = 70
-                img.height = 70
-                ws.add_image(img, "A1")
-            except Exception:
-                pass
-
-        # Borde inferior en encabezado (línea azul de 3px como en print.css)
-        header_border_bottom = Border(bottom=Side(style="medium", color=AZUL))
-        
-        ws.merge_cells("B1:J1")
-        c = ws["B1"]
-        c.value = hdr["entidad"]
-        c.font = font_entity
-        c.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
-        c.border = header_border_bottom
-
-        ws.merge_cells("B2:J2")
-        c2 = ws["B2"]
-        c2.value = hdr["unidad"]
-        c2.font = font_sub
-        c2.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        c2.border = header_border_bottom
-
-        ws.merge_cells("B3:J3")
-        c3 = ws["B3"]
-        c3.value = "MANIFIESTO DE GASTO"
-        c3.font = font_title
-        c3.alignment = Alignment(horizontal="center", vertical="top")
-        c3.border = header_border_bottom
-
-        ws.merge_cells("B4:J4")
-        c4 = ws["B4"]
-        c4.value = hdr["modalidad"]
-        c4.font = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
-        c4.alignment = Alignment(horizontal="center", vertical="center")
-        c4.border = header_border_bottom
-
-        ws["K1"].value = f"N° {hdr['n_manifiesto']}"
-        ws["K1"].font = font_num_doc
-        ws["K1"].alignment = Alignment(horizontal="right", vertical="center")
-        ws["K1"].border = border_all
-
-        ws["K2"].value = "PERÍODO:"
-        ws["K2"].font = Font(name="Arial", size=9, bold=True, color=AZUL)
-        ws["K2"].alignment = Alignment(horizontal="right", vertical="center")
-        ws["K2"].border = border_all
-
-        ws["K3"].value = hdr["periodo"]
-        ws["K3"].font = font_periodo
-        ws["K3"].alignment = Alignment(horizontal="right", vertical="center")
-        ws["K3"].border = border_all
-
-        # Alturas de fila para encabezado (ajustadas para texto envuelto)
-        ws.row_dimensions[1].height = 24
-        ws.row_dimensions[2].height = 20
-        ws.row_dimensions[3].height = 32
-        ws.row_dimensions[4].height = 20
-
-        # ── DATOS GENERALES (fila 6-15) ──
-        datos = [
-            ("PROYECTO", hdr["proyecto"], True),
-            ("CÓDIGO ÚNICO", hdr["cui"], False),
-            ("CORRELATIVO META", hdr["meta"], False),
-            ("FUENTE FINANCIAMIENTO", hdr["fuente"], False),
-            ("MODALIDAD", hdr["modalidad"], False),
-            ("UBICACIÓN", hdr["ubicacion"], False),
-            ("RESIDENTE DE OBRA", hdr["residente"], False),
-            ("SUPERVISOR DE OBRA", hdr["supervisor"], False),
-            ("ADMIN. DE OBRA", hdr["asistente"], False),
-            ("PERÍODO", hdr["periodo"], True),
+        nc_m = 11  # A-K
+        info_pairs = [
+            [("Proyecto", hdr["proyecto"])],
+            [("Codigo Unico", hdr["cui"]), ("Correlativo Meta", hdr["meta"])],
+            [("Fuente Financ.", hdr["fuente"]), ("Modalidad", hdr["modalidad"])],
+            [("Ubicacion", hdr["ubicacion"]), ("Residente de Obra", hdr["residente"])],
+            [("Supervisor de Obra", hdr["supervisor"]), ("Admin. de Obra", hdr["asistente"])],
         ]
+        font_num_doc = Font(name=FN, size=10, bold=True, color=AZUL)
+        tabla_start = _build_xl_header(
+            ws, nc_m,
+            "Manifiesto de Gasto",
+            hdr["modalidad"],
+            {"entidad": hdr["entidad"], "unidad": hdr["unidad"],
+             "periodo": hdr["periodo"]},
+            logo_file, info_pairs, [],
+            extra_right={
+                1: (f"N° {hdr['n_manifiesto']}", font_num_doc),
+                2: ("PERÍODO:", Font(name=FN, size=9, bold=True, color=AZUL)),
+                3: (hdr["periodo"], font_periodo),
+            },
+            header_heights={'project': 40, 'pair': 15})
 
-        for i, (label, valor, full_width) in enumerate(datos):
-            r = 6 + i
-            # Alturas de fila: full_width (C:K = 144 chars) casi nunca envuelve
-            if full_width:
-                ws.row_dimensions[r].height = 24 if len(valor) > 60 else 20
-            else:
-                # C:E merge = 32 chars, texto puede envolver
-                lineas = max(1, 1 + len(valor) // 28)
-                ws.row_dimensions[r].height = max(20, 15 * lineas)
-            if full_width:
-                ws.merge_cells(f"A{r}:B{r}")
-                c_lbl = ws.cell(row=r, column=1, value=label)
-                c_lbl.font = font_label
-                c_lbl.fill = fill_bg
-                c_lbl.alignment = align_left
-                c_lbl.border = border_grid
-                ws.cell(row=r, column=2).border = border_grid
-                ws.cell(row=r, column=2).fill = fill_bg
-                ws.merge_cells(f"C{r}:K{r}")
-                c_val = ws.cell(row=r, column=3, value=valor)
-                c_val.font = font_val
-                c_val.alignment = align_left
-                c_val.border = border_grid
-            else:
-                c_lbl = ws.cell(row=r, column=1, value=label)
-                c_lbl.font = font_label
-                c_lbl.fill = fill_bg
-                c_lbl.alignment = align_left
-                c_lbl.border = border_grid
-                ws.merge_cells(f"A{r}:B{r}")
-                ws.merge_cells(f"C{r}:E{r}")
-                c_val = ws.cell(row=r, column=3, value=valor)
-                c_val.font = font_val
-                c_val.alignment = align_left
-                c_val.border = border_grid
-                for col in range(4, 6):
-                    ws.cell(row=r, column=col).border = border_grid
+        # ── Filas 1-12 = encabezado fijo (se repite en cada página) ──
+        ws.row_dimensions[5].height = 0
+        ws.row_dimensions[5].hidden = True
+        ws.row_dimensions[11].height = 7
+        ws.print_title_rows = "1:12"
 
         # ── TABLA FINANCIERA ──
-        tabla_start = 17
 
         headers = ["N°", "Fecha", "SIAF", "Tipo Doc", "N°",
                     "Nombre / Proveedor", "Detalle del Gasto", "Und.",
@@ -4075,8 +4223,8 @@ def registrar_rutas(app):
                 vals = [prov_num, fecha_str, siaf, tipo_doc, num_doc,
                         proveedor, f["detalle"], f["und"],
                         f["cantidad"], f["pu"], f"=ROUND(I{r}*J{r},2)"]
-                aligns = [align_center, align_left, align_left, align_center,
-                          align_center, align_left, align_left, align_center,
+                aligns = [align_center_nw, align_left_nw, align_left, align_center_nw,
+                          align_center_nw, align_left, align_left, align_center_nw,
                           align_right_num, align_right_num, align_right_num]
 
                 for j, (v, al) in enumerate(zip(vals, aligns), 1):
@@ -4088,11 +4236,12 @@ def registrar_rutas(app):
                         c.border = border_grid
                     if j in (9, 10, 11) and v:
                         c.number_format = '#,##0.00'
-                # Height: ceil(len / 38) lines × 14pt/line, min 18
+                # Height: líneas según ancho de col (G=34, F=22) × 14pt
                 v_texto = str(f["detalle"] or "")
                 v_prov = str(proveedor or "")
-                h_texto = math.ceil(len(v_texto) / 38) * 14 if v_texto else 0
-                h_prov = math.ceil(len(v_prov) / 30) * 14 if v_prov else 0
+                # ~1.1 chars por unidad de ancho de columna
+                h_texto = math.ceil(len(v_texto) / 37) * 14 if v_texto else 0
+                h_prov = math.ceil(len(v_prov) / 24) * 14 if v_prov else 0
                 ws.row_dimensions[r].height = max(h_texto, h_prov, 18)
                 r += 1
 
@@ -4412,14 +4561,17 @@ def registrar_rutas(app):
         secciones, total, clasif_cols = f05_datos(mes, anio)
 
         # ── Colores fieles al print.css ──
-        AZUL = "1F4E79"
-        AZUL_OSC = "14355A"
-        BG = "F1F5F9"
+        AZUL = "1E3A5F"
+        AZUL_OSC = "162D45"
+        AZUL_CLARO = "2C527A"
+        BG = "F8FAFC"
+        TEXTO2 = "64748B"
         BLANCO = "FFFFFF"
+        BORDE = "CBD5E1"
 
         thin = Side(style="thin", color=AZUL_OSC)
         border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
-        thin_gray = Side(style="thin", color="C3CCD8")
+        thin_gray = Side(style="thin", color=BORDE)
         border_grid = Border(left=thin_gray, right=thin_gray, top=thin_gray,
                              bottom=thin_gray)
 
@@ -4428,24 +4580,30 @@ def registrar_rutas(app):
         fill_bg = PatternFill("solid", fgColor=BG)
         fill_rubro = PatternFill("solid", fgColor="E3EAF2")
 
-        font_entity = Font(name="Arial", size=11, bold=True, color=AZUL_OSC)
-        font_sub = Font(name="Arial", size=9, color="64748B")
-        font_title = Font(name="Arial", size=16, bold=True, color=AZUL)
-        font_periodo = Font(name="Arial", size=10, bold=True, color=AZUL)
-        font_label = Font(name="Arial", size=8, bold=True, color=AZUL_OSC)
-        font_val = Font(name="Arial", size=10)
-        font_th = Font(name="Arial", size=8, bold=True, color=BLANCO)
-        font_td = Font(name="Arial", size=9)
-        font_td_b = Font(name="Arial", size=9, bold=True)
-        font_rubro = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
-        font_subtotal = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
-        font_total = Font(name="Arial", size=10, bold=True, color=BLANCO)
+        FN = "Calibri"
+        font_entity = Font(name=FN, size=11, bold=True, color=AZUL_OSC)
+        font_sub = Font(name=FN, size=9, color=TEXTO2)
+        font_title = Font(name=FN, size=16, bold=True, color=AZUL)
+        font_periodo = Font(name=FN, size=10, bold=True, color=AZUL)
+        font_label = Font(name=FN, size=8, bold=True, color=AZUL_OSC)
+        font_val = Font(name=FN, size=10)
+        font_th = Font(name=FN, size=8, bold=True, color=BLANCO)
+        font_td = Font(name=FN, size=9)
+        font_td_b = Font(name=FN, size=9, bold=True)
+        font_rubro = Font(name=FN, size=9, bold=True, color=AZUL_OSC)
+        font_subtotal = Font(name=FN, size=9, bold=True, color=AZUL_OSC)
+        font_total = Font(name=FN, size=10, bold=True, color=BLANCO)
 
         align_center = Alignment(horizontal="center", vertical="center",
                                  wrap_text=True)
         align_left = Alignment(horizontal="left", vertical="center",
                                wrap_text=True)
-        align_right_num = Alignment(horizontal="right", vertical="center")
+        align_nw = Alignment(horizontal="left", vertical="center",
+                             wrap_text=False)
+        align_center_nw = Alignment(horizontal="center", vertical="center",
+                                    wrap_text=False)
+        align_right_num = Alignment(horizontal="right", vertical="center",
+                                    wrap_text=False)
 
         wb = Workbook()
         ws = wb.active
@@ -4462,153 +4620,81 @@ def registrar_rutas(app):
         ws.print_options.horizontalCentered = True
         ws.sheet_view.view = "pageBreakPreview"
         ws.sheet_view.showGridLines = False
-        ws.print_title_rows = "14:14"
-        ws.freeze_panes = "A15"
 
         ncols = 15 + len(clasif_cols)
 
-        # Anchos proporcionales — calibrados para que el total quede
-        # dentro de ~1060px (A4 landscape) y cada columna quepa su contenido.
-        ancho_clasif_px = int((1060 - 820) / len(clasif_cols)) if clasif_cols else 60
-        px = [30, 45, 65, 32, 32, 140, 195, 36, 32, 46, 65] \
-            + [ancho_clasif_px] * len(clasif_cols) + [48, 46, 42, 65]
+        # Anchos en px (total = 1123px para A4 horizontal)
+        # Reducir texto para ampliar clasificadores y numeric cols sin ###
+        px = [22, 38, 68, 30, 30, 120, 165, 28, 32, 56, 66] \
+            + [70] * len(clasif_cols) + [66, 62, 60, 72]
         for j, w in enumerate(px, 1):
-            ws.column_dimensions[get_column_letter(j)].width = max(3.0, round((w - 5) / 7, 1))
+            ws.column_dimensions[get_column_letter(j)].width = round(w / 7, 1)
 
         # Anchos reales de columna (después de asignar widths)
         col_chars = {j: max(3, ws.column_dimensions[get_column_letter(j)].width or 5)
                      for j in range(1, ncols + 1)}
 
-        # ── ENCABEZADO ──
-        header_border_bottom = Border(bottom=Side(style="medium", color=AZUL))
-        prev_col_letter = get_column_letter(ncols - 1)
-        last_col_letter = get_column_letter(ncols)
-
+        # ── ENCABEZADO (fiel al print.css) ──
         logo_file = os.path.join(app.root_path, "static", p.logo_path) if p.logo_path else None
-        if logo_file and os.path.isfile(logo_file):
-            try:
-                img = XlImage(logo_file)
-                img.width = 70
-                img.height = 70
-                ws.add_image(img, "A1")
-            except Exception:
-                pass
-
-        ws.merge_cells(f"B1:{prev_col_letter}1")
-        c = ws["B1"]
-        c.value = p.entidad or ""
-        c.font = font_entity
-        c.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
-        c.border = header_border_bottom
-
-        ws.merge_cells(f"B2:{prev_col_letter}2")
-        c = ws["B2"]
-        c.value = p.unidad_ejecutora or ""
-        c.font = font_sub
-        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        c.border = header_border_bottom
-
-        ws.merge_cells(f"B3:{prev_col_letter}3")
-        c = ws["B3"]
-        c.value = "EJECUCION PRESUPUESTAL MENSUAL"
-        c.font = font_title
-        c.alignment = Alignment(horizontal="center", vertical="top")
-        c.border = header_border_bottom
-
-        ws.merge_cells(f"B4:{prev_col_letter}4")
-        c = ws["B4"]
-        c.value = "TOTAL COSTO DE CONSTRUCCION POR ADM. DIRECTA"
-        c.font = font_sub
-        c.alignment = Alignment(horizontal="center", vertical="center")
-        c.border = header_border_bottom
-
-        ws.merge_cells(f"{last_col_letter}2:{last_col_letter}3")
-        c = ws[f"{last_col_letter}2"]
-        c.value = f"PERIODO: {MESES[mes-1]} - {anio}"
-        c.font = font_periodo
-        c.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True)
-        c.border = border_all
-        ws[f"{last_col_letter}3"].border = border_all
-
-        ws.row_dimensions[1].height = 24
-        ws.row_dimensions[2].height = 20
-        ws.row_dimensions[3].height = 32
-        ws.row_dimensions[4].height = 20
-
-        # ── DATOS GENERALES (filas 6-10) ──
-        datos = [
-            ("PROYECTO", p.nombre or "", True),
-            ("CODIGO UNICO", p.cui or "", False),
-            ("CORRELATIVO META", p.meta or "", False),
-            ("FUENTE FINANC.", p.fuente or "", False),
-            ("MODALIDAD", "ADMINISTRACION DIRECTA", False),
+        info_pairs = [
+            [("Proyecto", p.nombre or "")],
+            [("Codigo Unico", p.cui or ""), ("Correlativo Meta", p.meta or "")],
+            [("Fuente Financ.", p.fuente or ""), ("Modalidad", "ADMINISTRACION DIRECTA")],
         ]
-        for i, (label, valor, full_width) in enumerate(datos):
-            r = 6 + i
-            if full_width:
-                # Merge C:K → sum characters of cols C(3) through K(11)
-                merge_chars = sum(col_chars.get(j, 5) for j in range(3, 12))
-            else:
-                # Merge C:E → sum characters of cols C(3) through E(5)
-                merge_chars = sum(col_chars.get(j, 5) for j in range(3, 6))
-            lineas = max(1, math.ceil(len(str(valor)) / max(merge_chars, 1))) if valor else 1
-            ws.row_dimensions[r].height = max(20, lineas * 16)
-            if full_width:
-                ws.merge_cells(f"A{r}:B{r}")
-                c_lbl = ws.cell(row=r, column=1, value=label)
-                c_lbl.font = font_label
-                c_lbl.alignment = align_left
-                ws.merge_cells(f"C{r}:K{r}")
-                c_val = ws.cell(row=r, column=3, value=valor)
-                c_val.font = font_val
-                c_val.alignment = align_left
-                for col in range(1, 12):
-                    cc = ws.cell(row=r, column=col)
-                    cc.border = border_grid
-                    if col <= 2:
-                        cc.fill = fill_bg
-            else:
-                ws.merge_cells(f"A{r}:B{r}")
-                ws.merge_cells(f"C{r}:E{r}")
-                c_lbl = ws.cell(row=r, column=1, value=label)
-                c_lbl.font = font_label
-                c_lbl.alignment = align_left
-                c_val = ws.cell(row=r, column=3, value=valor)
-                c_val.font = font_val
-                c_val.alignment = align_left
-                for col in range(1, 6):
-                    cc = ws.cell(row=r, column=col)
-                    cc.border = border_grid
-                    if col <= 2:
-                        cc.fill = fill_bg
-
-        # ── RESPONSABLES (filas 11-13) ──
-        resp = [
-            ("SUPERVISOR DE OBRA", p.supervisor or ""),
-            ("RESIDENTE DE OBRA", p.residente or ""),
-            ("ADMIN. DE OBRA", p.asistente or ""),
+        responsables = [
+            ("Supervisor de Obra", p.supervisor or ""),
+            ("Residente de Obra", p.residente or ""),
+            ("Admin. de Obra", p.asistente or ""),
         ]
-        for i, (lab, val) in enumerate(resp):
-            r = 11 + i
-            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
-            c_lab = ws.cell(row=r, column=1, value=lab)
-            c_lab.font = font_th
-            c_lab.alignment = align_left
-            ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=ncols)
-            c_v = ws.cell(row=r, column=4, value=val)
-            c_v.font = font_val
-            c_v.alignment = align_left
-            for col in range(1, ncols + 1):
-                cc = ws.cell(row=r, column=col)
-                if col <= 3:
-                    cc.fill = fill_azul
-                    cc.border = border_all
-                else:
-                    cc.border = border_grid
-            ws.row_dimensions[r].height = 20
+        tabla_start = _build_xl_header(
+            ws, ncols,
+            "Ejecucion Presupuestal Mensual",
+            "Total Costo de Construccion por Adm. Directa",
+            {"entidad": p.entidad or "", "unidad": p.unidad_ejecutora or "",
+             "periodo": f"PERIODO: {MESES[mes-1]} - {anio}"},
+            logo_file, info_pairs, responsables,
+            header_heights={'resp': 22}, info_cols="left")
 
-        # ── TABLA FINANCIERA ──
-        tabla_start = 14
+        # ── Ocultar fila 5 spacer + reducir fila 12 spacer ──
+        ws.row_dimensions[5].hidden = True
+        ws.row_dimensions[5].height = 0
+        ws.row_dimensions[12].height = 7
+
+        # ── Auto-ajustar alturas filas 1-11 (encabezado) ──
+        def _xl_row_height(texto, col_width_chars, font_size, wrap=True):
+            if not wrap or not texto:
+                return font_size * 1.6
+            chars_por_linea = max(1, int(col_width_chars * 0.85))
+            nlineas = max(1, math.ceil(len(str(texto)) / chars_por_linea))
+            return max(font_size * 1.6, nlineas * (font_size * 1.6))
+
+        # Fila 1: entidad
+        w1 = sum(col_chars.get(j, 9) for j in range(2, ncols))
+        ws.row_dimensions[1].height = max(22, _xl_row_height(ws.cell(1, 2).value, w1, 11))
+        # Fila 2: unidad
+        ws.row_dimensions[2].height = max(16, _xl_row_height(ws.cell(2, 2).value, w1, 9))
+        # Fila 3: titulo
+        ws.row_dimensions[3].height = max(24, _xl_row_height(ws.cell(3, 2).value, w1, 13))
+        # Fila 4: subtitulo
+        ws.row_dimensions[4].height = max(16, _xl_row_height(ws.cell(4, 2).value, w1, 9))
+        # Fila 6: proyecto
+        # Fila 6: proyecto (value in D+)
+        w6 = sum(col_chars.get(j, 9) for j in range(4, ncols + 1))
+        ws.row_dimensions[6].height = max(17, _xl_row_height(p.nombre, w6, 10))
+        # Filas 7-8: info pairs (each value in D:half)
+        half = ncols // 2
+        w_half = sum(col_chars.get(j, 9) for j in range(4, half + 1))
+        for info_idx, row_items in enumerate(info_pairs[1:], start=7):
+            txt = max((item[1] for item in row_items),
+                      key=lambda x: len(str(x or "")), default="")
+            ws.row_dimensions[info_idx].height = max(15, _xl_row_height(txt, w_half, 10))
+        # Filas 9-11: responsables (value in D:lastcol)
+        resp_w = sum(col_chars.get(j, 9) for j in range(4, ncols + 1))
+        for i, (lab, val) in enumerate(responsables):
+            ws.row_dimensions[9 + i].height = max(15, _xl_row_height(val, resp_w, 9))
+
+        ws.print_title_rows = f"{tabla_start}:{tabla_start}"
+        ws.freeze_panes = f"A{tabla_start + 1}"
         headers = ["N°", "SIAF", "Fecha", "Tipo", "N°", "Proveedor", "Detalle",
                    "Und", "Cant", "P.U", "Importe"] + list(clasif_cols) \
                  + ["Directos", "Grales", "Superv.", "Total"]
@@ -4658,11 +4744,11 @@ def registrar_rutas(app):
                     f["supervision"] if f["supervision"] else "-",
                     d.importe,
                 ]
-                aligns = [align_center, align_left, align_center, align_center,
-                          align_center, align_left, align_left, align_center]
+                aligns = [align_center_nw, align_nw, align_center_nw,
+                          align_center_nw, align_center_nw, align_left,
+                          align_left, align_center_nw]
                 for j, v in enumerate(vals, 1):
                     c = ws.cell(row=r, column=j, value=v)
-                    # Solo aplicar borde si la celda tiene contenido
                     if v is not None and v != "":
                         c.border = border_grid
                     if j <= 8:
@@ -4675,16 +4761,27 @@ def registrar_rutas(app):
                         c.font = font_td
                         c.alignment = align_right_num
                     if isinstance(v, (int, float)):
-                        c.number_format = '#,##0.00'
+                        # Cols N°(1), SIAF(2), N°doc(5), CANT(8) = enteros
+                        if j in (1, 2, 5, 8):
+                            c.number_format = '0'
+                        else:
+                            c.number_format = '#,##0.00'
                 tc = ws.cell(row=r, column=ncols, value=f"=K{r}")
                 tc.number_format = '#,##0.00'
-                # Altura basada en ancho real de columna (Arial 9: ~1.1 char/unit)
-                w_detalle = col_chars.get(7, 27) * 1.1   # col G = Detalle
-                w_proveedor = col_chars.get(6, 19) * 1.1  # col F = Proveedor
-                h_detalle = math.ceil(len(str(d.detalle or "")) / max(w_detalle, 1)) * 14
-                h_proveedor = math.ceil(len(str(g.proveedor or "")) / max(w_proveedor, 1)) * 14 \
-                    if pf else 0
-                h = max(h_detalle, h_proveedor, 18)
+                # Altura de fila: ajustar al contenido más alto
+                h = 18
+                for j, v in enumerate(vals, 1):
+                    if v is None or v == "":
+                        continue
+                    cw = col_chars.get(j, 9)
+                    txt = str(v)
+                    # Proveedor (6) y Detalle (7) permiten wrap; resto no
+                    if j in (6, 7):
+                        chars_linea = max(1, int(cw * 0.85))
+                        nlineas = max(1, math.ceil(len(txt) / chars_linea))
+                        h = max(h, nlineas * 13)
+                    else:
+                        h = max(h, 18)
                 ws.row_dimensions[r].height = h
                 r += 1
 
@@ -4806,14 +4903,17 @@ def registrar_rutas(app):
         incluir_anios = p.incluir_anios_anteriores
 
         # ── Colores fieles al print.css ──
-        AZUL = "1F4E79"
-        AZUL_OSC = "14355A"
-        BG = "F1F5F9"
+        AZUL = "1E3A5F"
+        AZUL_OSC = "162D45"
+        AZUL_CLARO = "2C527A"
+        BG = "F8FAFC"
+        TEXTO2 = "64748B"
         BLANCO = "FFFFFF"
+        BORDE = "CBD5E1"
 
         thin = Side(style="thin", color=AZUL_OSC)
         border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
-        thin_gray = Side(style="thin", color="C3CCD8")
+        thin_gray = Side(style="thin", color=BORDE)
         border_grid = Border(left=thin_gray, right=thin_gray, top=thin_gray,
                              bottom=thin_gray)
 
@@ -4821,18 +4921,20 @@ def registrar_rutas(app):
         fill_azul_osc = PatternFill("solid", fgColor=AZUL_OSC)
         fill_bg = PatternFill("solid", fgColor=BG)
         fill_rubro = PatternFill("solid", fgColor="E3EAF2")
+        fill_resp = PatternFill("solid", fgColor="E8EDF3")
 
-        font_entity = Font(name="Arial", size=11, bold=True, color=AZUL_OSC)
-        font_sub = Font(name="Arial", size=9, color="64748B")
-        font_title = Font(name="Arial", size=16, bold=True, color=AZUL)
-        font_periodo = Font(name="Arial", size=10, bold=True, color=AZUL)
-        font_label = Font(name="Arial", size=8, bold=True, color=AZUL_OSC)
-        font_val = Font(name="Arial", size=10)
-        font_th = Font(name="Arial", size=8, bold=True, color=BLANCO)
-        font_td = Font(name="Arial", size=9)
-        font_td_b = Font(name="Arial", size=9, bold=True)
-        font_rubro = Font(name="Arial", size=9, bold=True, color=AZUL_OSC)
-        font_total = Font(name="Arial", size=10, bold=True, color=BLANCO)
+        FN = "Calibri"
+        font_entity = Font(name=FN, size=11, bold=True, color=AZUL_OSC)
+        font_sub = Font(name=FN, size=9, color=TEXTO2)
+        font_title = Font(name=FN, size=16, bold=True, color=AZUL)
+        font_periodo = Font(name=FN, size=10, bold=True, color=AZUL)
+        font_label = Font(name=FN, size=8, bold=True, color=AZUL_OSC)
+        font_val = Font(name=FN, size=10)
+        font_th = Font(name=FN, size=8, bold=True, color=BLANCO)
+        font_td = Font(name=FN, size=9)
+        font_td_b = Font(name=FN, size=9, bold=True)
+        font_rubro = Font(name=FN, size=9, bold=True, color=AZUL_OSC)
+        font_total = Font(name=FN, size=10, bold=True, color=BLANCO)
 
         align_center = Alignment(horizontal="center", vertical="center",
                                  wrap_text=True)
@@ -4847,16 +4949,14 @@ def registrar_rutas(app):
         ws.page_setup.orientation = "landscape"
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
-        ws.page_margins.left = 0.4
-        ws.page_margins.right = 0.4
+        ws.page_setup.fitToHeight = 1
+        ws.page_margins.left = 1.0
+        ws.page_margins.right = 1.0
         ws.page_margins.top = 0.4
         ws.page_margins.bottom = 0.5
-        ws.print_options.horizontalCentered = True
+        ws.print_options.horizontalCentered = False
         ws.sheet_view.view = "pageBreakPreview"
         ws.sheet_view.showGridLines = False
-        ws.print_title_rows = "15:15"
-        ws.freeze_panes = "A16"
 
         # ── Columnas de la tabla (segun configuracion del proyecto) ──
         col_pim = 4 + (3 if incluir_anios else 0)
@@ -4866,122 +4966,130 @@ def registrar_rutas(app):
         col_saldo = col_ejec + 2
         ncols = max(11, col_saldo + (2 if incluir_anios else 0))
 
-        anchos = {1: 15, 2: 34, 3: 12}
+        anchos = {1: 11, 2: 26, 3: 15}
         if incluir_anios:
-            anchos.update({4: 9, 5: 9, 6: 9, col_saldo + 1: 12, col_saldo + 2: 13})
-        anchos[col_pim] = 12
+            anchos.update({4: 9, 5: 9, 6: 9, col_saldo + 1: 11, col_saldo + 2: 12})
+        anchos[col_pim] = 11
         for k, _m in enumerate(meses_vis):
             anchos[col_mes_ini + k] = 9
-        anchos[col_ejec] = 12
-        anchos[col_pct] = 7
-        anchos[col_saldo] = 12
+        anchos[col_ejec] = 11
+        anchos[col_pct] = 9
+        anchos[col_saldo] = 11
         for j in range(1, ncols + 1):
-            ws.column_dimensions[get_column_letter(j)].width = anchos.get(j, 10)
+            ws.column_dimensions[get_column_letter(j)].width = anchos.get(j, 9)
         last_col = get_column_letter(ncols)
 
-        # ── ENCABEZADO (filas 1-4) ──
-        header_border_bottom = Border(bottom=Side(style="medium", color=AZUL))
-
+        # ── ENCABEZADO (fiel al print.css) ──
         logo_file = os.path.join(app.root_path, "static", p.logo_path) if p.logo_path else None
-        if logo_file and os.path.isfile(logo_file):
-            try:
-                img = XlImage(logo_file)
-                img.width = 70
-                img.height = 70
-                ws.add_image(img, "A1")
-            except Exception:
-                pass
-
-        ws.merge_cells(f"B1:{last_col}1")
-        c = ws["B1"]
-        c.value = p.entidad or ""
-        c.font = font_entity
-        c.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
-
-        ws.merge_cells(f"B2:{last_col}2")
-        c = ws["B2"]
-        c.value = p.unidad_ejecutora or ""
-        c.font = font_sub
-        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-        ws.merge_cells(f"B3:{last_col}3")
-        c = ws["B3"]
-        c.value = "CUADRO COMPARATIVO PRESUPUESTO ANALITICO APROBADO Y EJECUTADO"
-        c.font = font_title
-        c.alignment = Alignment(horizontal="center", vertical="top", wrap_text=True)
-
-        ws.merge_cells(f"B4:{last_col}4")
-        c = ws["B4"]
-        c.value = f"PERIODO: {MESES[mes-1]} - {anio}"
-        c.font = font_periodo
-        c.alignment = Alignment(horizontal="center", vertical="center")
-        c.border = header_border_bottom
-
-        ws.row_dimensions[1].height = 24
-        ws.row_dimensions[2].height = 20
-        ws.row_dimensions[3].height = 32
-        ws.row_dimensions[4].height = 20
-
-        # ── DATOS GENERALES (filas 6-10) ──
-        datos = [
-            ("PROYECTO", p.nombre or "", True),
-            ("CODIGO UNICO", p.cui or "", False),
-            ("CORRELATIVO META", p.meta or "", False),
-            ("FUENTE FINANC.", p.fuente or "", False),
-            ("MODALIDAD", "ADMINISTRACION DIRECTA", False),
+        info_pairs = [
+            [("Proyecto", p.nombre or "")],
+            [("Codigo Unico", p.cui or ""), ("Correlativo Meta", p.meta or "")],
+            [("Fuente Financ.", p.fuente or ""), ("Modalidad", "ADMINISTRACION DIRECTA")],
         ]
-        for i, (label, valor, full_width) in enumerate(datos):
-            r = 6 + i
-            if full_width:
-                ws.row_dimensions[r].height = max(
-                    math.ceil(len(str(valor)) / 80) * 16, 20)
-                ws.merge_cells(f"A{r}:B{r}")
-                ws.merge_cells(f"C{r}:K{r}")
-            else:
-                lineas = max(1, 1 + len(str(valor)) // 28)
-                ws.row_dimensions[r].height = max(20, 15 * lineas)
-                ws.merge_cells(f"A{r}:B{r}")
-                ws.merge_cells(f"C{r}:E{r}")
-            c_lbl = ws.cell(row=r, column=1, value=label)
-            c_lbl.font = font_label
-            c_lbl.alignment = align_left
-            c_val = ws.cell(row=r, column=3, value=valor)
-            c_val.font = font_val
-            c_val.alignment = align_left
-            fin = 11 if full_width else 5
-            for col in range(1, fin + 1):
-                cc = ws.cell(row=r, column=col)
-                cc.border = border_grid
-                if col <= 2:
-                    cc.fill = fill_bg
-
-        # ── RESPONSABLES (filas 11-13) ──
-        resp = [
-            ("SUPERVISOR DE OBRA", p.supervisor or ""),
-            ("RESIDENTE DE OBRA", p.residente or ""),
-            ("ADMIN. DE OBRA", p.asistente or ""),
+        responsables = [
+            ("Supervisor de Obra", p.supervisor or ""),
+            ("Residente de Obra", p.residente or ""),
+            ("Admin. de Obra", p.asistente or ""),
         ]
-        for i, (lab, val) in enumerate(resp):
-            r = 11 + i
-            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
-            c_lab = ws.cell(row=r, column=1, value=lab)
-            c_lab.font = font_th
-            c_lab.alignment = align_left
-            ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=ncols)
-            c_v = ws.cell(row=r, column=4, value=val)
-            c_v.font = font_val
-            c_v.alignment = align_left
-            for col in range(1, ncols + 1):
-                cc = ws.cell(row=r, column=col)
-                if col <= 3:
-                    cc.fill = fill_azul
-                    cc.border = border_all
-                else:
-                    cc.border = border_grid
-            ws.row_dimensions[r].height = 20
+        tabla_start = _build_xl_header(
+            ws, ncols,
+            "Cuadro Comparativo Presupuesto Analitico Aprobado y Ejecutado",
+            f"Periodo: {MESES[mes-1]} - {anio}",
+            {"entidad": p.entidad or "", "unidad": p.unidad_ejecutora or "",
+             "periodo": f"PERIODO: {MESES[mes-1]} - {anio}"},
+            logo_file, info_pairs, responsables,
+            title_font_size=13,
+            header_heights={'entity': 22, 'sub': 16, 'title': 24, 'subtitle': 16,
+                            'project': 36, 'pair': 15, 'resp': 16})
 
-        # ── TABLA PRINCIPAL (desde la fila 15) ──
-        tabla_start = 15
+        # Eliminar fila 5 (spacer vacio entre encabezado e info-grid)
+        # No usar delete_rows porque desajusta los merges de _build_xl_header
+        ws.row_dimensions[5].hidden = True
+        ws.row_dimensions[5].height = 0
+
+        # Reducir filas spacer (12=before tabla, 31=before PIM, 38=before EXP, 43=trailing)
+        for spacer_row in [12, 31, 38, 43]:
+            ws.row_dimensions[spacer_row].height = 7
+
+        # ── Ajustar fila Proyecto (row 6 after header): fusionar B6:L6 ──
+        # After hidden row 5, row 6 has Proyecto data from _build_xl_header
+        no_border = Border()
+        # Unmerge existing merges on row 6
+        for m in list(ws.merged_cells.ranges):
+            if m.min_row == 6:
+                ws.unmerge_cells(str(m))
+        # Label en A6
+        c5a = ws.cell(row=6, column=1)
+        c5a.value = "Proyecto"
+        c5a.font = font_label
+        c5a.alignment = align_left
+        c5a.fill = fill_bg
+        c5a.border = border_grid
+        # Valor del proyecto: set value FIRST, then merge
+        c5b = ws.cell(row=6, column=2)
+        c5b.value = p.nombre or ""
+        c5b.font = font_val
+        c5b.alignment = align_left
+        c5b.border = border_grid
+        ws.merge_cells("B6:L6")
+        for cc in range(3, ncols + 1):
+            ws.cell(row=6, column=cc).border = border_grid
+
+        # ── Limpiar bordes y merges en responsables cols F-L (6-12) ──
+        # _build_xl_header crea merges que se extienden hasta ncols,
+        # pero responsables solo deben usar A-E. Unmerge + recrear.
+        resp_row_start = 6 + len(info_pairs)  # row 9, 10, 11
+        resp_col_end = min(5, ncols)
+        def _xl_row_height(texto, col_width_chars, font_size, wrap=True):
+            """Calcula altura de fila necesaria para el texto."""
+            if not wrap or not texto:
+                return font_size * 1.6
+            chars_por_linea = max(1, int(col_width_chars * 0.85))
+            nlineas = max(1, math.ceil(len(str(texto)) / chars_por_linea))
+            return max(font_size * 1.6, nlineas * (font_size * 1.6))
+
+        # Fila 1-4: header (ya con alturas de _build_xl_header)
+        # Fila 6: proyecto (B6:L6)
+        w6 = sum(anchos.get(j, 9) for j in range(2, ncols + 1))
+        h6 = _xl_row_height(p.nombre, w6, 10)
+        ws.row_dimensions[6].height = max(17, h6)
+        # Filas 7-8: info pairs (half-width)
+        mid_w = sum(anchos.get(j, 9) for j in range(1, (ncols + 1) // 2 + 1))
+        for info_row_idx, row_items in enumerate(info_pairs[1:], start=7):
+            txt = max((item[1] for item in ws.cell(info_row_idx, 1).value and [] or []),
+                      key=lambda x: len(str(x or "")), default="")
+            ws.row_dimensions[info_row_idx].height = max(15, _xl_row_height(txt, mid_w, 10))
+        # Filas 9-11: responsables (value width = full row)
+        resp_w = sum(anchos.get(j, 9) for j in range(1, ncols + 1))
+        for i, (lab, val) in enumerate(responsables):
+            ws.row_dimensions[resp_row_start + i].height = max(15, _xl_row_height(val, resp_w, 9))
+
+        # ── Limpiar bordes y merges en responsables cols F-L ──
+        for resp_row in range(resp_row_start, resp_row_start + len(responsables)):
+            # Unmerge all ranges in this row
+            for m in list(ws.merged_cells.ranges):
+                if m.min_row == resp_row:
+                    ws.unmerge_cells(str(m))
+            # Recreate merges: A:B label, C:E value
+            ws.merge_cells(f"A{resp_row}:B{resp_row}")
+            ws.merge_cells(f"C{resp_row}:{get_column_letter(resp_col_end)}{resp_row}")
+            # Clear all cells cols 1-ncols and re-apply correct styling
+            for cc in range(1, ncols + 1):
+                cell = ws.cell(row=resp_row, column=cc)
+                cell.border = no_border
+                cell.fill = PatternFill()
+            # Apply correct borders: A-B label with azul fill, C-E value with resp fill
+            for cc in [1, 2]:
+                cell = ws.cell(row=resp_row, column=cc)
+                cell.border = border_all
+                cell.fill = fill_azul
+            for cc in range(3, resp_col_end + 1):
+                cell = ws.cell(row=resp_row, column=cc)
+                cell.border = border_all
+                cell.fill = fill_resp
+
+        ws.print_title_rows = f"{tabla_start}:{tabla_start}"
+        ws.freeze_panes = f"A{tabla_start + 1}"
         headers = ["Especif. de gasto", "Detalle", "Exp. Tecnico"]
         if incluir_anios:
             headers += ["2023", "2024", "2025"]
@@ -5062,7 +5170,11 @@ def registrar_rutas(app):
                     cc.number_format = '0.0%' if j == col_pct else '#,##0.00'
                 for col in range(1, ncols + 1):
                     ws.cell(row=r, column=col).border = border_grid
-                ws.row_dimensions[r].height = 16
+                # Auto-ajustar alto segun Detalle (col 2)
+                det_text = sub["detalle"] or ""
+                det_w = anchos.get(2, 25)
+                h_det = _xl_row_height(det_text, det_w, 9)
+                ws.row_dimensions[r].height = max(16, h_det)
                 det_fin = r
                 r += 1
 
@@ -5117,96 +5229,76 @@ def registrar_rutas(app):
         ws.row_dimensions[r].height = 20
         r += 1
 
-        # ── RESUMEN A NIVEL PIM ──
-        r += 1
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=4)
+        # ── RESUMENES lado a lado: PIM (A-F) | EXPEDIENTE (H-L) ──
+        r += 1  # spacer
+
+        # Columnas para cada cuadro
+        col_pim_end = 6      # F
+        col_exp_ini = 8      # H
+        col_exp_end = ncols  # L (12)
+        col_pim_lbl = get_column_letter(col_pim_end - 1)  # E
+        col_pim_val = get_column_letter(col_pim_end)       # F
+        col_exp_lbl = get_column_letter(col_exp_ini + 1)   # I
+        col_exp_val = get_column_letter(col_exp_ini + 2)   # J
+
+        # ── Headers ──
+        # PIM header: A:E merged
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=col_pim_end - 1)
         c = ws.cell(row=r, column=1, value="RESUMEN A NIVEL PIM")
-        c.font = font_th
-        c.alignment = align_left
-        for col in range(1, 5):
+        c.font = font_th; c.alignment = align_left
+        for col in range(1, col_pim_end):
             cc = ws.cell(row=r, column=col)
-            cc.fill = fill_azul
-            cc.border = border_all
+            cc.fill = fill_azul; cc.border = border_all
+        # EXPEDIENTE header: H:L merged
+        ws.merge_cells(start_row=r, start_column=col_exp_ini, end_row=r, end_column=col_exp_end)
+        c = ws.cell(row=r, column=col_exp_ini, value="RESUMEN A NIVEL DE EXPEDIENTE")
+        c.font = font_th; c.alignment = align_left
+        for col in range(col_exp_ini, col_exp_end + 1):
+            cc = ws.cell(row=r, column=col)
+            cc.fill = fill_azul; cc.border = border_all
         ws.row_dimensions[r].height = 18
         r += 1
 
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+        # ── Sub-headers ──
+        # PIM: DESCRIPCION A:C, % D, S/ E
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
         c = ws.cell(row=r, column=1, value="DESCRIPCION")
-        c.font = font_label
-        c.alignment = align_left
-        c2 = ws.cell(row=r, column=3, value="S/.")
-        c2.font = font_label
-        c2.alignment = align_right_num
+        c.font = font_label; c.alignment = align_left
         c3 = ws.cell(row=r, column=4, value="%")
-        c3.font = font_label
-        c3.alignment = align_center
-        for col in range(1, 5):
+        c3.font = font_label; c3.alignment = align_center
+        c2 = ws.cell(row=r, column=5, value="S/.")
+        c2.font = font_label; c2.alignment = align_right_num
+        for col in range(1, col_pim_end + 1):
             cc = ws.cell(row=r, column=col)
-            cc.fill = fill_bg
-            cc.border = border_grid
+            cc.fill = fill_bg; cc.border = border_grid
+
+        # EXPEDIENTE: DESCRIPCION H:K, S/ L
+        ws.merge_cells(start_row=r, start_column=col_exp_ini, end_row=r, end_column=col_exp_ini + 3)
+        c = ws.cell(row=r, column=col_exp_ini, value="DESCRIPCION")
+        c.font = font_label; c.alignment = align_left
+        c2 = ws.cell(row=r, column=col_exp_ini + 4, value="S/.")
+        c2.font = font_label; c2.alignment = align_right_num
+        for col in range(col_exp_ini, col_exp_ini + 5):
+            cc = ws.cell(row=r, column=col)
+            cc.fill = fill_bg; cc.border = border_grid
         ws.row_dimensions[r].height = 18
         r += 1
 
+        # ── Data rows ──
         pim_v = sintesis["pim"]
-
         def pct_de(num):
             return (num / pim_v) if pim_v else 0
 
-        ini_pim = r
         filas_pim = [
             (f"PIM ASIGNADO {anio}", pim_v, 1.0, "0%", True),
             (f"GASTO EJECUTADO {anio}",
              f"={get_column_letter(col_ejec)}{total_row}",
-             f"=IF(C{ini_pim}=0,0,C{ini_pim + 1}/C{ini_pim})", "0.00%", False),
+             f"=IF(E{r}=0,0,E{r+1}/E{r})", "0.00%", False),
             (f"GASTO FINANCIERO MES DE {MESES[mes-1]}", sintesis["mes_actual"],
              pct_de(sintesis["mes_actual"]), "0.00%", False),
             (f"SALDO {anio}", sintesis["saldo_pim"],
              pct_de(sintesis["saldo_pim"]), "0.00%", True),
         ]
-        for desc, sval, fracc, fmt, strong in filas_pim:
-            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
-            c = ws.cell(row=r, column=1, value=desc)
-            c.font = font_td_b if strong else font_td
-            c.alignment = align_left
-            cs = ws.cell(row=r, column=3, value=sval)
-            cs.font = font_td_b if strong else font_td
-            cs.alignment = align_right_num
-            cs.number_format = '#,##0.00'
-            cp = ws.cell(row=r, column=4, value=fracc)
-            cp.font = font_td
-            cp.alignment = align_right_num
-            cp.number_format = fmt
-            for col in range(1, 5):
-                ws.cell(row=r, column=col).border = border_grid
-            ws.row_dimensions[r].height = 16
-            r += 1
-
-        # ── RESUMEN A NIVEL DE EXPEDIENTE ──
-        r += 1
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
-        c = ws.cell(row=r, column=1, value="RESUMEN A NIVEL DE EXPEDIENTE")
-        c.font = font_th
-        c.alignment = align_left
-        for col in range(1, 4):
-            cc = ws.cell(row=r, column=col)
-            cc.fill = fill_azul
-            cc.border = border_all
-        ws.row_dimensions[r].height = 18
-        r += 1
-
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
-        c = ws.cell(row=r, column=1, value="DESCRIPCION")
-        c.font = font_label
-        c.alignment = align_left
-        c2 = ws.cell(row=r, column=3, value="S/.")
-        c2.font = font_label
-        c2.alignment = align_right_num
-        for col in range(1, 4):
-            cc = ws.cell(row=r, column=col)
-            cc.fill = fill_bg
-            cc.border = border_grid
-        ws.row_dimensions[r].height = 18
-        r += 1
 
         filas_exp = [("PRESUPUESTO TOTAL DE OBRA", sintesis["et"], True)]
         if incluir_anios:
@@ -5223,19 +5315,53 @@ def registrar_rutas(app):
         else:
             filas_exp.append(("SALDO A NIVEL DE EXPEDIENTE TECNICO",
                               sintesis["saldo_proyecto"], True))
-        for desc, sval, strong in filas_exp:
-            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
-            c = ws.cell(row=r, column=1, value=desc)
-            c.font = font_td_b if strong else font_td
-            c.alignment = align_left
-            cs = ws.cell(row=r, column=3, value=sval)
-            cs.font = font_td_b if strong else font_td
-            cs.alignment = align_right_num
-            cs.number_format = '#,##0.00'
-            for col in range(1, 4):
-                ws.cell(row=r, column=col).border = border_grid
+
+        ini_pim = r
+        max_rows = max(len(filas_pim), len(filas_exp))
+        for idx in range(max_rows):
+            # PIM side (cols A-E): desc A:C, % D, S/ E
+            if idx < len(filas_pim):
+                desc, sval, fracc, fmt, strong = filas_pim[idx]
+                ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+                c = ws.cell(row=r, column=1, value=desc)
+                c.font = font_td_b if strong else font_td
+                c.alignment = align_left
+                cp = ws.cell(row=r, column=4, value=fracc)
+                cp.font = font_td; cp.alignment = align_right_num
+                cp.number_format = fmt
+                cs = ws.cell(row=r, column=5, value=sval)
+                cs.font = font_td_b if strong else font_td
+                cs.alignment = align_right_num
+                cs.number_format = '#,##0.00'
+                for col in range(1, col_pim_end + 1):
+                    ws.cell(row=r, column=col).border = border_grid
+
+            # EXPEDIENTE side (cols H-L): desc H:K, S/ L
+            if idx < len(filas_exp):
+                desc, sval, strong = filas_exp[idx]
+                ws.merge_cells(start_row=r, start_column=col_exp_ini,
+                               end_row=r, end_column=col_exp_ini + 3)
+                c = ws.cell(row=r, column=col_exp_ini, value=desc)
+                c.font = font_td_b if strong else font_td
+                c.alignment = align_left
+                cs = ws.cell(row=r, column=col_exp_ini + 4, value=sval)
+                cs.font = font_td_b if strong else font_td
+                cs.alignment = align_right_num
+                cs.number_format = '#,##0.00'
+                for col in range(col_exp_ini, col_exp_ini + 5):
+                    ws.cell(row=r, column=col).border = border_grid
+
             ws.row_dimensions[r].height = 16
             r += 1
+
+        # Fix PIM percentage formula (needs final row refs)
+        # Re-read filas_pim formula with correct row references
+        pim_data_start = ini_pim
+        pim_data_end = ini_pim + len(filas_pim) - 1
+        # GASTO EJECUTADO row is ini_pim + 1
+        ejec_pim_row = ini_pim + 1
+        ws.cell(row=ejec_pim_row, column=4).value = (
+            f"=IF(E{ini_pim}=0,0,E{ejec_pim_row}/E{ini_pim})")
 
         # ── Ajustes finales ──
         ws.print_area = f"A1:{get_column_letter(ncols)}{r}"
