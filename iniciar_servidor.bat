@@ -25,10 +25,11 @@ if not exist "%PYEXE%" (
   set "PYEXE=python"
 )
 
-"%PYEXE%" -c "import waitress" >nul 2>&1
+:: Verificar/instalar dependencias de la app (Flask, openpyxl, Pillow, waitress)
+"%PYEXE%" -c "import flask, flask_sqlalchemy, openpyxl, PIL, waitress" >nul 2>&1
 if errorlevel 1 (
-  echo Instalando waitress...
-  "%PYEXE%" -m pip install waitress --quiet --disable-pip-version-check
+  echo Instalando dependencias faltantes...
+  "%PYEXE%" -m pip install -r requirements.txt --quiet --disable-pip-version-check
 )
 
 echo.

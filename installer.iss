@@ -3,7 +3,7 @@
 ; El usuario final ejecuta el .exe y queda todo listo para usar.
 
 #define MyAppName "Informe Mensual de Obra"
-#define MyAppVersion "1.1.6"
+#define MyAppVersion "1.1.7"
 #define MyAppPublisher "INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C."
 #define MyAppURL "https://github.com/jacj01/informe-mensual-obra"
 #define MyAppExeName "iniciar_sin_consola.vbs"
@@ -50,8 +50,9 @@ Source: ".gitignore"; DestDir: "{app}"; Flags: ignoreversion
 ; Archivos de datos para combobox
 Source: "Rubro.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Recursos.txt"; DestDir: "{app}"; Flags: ignoreversion
-; La app completa (excluir instance/ para no sobreescribir la DB del usuario)
-Source: "informe_web\*"; DestDir: "{app}\informe_web"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "informe_web\instance\*"
+; La app completa (excluir instance/ para no sobreescribir la DB del usuario,
+; y excluir logs/pid/__pycache__ que son runtime y pueden estar en uso)
+Source: "informe_web\*"; DestDir: "{app}\informe_web"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "instance\*;servidor.log;servidor.pid;__pycache__;*.pyc"
 
 [Icons]
 Name: "{group}\Abrir Informe de Obra"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Logo.ico"
@@ -64,7 +65,10 @@ Name: "{autodesktop}\Informe de Obra"; Filename: "{app}\{#MyAppExeName}"; Tasks:
 Name: "desktopicon"; Description: "Crear icono en el escritorio"; GroupDescription: "Iconos adicionales:"; Flags: checkedonce
 
 [Run]
-Filename: "{app}\instalar_python.bat"; StatusMsg: "Configurando Python..."; Flags: runhidden waituntilterminated; Check: IsFreshInstall
+; instalar_python.bat se ejecuta SIEMPRE (instalacion nueva o actualizacion): es
+; idempotente, descarga/instala Python solo si falta y luego asegura las
+; dependencias (Flask, openpyxl, Pillow, waitress) desde requirements.txt
+Filename: "{app}\instalar_python.bat"; StatusMsg: "Configurando Python..."; Flags: runhidden waituntilterminated
 Filename: "{app}\limpiar_usuarios.bat"; StatusMsg: "Configurando usuarios..."; Flags: runhidden waituntilterminated; Check: IsFreshInstall
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir Informe de Obra ahora"; Flags: nowait postinstall skipifsilent unchecked
 
@@ -96,6 +100,70 @@ begin
   Log('[PS] Code=' + IntToStr(R) + ' Cmd: ' + Cmd);
 end;
 
+// Descarga e instala Python Embeddable si no existe ya en {app}\python.
+procedure SetupPython;
+var
+  DestDir, PyExe, TmpDir, ZipPath, Url: String;
+begin
+  DestDir := ExpandConstant('{app}\python');
+  PyExe := DestDir + '\python.exe';
+  if FileExists(PyExe) then
+  begin
+    Log('[INSTALL] Python ya presente: ' + PyExe);
+    Exit;
+  end;
+
+  Log('[INSTALL] Descargando Python Embeddable...');
+  ForceDirectories(DestDir);
+  TmpDir := ExpandConstant('{tmp}');
+  ZipPath := TmpDir + '\{#PyZip}';
+  Url := 'https://www.python.org/ftp/python/{#PythonVersion}/{#PyZip}';
+
+  if not PsExec('Invoke-WebRequest -Uri ''' + Url + ''' -OutFile ''' + ZipPath + '''') then
+  begin
+    Log('[INSTALL] ERROR descargando Python. Se reintentara desde instalar_python.bat.');
+    Exit;
+  end;
+
+  if not PsExec('Expand-Archive -Path ''' + ZipPath + ''' -DestinationPath ''' + DestDir + ''' -Force') then
+  begin
+    Log('[INSTALL] ERROR descomprimiendo Python.');
+    Exit;
+  end;
+
+  // Habilitar import site (necesario para que funcione pip)
+  PsExec('$pth = Get-ChildItem -Path ''' + DestDir + ''' -Filter ''python*._pth'' | Select-Object -First 1; ' +
+         'if ($pth) { $c = Get-Content $pth.FullName -Raw; $c = $c -replace ''#import site'',''import site''; ' +
+         'Set-Content -Path $pth.FullName -Value $c -NoNewline }');
+  Log('[INSTALL] Python Embeddable listo en: ' + DestDir);
+end;
+
+// Escribe instalar_python.bat en {app}\ que asegura pip y las dependencias
+// del proyecto desde requirements.txt (idempotente: solo instala lo que falta).
+procedure GenerarInstalarBat;
+var
+  Bat: String;
+begin
+  Bat :=
+    '@echo off' + #13#10 +
+    'cd /d "%~dp0python"' + #13#10 +
+    'echo === Configurando Python e instalando dependencias ===' + #13#10 +
+    'set "PIP=no"' + #13#10 +
+    'python -c "import sys, pip" >nul 2>&1 && set "PIP=yes"' + #13#10 +
+    'if not "%PIP%"=="yes" (' + #13#10 +
+    '  echo Descargando get-pip.py...' + #13#10 +
+    '  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri ''https://bootstrap.pypa.io/get-pip.py'' -OutFile ''%~dp0get-pip.py''"' + #13#10 +
+    '  python "%~dp0get-pip.py" --quiet' + #13#10 +
+    '  del "%~dp0get-pip.py"' + #13#10 +
+    ')' + #13#10 +
+    'echo Instalando dependencias (Flask, openpyxl, Pillow, waitress)...' + #13#10 +
+    'python -m pip install -r "%~dp0..\informe_web\requirements.txt" --quiet --disable-pip-version-check' + #13#10 +
+    'echo === Listo ===' + #13#10 +
+    'del "%~f0"';
+  SaveStringToFile(ExpandConstant('{app}\instalar_python.bat'), Bat, False);
+  Log('[INSTALL] instalar_python.bat generado.');
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   R: Integer;
@@ -113,14 +181,23 @@ begin
   DeleteFile(AppWeb + '\servidor.pid');
   Sleep(2000);
 
-  // === FRESH INSTALL: solo instalar Python, NO tocar DB ===
+  // === GARANTIZAR PYTHON EMBEDDABLE (instalacion nueva o actualizacion) ===
+  // Si no existe python.exe se descarga Python Embeddable y se habilita pip.
+  SetupPython;
+
+  // === GENERAR instalar_python.bat (idempotente, se ejecuta en [Run]) ===
+  // Solo instala pip y las dependencias que falten (Flask, openpyxl, Pillow,
+  // waitress) desde requirements.txt. Sirve tanto para instalacion nueva como
+  // para actualizaciones que puedan carecer de dependencias.
+  GenerarInstalarBat;
+
+  // === UPGRADE: respaldar datos críticos ANTES de copiar ===
   if IsFreshInstall then
   begin
-    Log('[INSTALL] Fresh install - no hay DB existente.');
+    Log('[INSTALL] Fresh install - no hay DB existente. No se respalda DB.');
     Exit;
   end;
 
-  // === UPGRADE: respaldar datos críticos ANTES de copiar ===
   Log('[INSTALL] Upgrade detectado - iniciando respaldo...');
 
   // Limpiar respaldo anterior

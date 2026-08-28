@@ -68,6 +68,37 @@ function Version-Tag([string]$tag) {
 
 function gh-ok { $null = Get-Command gh -ErrorAction SilentlyContinue; return $?}
 
+# --- Lista de archivos .db que existen dentro de una carpeta (a cualquier profundidad) ---
+function Get-DbFiles([string]$dir) {
+    if (-not (Test-Path $dir)) { return @() }
+    return @(Get-ChildItem -Path $dir -Recurse -File -Filter "*.db" -ErrorAction SilentlyContinue |
+             Where-Object { $_.Name -notmatch '-wal$|-shm$' } |
+             ForEach-Object { $_.FullName })
+}
+
+# --- Verifica que TODAS las .db de $origen existan en $destino (mismos nombres relativos) ---
+function Dbs-Verificados([string]$origen, [string]$destino) {
+    $dbs = Get-DbFiles $origen
+    if ($dbs.Count -eq 0) { return $true }   # sin DB previa: nada que preservar
+    foreach ($f in $dbs) {
+        $rel = $f.Substring($origen.Length).TrimStart('\','/')
+        $target = Join-Path $destino $rel
+        if (-not (Test-Path $target)) { return $false }
+    }
+    return $true
+}
+
+# --- Verifica contra una lista capturada (rutas relativas al instance/): que cada
+#     .db de $listaRel exista bajo la carpeta $instanceNuevo ---
+function Dbs-ListaVerificados([string[]]$listaRel, [string]$instanceNuevo) {
+    if ($null -eq $listaRel -or $listaRel.Count -eq 0) { return $true }
+    foreach ($rel in $listaRel) {
+        $target = Join-Path $instanceNuevo $rel
+        if (-not (Test-Path $target)) { return $false }
+    }
+    return $true
+}
+
 try {
 
 if (-not $PyExe) {
@@ -178,7 +209,8 @@ Escribir-Progreso "descargando" 30 "Paquete listo. Preparando instalación..."
 # Preservar la base de datos / respaldos / uploads / logs del usuario (no viajan en el zip)
 $preservation = @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/static/uploads",
                "informe_web/servidor.log", "informe_web/servidor.pid")
-# 8.1) Detener el servidor ANTES de mover informe_web; si no, los .py/.pyc abiertos
+
+# 8.1) Detener el servidor ANTES de tocar informe_web; si no, los .py/.pyc abiertos
 #      impiden el Move-Item ("proceso en uso"). El updater corre detached, sobrevive.
 Escribir-Progreso "instalando" 35 "Deteniendo servidor..."
 $pidfile = Join-Path $Raiz "informe_web\servidor.pid"
@@ -201,25 +233,63 @@ if ($matado) {
     }
 }
 
-# 8.2) Respaldo de la instalacion actual (rollback)
+# 8.2) Capturar QUÉ archivos .db existen hoy (maestra + tenants) para poder
+#      comprobar tras cada operacion que NINGUNO se perdio.
+$liveInstance = Join-Path $Raiz "informe_web\instance"
+$dbsAntes = Get-DbFiles $liveInstance
+$dbsAntesRel = @($dbsAntes | ForEach-Object { $_.Substring($liveInstance.Length).TrimStart('\','/') })
+if ($dbsAntesRel.Count -gt 0) {
+    Write-Host ("Detectadas {0} base(s) de datos a preservar." -f $dbsAntesRel.Count)
+} else {
+    Write-Host "No se detectaron archivos .db en instance/. (Instalacion nueva o sin datos)."
+}
+
+# 8.3) Respaldo de la instalacion actual. MUY IMPORTANTE: se verifica que el
+#      respaldo contenga TODAS las .db antes de continuar. Si no, se aborta y
+#      se restaura al instante (nunca se deja la app sin su base de datos).
 if (Test-Path $bakDir) { Remove-Item -Recurse -Force $bakDir }
 New-Item -ItemType Directory -Force -Path $bakDir | Out-Null   # Move-Item needs parent dir
 Start-Sleep -Seconds 2   # dejar que los handles del server detenido se liberen
 Escribir-Progreso "instalando" 50 "Respaldando instalacion actual..."
-Move-Item -LiteralPath (Join-Path $Raiz "informe_web") -Destination (Join-Path $bakDir "informe_web")
+$liveWeb = Join-Path $Raiz "informe_web"
+$bakWeb  = Join-Path $bakDir "informe_web"
+Move-Item -LiteralPath $liveWeb -Destination $bakWeb -ErrorAction Stop
+
+# Verificar que las .db que habia quedaron en el respaldo
+$bakInstance = Join-Path $bakWeb "instance"
+if (-not (Dbs-ListaVerificados $dbsAntesRel $bakInstance)) {
+    Write-Warning "FALLO: el respaldo no contiene todas las bases de datos. Restaurando..."
+    Escribir-Progreso "rollback" 100 "La base de datos no quedo respaldada. Se restaura la version anterior."
+    Move-Item -LiteralPath $bakWeb -Destination $liveWeb -Force
+    Start-Process -FilePath $PyWexe -ArgumentList "servidor_silencioso.py" -WorkingDirectory "$Raiz/informe_web"
+    exit 3
+}
 
 # Copiar la nueva informe_web
 Escribir-Progreso "instalando" 70 "Instalando nueva version..."
-Copy-Item -Recurse -Force (Join-Path $tmpDir "informe_web") -Destination (Join-Path $Raiz "informe_web") -ErrorAction Stop
+Copy-Item -Recurse -Force (Join-Path $tmpDir "informe_web") -Destination $liveWeb -ErrorAction Stop
 
 # Restaurar los datos preservados (si existian en el backup, copiarlos de vuelta)
 foreach ($p in $preservation) {
     $src = Join-Path $bakDir $p
     if (Test-Path $src) {
         $dst = Join-Path $Raiz $p
-        Copy-Item -Path $src -Destination $dst -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path $src -Destination $dst -Recurse -Force -ErrorAction Stop
     }
 }
+
+# Verificar que TODAS las .db anteriores volvieron a su lugar en la instalacion
+if (-not (Dbs-ListaVerificados $dbsAntesRel $liveInstance)) {
+    Write-Warning "FALLO: la base de datos no pudo restaurarse. Haciendo rollback completo..."
+    Escribir-Progreso "rollback" 100 "No se pudo restaurar la base de datos. Se revierte la actualizacion."
+    Remove-Item -Recurse -Force $liveWeb -ErrorAction SilentlyContinue
+    Move-Item -LiteralPath $bakWeb -Destination $liveWeb -Force
+    Start-Process -FilePath $PyWexe -ArgumentList "servidor_silencioso.py" -WorkingDirectory "$Raiz/informe_web"
+    exit 4
+}
+$dbsTotales = (Get-DbFiles $liveInstance).Count
+Write-Host "Base(s) de datos restauradas correctamente: $dbsTotales"
+
 
 # Reemplazar tambien los launchers y logo raiz del paquete
 Copy-Item -Force (Join-Path $tmpDir "*.bat") -Destination $Raiz -ErrorAction SilentlyContinue
@@ -238,6 +308,24 @@ try {
 if ($ok) {
     Write-Host "Actualizacion OK ($tag). Limpiando backup."
     Remove-Item -Recurse -Force $bakDir
+
+    # Asegurar dependencias Python (Flask, openpyxl, Pillow, waitress, etc.)
+    # Las actualizaciones solo copian archivos; si falta un paquete (p.ej. openpyxl
+    # para las exportaciones Excel), se instala ahora desde requirements.txt.
+    Write-Host "Verificando dependencias de Python..."
+    Escribir-Progreso "instalando" 90 "Verificando dependencias de Python..."
+    $depsOk = $false
+    try {
+        & $PyExe -c "import flask, flask_sqlalchemy, openpyxl, PIL, waitress" 2>$null
+        if ($LASTEXITCODE -eq 0) { $depsOk = $true } else {
+            & $PyExe -m pip install -r (Join-Path $Raiz "informe_web\requirements.txt") --quiet --disable-pip-version-check
+            if ($LASTEXITCODE -eq 0) { $depsOk = $true }
+        }
+    } catch {
+        Write-Warning "No se pudo verificar/instalar dependencias: $($_.Exception.Message)"
+    }
+    if (-not $depsOk) { Write-Warning "Aviso: algunas dependencias podrian faltar. La app las instalara al iniciar." }
+
     # El servidor ya fue detenido antes del backup. Levantarlo con la nueva version.
     Start-Process -FilePath $PyWexe `
         -ArgumentList "servidor_silencioso.py" `
