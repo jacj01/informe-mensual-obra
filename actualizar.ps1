@@ -165,14 +165,15 @@ if (gh-ok) {
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile (Join-Path $tmpDir "update.zip") -Headers $dlHeaders -TimeoutSec 120
     $zipPath = Join-Path $tmpDir "update.zip"
 }
+}   # fin MODO 2 (else)
 
+# Común para ambos modos: localizar el ZIP descargado y descomprimir a temp
+# (no toca la instalacion viva)
 $zipPath = (Get-ChildItem $tmpDir -Filter "*.zip" | Select-Object -First 1).FullName
 if (-not $zipPath) { Write-Error "No se encontro el asset zip descargado"; exit 2 }
-
-# Descomprimir a temp (no toca la instalacion viva)
+Escribir-Progreso "descargando" 30 "Descomprimiendo paquete..."
 Expand-Archive -LiteralPath $zipPath -DestinationPath $tmpDir -Force
 Escribir-Progreso "descargando" 30 "Paquete listo. Preparando instalación..."
-}
 
 # Preservar la base de datos / respaldos / uploads / logs del usuario (no viajan en el zip)
 $preservation = @("informe_web/instance", "informe_web/Respaldo BD", "informe_web/static/uploads",
