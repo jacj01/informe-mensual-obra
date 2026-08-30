@@ -3,7 +3,7 @@
 ; El usuario final ejecuta el .exe y queda todo listo para usar.
 
 #define MyAppName "Informe Mensual de Obra"
-#define MyAppVersion "1.1.7"
+#define MyAppVersion "1.1.8"
 #define MyAppPublisher "INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C."
 #define MyAppURL "https://github.com/jacj01/informe-mensual-obra"
 #define MyAppExeName "iniciar_sin_consola.vbs"
@@ -50,9 +50,17 @@ Source: ".gitignore"; DestDir: "{app}"; Flags: ignoreversion
 ; Archivos de datos para combobox
 Source: "Rubro.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Recursos.txt"; DestDir: "{app}"; Flags: ignoreversion
-; La app completa (excluir instance/ para no sobreescribir la DB del usuario,
-; y excluir logs/pid/__pycache__ que son runtime y pueden estar en uso)
-Source: "informe_web\*"; DestDir: "{app}\informe_web"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "instance\*;servidor.log;servidor.pid;__pycache__;*.pyc"
+; Codigo fuente Python (solo la raiz de informe_web; *.py coincide con los
+; .py de primer nivel y NO baja a subdirectorios, asi NO se empaquetan instance\
+; ni __pycache__). Tampoco se incluyen servidor.log ni servidor.pid (runtime).
+; ojo: NO usar recursesubdirs aqui, porque en Inno 6.7.3 el parametro Excludes
+; no se aplica con recursesubdirs (se comprimiria la BD de desarrollo en instance\).
+Source: "informe_web\*.py"; DestDir: "{app}\informe_web"; Flags: ignoreversion
+Source: "informe_web\requirements.txt"; DestDir: "{app}\informe_web"; Flags: ignoreversion
+Source: "informe_web\INFORMACION_APLICATIVO.txt"; DestDir: "{app}\informe_web"; Flags: ignoreversion
+; Plantillas y estaticos (no contienen BD/logs/pycache)
+Source: "informe_web\templates\*"; DestDir: "{app}\informe_web\templates"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "informe_web\static\*"; DestDir: "{app}\informe_web\static"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Abrir Informe de Obra"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Logo.ico"
@@ -69,7 +77,6 @@ Name: "desktopicon"; Description: "Crear icono en el escritorio"; GroupDescripti
 ; idempotente, descarga/instala Python solo si falta y luego asegura las
 ; dependencias (Flask, openpyxl, Pillow, waitress) desde requirements.txt
 Filename: "{app}\instalar_python.bat"; StatusMsg: "Configurando Python..."; Flags: runhidden waituntilterminated
-Filename: "{app}\limpiar_usuarios.bat"; StatusMsg: "Configurando usuarios..."; Flags: runhidden waituntilterminated; Check: IsFreshInstall
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir Informe de Obra ahora"; Flags: nowait postinstall skipifsilent unchecked
 
 [UninstallDelete]
@@ -77,8 +84,6 @@ Type: filesandordirs; Name: "{app}\python"
 Type: files; Name: "{app}\informe_web\servidor.pid"
 Type: files; Name: "{app}\informe_web\servidor.log"
 Type: files; Name: "{app}\instalar_python.bat"
-Type: files; Name: "{app}\limpiar_usuarios.bat"
-Type: files; Name: "{app}\limpiar_usuarios.py"
 
 [Code]
 var
@@ -87,7 +92,11 @@ var
 
 function IsFreshInstall: Boolean;
 begin
-  Result := not FileExists(ExpandConstant('{app}\informe_web\informe.db'));
+  // La base de datos maestra vive en instance/informe.db (NO en informe_web\
+  // directamente). Revisar la ruta correcta evita que una actualizacion sobre
+  // una instalacion existente se trate como instalacion nueva (lo que saltaba
+  // el respaldo de la DB y ejecutaba limpiar_usuarios.bat en cada actualizacion).
+  Result := not FileExists(ExpandConstant('{app}\informe_web\instance\informe.db'));
 end;
 
 function PsExec(const Cmd: String): Boolean;

@@ -67,7 +67,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-file-earmark-arrow-down"></i> Generar archivo de licencia</h3></div>
+  <div class="card-head"><h3><i class="bi bi-key"></i> Generar código de licencia</h3></div>
   <form method="post" action="{{ url_for('licencia_generar') }}" class="form-panel">
     <div class="form-grid">
       <div class="field">
@@ -88,28 +88,32 @@
       </div>
       <div class="field full">
         <div class="field-hint">
-          La licencia queda vinculada a ese usuario: solo su cuenta podrá activarla y
-          el archivo solo sirve <b>una vez</b>. Entrégueselo al cliente; él lo sube desde
-          la página de suscripción vencida y la vigencia se amplía automáticamente.
+          El código queda vinculado a ese usuario y al <b>primer equipo</b> donde
+          se active (un solo uso por usuario y equipo). Se genera un código
+          <b>XXXXX-XXXXX-XXXXX-XXXXX-XXXXX</b> que usted copia y entrega al
+          cliente; él lo ingresa desde la página de suscripción vencida.
         </div>
       </div>
     </div>
     <div class="form-actions">
-      <button type="submit" class="btn btn-gold btn-lg"><i class="bi bi-download"></i> Generar y descargar licencia</button>
+      <button type="submit" class="btn btn-gold btn-lg"><i class="bi bi-key"></i> Generar código de licencia</button>
     </div>
   </form>
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-file-earmark-arrow-up"></i> Renovar con archivo de licencia</h3></div>
-  <form method="post" action="{{ url_for('licencia_subir') }}" enctype="multipart/form-data" class="form-panel">
+  <div class="card-head"><h3><i class="bi bi-key-fill"></i> Renovar con código de licencia</h3></div>
+  <form method="post" action="{{ url_for('licencia_subir') }}" class="form-panel">
     <div class="form-grid">
       <div class="field full">
-        <label>Archivo de licencia (.lic)</label>
-        <input type="file" name="licencia" accept=".lic,.json,application/json" required>
+        <label for="f-ap-codigo">Código de licencia</label>
+        <input type="text" name="licencia" id="f-ap-codigo" class="lic-codigo-input"
+               placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" maxlength="35" required autocomplete="off"
+               pattern="[0-9BCDFGHJKMPQRTVWXYa-z A-Z-]*">
         <div class="field-hint">
-          Si la suscripción sigue vigente, la nueva vigencia se suma a la fecha de vencimiento actual;
-          si ya venció, se inicia desde hoy.
+          Ingrese el código. Queda atado a su usuario y al primer equipo donde se
+          active; si la suscripción sigue vigente, la nueva vigencia se suma a la
+          fecha de vencimiento actual; si ya venció, se inicia desde hoy.
         </div>
       </div>
     </div>
@@ -176,4 +180,17 @@
     que siempre puede ingresar para renovar. Antes de vencer (15 días) se muestra un aviso.
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var campo = document.getElementById('f-ap-codigo');
+    if (!campo) return;
+    campo.addEventListener('input', function () {
+      campo.value = campo.value.toUpperCase().replace(/[^0-9BCDFGHJKMPQRTVWXY]/g, '')
+        .replace(/(.{5})/g, '$1-').replace(/-$/, '').slice(0, 29);
+    });
+  })();
+</script>
 {% endblock %}

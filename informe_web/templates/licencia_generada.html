@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Código de licencia generado para el administrador. Cópielo y entréguelo al cliente.">
+  <title>Código de licencia generado | Informe Mensual de Obra</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=9">
+</head>
+<body class="vencida-body">
+  <div class="vencida-card">
+    <div class="vencida-top">
+      <div class="vencida-icon"><i class="bi bi-key-fill"></i></div>
+      <span class="vencida-tag"><i class="bi bi-check-circle-fill"></i> CÓDIGO GENERADO</span>
+      <h1>Licencia {{ plan }}</h1>
+      <p class="vencida-desc">
+        Código para el administrador <b>{{ titular.usuario }}</b>
+        {% if titular.nombres %} ({{ titular.nombres }}){% endif %}.
+        Cópielo y entrégueselo al cliente para que lo ingrese desde la página de
+        suscripción vencida.
+      </p>
+    </div>
+
+    <div class="lic-codigo-box">
+      <div class="lic-codigo" id="codigoGenerado">{{ codigo }}</div>
+      <button type="button" class="vencida-btn gold" onclick="copiarCodigo()" id="btnCopiar">
+        <i class="bi bi-clipboard"></i> <span id="lblCopiar">Copiar código</span>
+      </button>
+    </div>
+
+    <div class="vencida-note">
+      <i class="bi bi-shield-lock"></i>
+      <span>
+        El código es de <b>un solo uso</b> y queda atado al usuario
+        <b>{{ titular.usuario }}</b> y al <b>primer equipo</b> donde se active.
+        Si el cliente ya lo usó en el mismo equipo, puede volver a ingresarlo
+        para sumar tiempo; en otro equipo se rechazará.
+      </span>
+    </div>
+
+    <div class="vencida-actions">
+      <a class="vencida-btn ghost" href="{{ url_for('suscripcion') }}">
+        <i class="bi bi-arrow-left"></i> Volver a suscripción
+      </a>
+    </div>
+  </div>
+  <script>
+    function copiarCodigo() {
+      var texto = document.getElementById('codigoGenerado').textContent;
+      function ok() {
+        var lbl = document.getElementById('lblCopiar');
+        lbl.textContent = '¡Copiado!';
+        setTimeout(function () { lbl.textContent = 'Copiar código'; }, 2000);
+      }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(texto).then(ok, function () { fallback(); });
+      } else {
+        fallback();
+      }
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = texto;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); ok(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    }
+  </script>
+</body>
+</html>

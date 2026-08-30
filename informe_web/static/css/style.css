@@ -1266,6 +1266,20 @@ body.modal-open { overflow: hidden; }
 .vencida-btn.ghost:hover { color: #0F172A; border-color: #CBD5E1; }
 .vencida-actions { display: flex; justify-content: center; padding: 14px 32px 20px; }
 
+/* ---------- Código de licencia alfanumérico ---------- */
+.lic-codigo-box { display: flex; flex-direction: column; align-items: center; gap: 14px;
+                  padding: 0 32px 8px; }
+.lic-codigo { font-family: 'Courier New', ui-monospace, monospace; font-size: 22px; font-weight: 800;
+              letter-spacing: 2px; color: #1D4ED8; text-align: center; user-select: all;
+              background: #EFF6FF; border: 1.5px dashed #93C5FD; border-radius: 12px;
+              padding: 16px 14px; width: 100%; line-height: 1.5; word-break: break-all; }
+.lic-codigo-input { font-family: 'Courier New', ui-monospace, monospace; font-size: 18px;
+                    font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase;
+                    text-align: center; width: 100%; padding: 12px 10px; }
+.vencida-file-info.ok { color: #047857; font-weight: 600; }
+.lic-input-hint { font-size: 12px; color: var(--texto2); line-height: 1.5; margin: 0; }
+
+
 /* ---------- Modal: opciones de generacion de planilla ---------- */
 .planilla-seccion-activa { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 800;
                            text-transform: uppercase; letter-spacing: .4px; color: var(--azul-osc);

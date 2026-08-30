@@ -29,7 +29,7 @@ DATOS_DIR = (os.environ.get("INFORME_DATOS_DIR")
 
 # Tablas que solo existen en la base maestra (globales).
 TABLAS_MAESTRAS = {"usuario", "suscripcion", "suscripcion_historial",
-                   "licencias_usadas"}
+                   "licencias_usadas", "licencias_emitidas"}
 # Tablas de negocio: propias de cada Administrador (se descubren una sola vez).
 TABLAS_NEGOCIO = []
 

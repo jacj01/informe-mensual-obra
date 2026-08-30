@@ -286,14 +286,35 @@ class SuscripcionHistorial(db.Model):
 
 
 class LicenciaUtilizada(db.Model):
-    """Registro de licencias ya activadas (cada licencia tiene un solo uso).
+    """Registro de licencias ya activadas (cada código tiene un solo uso,
+    ligado al usuario y al primer equipo que lo activó).
 
-    La serie de la licencia se marca como usada al aplicar, de modo que el
-    mismo archivo no pueda reactivar la suscripción una segunda vez.
+    La serie del código se marca como usada al aplicar, de modo que el mismo
+    código no pueda reactivar la suscripción una segunda vez en otro equipo.
     """
     __tablename__ = "licencias_usadas"
     id = db.Column(db.Integer, primary_key=True)
     serie = db.Column(db.String(50), unique=True, nullable=False)
     usuario = db.Column(db.String(80), default="")
     plan = db.Column(db.String(20), default="")
+    maquina = db.Column(db.String(80), default="")
     fecha_uso = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class LicenciaEmitida(db.Model):
+    """Código de licencia alfanumérico emitido por el Super Usuario.
+
+    Cada código queda ligado al Administrador (usuario) para quien se generó
+    y a un plan. La serie (única) se incrusta en el código y se marca como
+    utilizada al activarla la primera vez, junto con el equipo que la usó.
+    """
+    __tablename__ = "licencias_emitidas"
+    id = db.Column(db.Integer, primary_key=True)
+    serie = db.Column(db.String(50), unique=True, nullable=False)
+    plan = db.Column(db.String(20), default="Mensual")
+    usuario = db.Column(db.String(80), default="")
+    emitida = db.Column(db.Date, default=date.today)
+    usada = db.Column(db.Boolean, default=False)
+    usada_por = db.Column(db.String(80), default="")
+    maquina = db.Column(db.String(80), default="")
+    fecha_uso = db.Column(db.DateTime)

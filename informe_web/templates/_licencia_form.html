@@ -1,8 +1,8 @@
-<form method="post" class="form-panel" action="{{ url_for('licencia_subir') }}" enctype="multipart/form-data">
+<form method="post" class="form-panel" action="{{ url_for('licencia_subir') }}">
   <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   <div class="card">
     <div class="card-head">
-      <h3><i class="bi bi-file-earmark-arrow-up"></i> Ampliar licencia</h3>
+      <h3><i class="bi bi-key"></i> Ampliar licencia</h3>
     </div>
     <div class="form-grid">
       {% if susc %}
@@ -23,13 +23,16 @@
       </div>
       {% endif %}
       <div class="field full">
-        <label for="lic-file">Archivo de licencia (.lic)</label>
-        <input type="file" name="licencia" id="lic-file" accept=".lic,.json,application/json" required>
-        <div class="field-hint" id="lic-file-info">
-          Seleccione el archivo de licencia que le fue entregado. La licencia es
-          personal para su usuario y de un solo uso. Si su suscripción sigue
-          vigente, se sumarán los días restantes más el periodo de la licencia
-          y se mostrará la nueva fecha de vencimiento.
+        <label for="lic-codigo">Código de licencia</label>
+        <input type="text" name="licencia" id="lic-codigo" class="lic-codigo-input"
+               placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" maxlength="35" required autocomplete="off"
+               pattern="[0-9BCDFGHJKMPQRTVWXYa-z A-Z-]*">
+        <div class="field-hint" id="lic-codigo-info">
+          Ingrese el código de licencia que le fue entregado (formato
+          XXXXX-XXXXX-XXXXX-XXXXX-XXXXX). El código es de un solo uso y queda
+          atado a su usuario y al primer equipo donde lo ingrese. Si su
+          suscripción sigue vigente, se sumarán los días restantes más el
+          periodo de la licencia y se mostrará la nueva fecha de vencimiento.
         </div>
       </div>
     </div>
@@ -39,20 +42,13 @@
     <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
   </div>
 </form>
-
 <script>
   (function () {
-    var inp = document.getElementById('lic-file');
-    var info = document.getElementById('lic-file-info');
-    if (!inp || !info) return;
-    function escapar(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-    inp.addEventListener('change', function () {
-      if (inp.files && inp.files.length) {
-        info.innerHTML = '<i class="bi bi-check-circle-fill"></i> Archivo seleccionado: <b>' +
-          escapar(inp.files[0].name) + '</b>';
-      } else {
-        info.textContent = 'Seleccione el archivo de licencia que le fue entregado.';
-      }
+    var campo = document.getElementById('lic-codigo');
+    if (!campo) return;
+    campo.addEventListener('input', function () {
+      campo.value = campo.value.toUpperCase().replace(/[^0-9BCDFGHJKMPQRTVWXY]/g, '')
+        .replace(/(.{5})/g, '$1-').replace(/-$/, '').slice(0, 29);
     });
   })();
 </script>

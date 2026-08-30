@@ -6,12 +6,14 @@ import hmac
 import json
 import logging
 import shutil
+import socket
 import struct
 import os
 import secrets
 import sqlite3
 import threading
 import time
+import uuid
 from datetime import date, datetime, timedelta
 from functools import wraps
 
@@ -34,8 +36,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from models import (db, Proyecto, Presupuesto, Gasto, GastoDetalle,
                     AlmacenMovimiento, ActividadEjecutada, Trabajador, Usuario,
                     CLASIFICADORES, COMPONENTES, Suscripcion,
-                    SuscripcionHistorial, LicenciaUtilizada, PLANES_SUSCRIPCION,
-                    sumar_meses)
+                    SuscripcionHistorial, LicenciaUtilizada, LicenciaEmitida,
+                    PLANES_SUSCRIPCION, sumar_meses)
 import version as _app_version
 from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      suscripcion_vigente, suscripcion_usuario, gastos_mes,
@@ -391,6 +393,26 @@ def migrar_suscripcion():
             conn.execute(text("ALTER TABLE usuario ADD COLUMN susc_inicio DATE"))
             conn.execute(text("ALTER TABLE usuario ADD COLUMN susc_fin DATE"))
             conn.execute(text("ALTER TABLE usuario ADD COLUMN susc_activa BOOLEAN"))
+            conn.commit()
+        # Tabla de códigos de licencia emitidos (Super Usuario -> cliente).
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS licencias_emitidas ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "serie VARCHAR(50) UNIQUE NOT NULL,"
+            "plan VARCHAR(20) DEFAULT 'Mensual',"
+            "usuario VARCHAR(80) DEFAULT '',"
+            "emitida DATE,"
+            "usada BOOLEAN DEFAULT 0,"
+            "usada_por VARCHAR(80) DEFAULT '',"
+            "maquina VARCHAR(80) DEFAULT '',"
+            "fecha_uso DATETIME)"))
+        conn.commit()
+        # Columna de equipo (huella) en licencias_usadas (códigos utilizados).
+        lcols = [r[1] for r in conn.execute(
+            text("PRAGMA table_info(licencias_usadas)"))]
+        if "maquina" not in lcols:
+            conn.execute(text(
+                "ALTER TABLE licencias_usadas ADD COLUMN maquina VARCHAR(80)"))
             conn.commit()
 
 
@@ -913,6 +935,191 @@ def aplicar_licencia(d):
         plan=plan))
     ms.commit()
     return {"plan": plan, "fecha_inicio": base, "fecha_fin": fin}
+
+
+# ----------------------------------------------------------------------------
+# Licencia alfanumérica XXXXX-XXXXX-XXXXX-XXXXX-XXXXX (5 grupos de 5 caracteres)
+# ----------------------------------------------------------------------------
+# Alfabeto sin caracteres ambiguos (sin 0/O/1/I/L). Solo admite caracteres que
+# el cliente pueda teclear sin equivocarse.
+_ALFABETO_LIC = "BCDFGHJKMPQRTVWXY2346789"
+# Mapa de plan -> indice dentro del alfabeto (para un caracter en el codigo).
+_PLANES_INDICE = {nombre: i for i, nombre in enumerate(PLANES_SUSCRIPCION)}
+_INDICE_PLANES = {i: nombre for nombre, i in _PLANES_INDICE.items()}
+# Prefijo de serie en la base: 'L' + decimal (serie del registro emitido).
+_PREFIJO_SERIE = "L"
+# Semilla de firma para los codigos (igual que la de archivos .lic, pero la
+# version cambia para que los codigos viejos de archivo no sean validos).
+CODIGO_LICENCIA_SECRETO = LICENCIA_SECRETO + "::codigo::2026"
+
+
+def _huella_maquina():
+    """Huella (identificador) estable del equipo actual.
+
+    Combina el identificador de interfaz de red (MAC), el nombre de la maquina
+    y el usuario de Windows en un hash corto. Sirve para atar una licencia al
+    primer equipo que la activa.
+    """
+    try:
+        nodo = uuid.getnode()
+    except Exception:
+        nodo = 0
+    base = "%s|%s|%s" % (nodo, socket.gethostname(), os.environ.get("USERNAME", ""))
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
+
+
+def _int_a_base32(valor, largo):
+    """Codifica un entero a 'largo' caracteres del alfabeto (base 24)."""
+    out = []
+    for _ in range(largo):
+        out.append(_ALFABETO_LIC[valor % len(_ALFABETO_LIC)])
+        valor //= len(_ALFABETO_LIC)
+    return "".join(reversed(out))
+
+
+def _base32_a_int(cadena, largo):
+    """Decodifica 'largo' caracteres del alfabeto a un entero (o None)."""
+    if len(cadena) != largo:
+        return None
+    valor = 0
+    for ch in cadena:
+        if ch not in _ALFABETO_LIC:
+            return None
+        valor = valor * len(_ALFABETO_LIC) + _ALFABETO_LIC.index(ch)
+    return valor
+
+
+def _firmar_codigo(serie_numero, plan, usuario):
+    """Firma (HMAC) de un codigo: ata serie+plan+usuario para que solo valga un
+    codigo realmente emitido por el aplicativo (no se puede teclear al azar)."""
+    msg = "%s|%s|%s|%s" % (serie_numero, plan, usuario, _PREFIJO_SERIE)
+    return hmac.new(
+        hashlib.sha256(CODIGO_LICENCIA_SECRETO.encode("utf-8")).digest(),
+        msg.encode("utf-8"), hashlib.sha256).digest()
+
+
+def _formatear_codigo(cadena):
+    """Divide los 25 caracteres en 5 grupos de 5 separados por guiones."""
+    return "-".join(cadena[i:i + 5] for i in range(0, 25, 5))
+
+
+def generar_codigo_licencia(plan, usuario):
+    """Genera un codigo alfanumerico XXXXX-XXXXX-XXXXX-XXXXX-XXXXX para el plan
+    y usuario (Administrador) indicado.
+
+    Crea el registro de emision (serie unica) y devuelve el codigo formateado.
+    El codigo solo puede activarlo el usuario titular y en el primer equipo que
+    lo use; reutilizarlo en el mismo equipo+usuario suma tiempo.
+    """
+    if plan not in PLANES_SUSCRIPCION:
+        plan = "Mensual"
+    ms = _bd.master_session
+    # Serie unica = id del registro de emision. Prefijo provisional para no
+    # violar NOT NULL durante el flush (se sobreescribe con el id real).
+    emision = LicenciaEmitida(
+        plan=plan,
+        usuario=(usuario or "").strip(),
+        emitida=date.today(),
+        usada=False,
+        serie=_PREFIJO_SERIE + "0")
+    ms.add(emision)
+    ms.flush()
+    serie_numero = emision.id
+    emision.serie = _PREFIJO_SERIE + str(serie_numero)
+    ms.commit()
+    # Firmar: serie(4 chars) + plan(1 char) + firma(20 chars) = 25 chars.
+    plan_char = _ALFABETO_LIC[_PLANES_INDICE[plan]]
+    serie_cod = _int_a_base32(serie_numero, 4)
+    firma_bits = _base32_bits(_firmar_codigo(serie_numero, plan, emision.usuario),
+                              20)
+    crudo = serie_cod + plan_char + firma_bits
+    return _formatear_codigo(crudo)
+
+
+def _base32_bits(digest_bytes, largo):
+    """Toma los primeros bytes del digest y los vuelca a 'largo' caracteres."""
+    num = int.from_bytes(digest_bytes[:16], "big")
+    return _int_a_base32(num % (len(_ALFABETO_LIC) ** largo), largo)
+
+
+def _validar_codigo(codigo, usuario_actual_):
+    """Valida y aplica un codigo alfanumerico a la suscripcion del actor.
+
+    Reglas:
+      - El codigo debe ser genuino (firma HMAC correcta) y existir en
+        licencias_emitidas.
+      - Solo puede activarlo el Administrador titular del codigo.
+      - El primer equipo que lo activa queda atado al codigo (primer equipo
+        gana); reutilizarlo en el mismo equipo+usuario suma tiempo; en otro
+        equipo se rechaza.
+    Devuelve dict {plan, fecha_inicio, fecha_fin} o None si es invalido.
+    """
+    if not isinstance(codigo, str):
+        return None
+    crudo = codigo.replace(" ", "").replace("-", "").upper()
+    if len(crudo) != 25 or any(c not in _ALFABETO_LIC for c in crudo):
+        return None
+    serie_cod = crudo[0:4]
+    plan_char = crudo[4]
+    firma = crudo[5:25]
+    serie_numero = _base32_a_int(serie_cod, 4)
+    if serie_numero is None:
+        return None
+    plan = _INDICE_PLANES.get(_ALFABETO_LIC.index(plan_char))
+    if plan is None or plan not in PLANES_SUSCRIPCION:
+        return None
+    ms = _bd.master_session
+    emision = ms.query(LicenciaEmitida).filter_by(
+        serie=_PREFIJO_SERIE + str(serie_numero)).first()
+    if emision is None:
+        return None
+    # Verificar firma con el usuario TIULAR registrado en la emision.
+    esperado = _base32_bits(
+        _firmar_codigo(serie_numero, emision.plan, emision.usuario), 20)
+    if firma != esperado:
+        return None
+    # Solo el Administrador titular puede activar el codigo.
+    actor = usuario_actual_ if usuario_actual_ is not None else usuario_actual()
+    if (not actor or actor.rol != "Administrador"
+            or (actor.usuario or "").strip() != emision.usuario):
+        return None
+    huella = _huella_maquina()
+    # Si ya fue usado: validar que sea el mismo equipo y el mismo usuario.
+    if emision.usada:
+        if emision.usada_por != actor.usuario or not emision.maquina:
+            return None
+        if emision.maquina != huella:
+            return None
+    hoy = date.today()
+    base = actor.susc_fin if (actor.susc_activa and actor.susc_fin
+                              and actor.susc_fin >= hoy) else hoy
+    fin = sumar_meses(base, PLANES_SUSCRIPCION[emision.plan])
+    actor.susc_plan = emision.plan
+    actor.susc_inicio = base
+    actor.susc_fin = fin
+    actor.susc_activa = True
+    if not emision.usada:
+        emision.usada = True
+        emision.usada_por = actor.usuario
+        emision.maquina = huella
+        emision.fecha_uso = datetime.utcnow()
+    usados = ms.query(LicenciaUtilizada).filter_by(
+        serie=emision.serie).first()
+    if usados is None:
+        ms.add(LicenciaUtilizada(
+            serie=emision.serie,
+            usuario=actor.usuario,
+            plan=emision.plan,
+            maquina=huella))
+    else:
+        usados.maquina = huella
+    ms.add(SuscripcionHistorial(
+        plan=emision.plan, fecha_inicio=base, fecha_fin=fin,
+        usuario=(actor.nombres or actor.usuario) if actor else "",
+        nota="Renovación por código %s" % _formatear_codigo(crudo),
+        accion="Renovación"))
+    ms.commit()
+    return {"plan": emision.plan, "fecha_inicio": base, "fecha_fin": fin}
 
 # Endpoints a los que solo accede el Administrador.
 _ENDPOINTS_ADMIN = ("usuarios", "usuario_nuevo", "usuario_editar", "usuario_eliminar")
@@ -2245,8 +2452,12 @@ def registrar_rutas(app):
     @app.route("/licencia/generar", methods=["POST"])
     @super_requerido
     def licencia_generar():
-        """Genera y descarga un archivo de licencia para el plan y el usuario
-        (Administrador) indicado. La licencia queda vinculada a ese usuario."""
+        """Genera un codigo alfanumerico XXXXX-XXXXX-XXXXX-XXXXX-XXXXX para el
+        plan y el usuario (Administrador) indicado, y lo muestra para copiar.
+
+        El codigo queda vinculado al usuario titular y al primer equipo que lo
+        active (primer equipo gana). Muestra la pagina 'licencia_generada'.
+        """
         plan = request.form.get("plan", "Mensual")
         if plan not in PLANES_SUSCRIPCION:
             plan = "Mensual"
@@ -2256,27 +2467,22 @@ def registrar_rutas(app):
         if not titular or titular.rol != "Administrador":
             flash("Seleccione el usuario Administrador para la licencia.", "error")
             return redirect(url_for("suscripcion"))
-        contenido = generar_licencia(plan, usuario=titular.usuario,
-                                     usuario_id=titular.id,
-                                     nombres=titular.nombres)
-        nombre = (f"licencia_{titular.usuario}_{plan.lower()}_"
-                  f"{date.today().strftime('%Y%m%d')}.lic")
-        return Response(
-            contenido, mimetype="application/octet-stream",
-            headers={"Content-Disposition":
-                     f"attachment; filename={nombre}"})
+        codigo = generar_codigo_licencia(plan, titular.usuario)
+        return render_template(
+            "licencia_generada.html", codigo=codigo, plan=plan,
+            titular=titular)
 
     @app.route("/licencia/subir", methods=["POST"])
     def licencia_subir():
-        """El cliente sube el archivo de licencia para renovar la suscripción."""
-        f = request.files.get("licencia")
-        if f is None or not f.filename:
-            flash("Seleccione el archivo de licencia (.lic o .json).", "error")
+        """El cliente ingresa el codigo alfanumerico para renovar la suscripción."""
+        codigo = request.form.get("licencia", "").strip()
+        if not codigo:
+            flash("Ingrese el código de licencia que le fue entregado.", "error")
             return redirect(url_for("suscripcion_vencida"))
-        s = aplicar_licencia(descifrar_licencia(f.read()))
+        s = _validar_codigo(codigo, usuario_actual())
         if s is None:
-            flash("El archivo de licencia no es válido, ya fue utilizado o no "
-                  "corresponde a la cuenta de su usuario.", "error")
+            flash("El código de licencia no es válido, ya fue utilizado en otro "
+                  "equipo o no corresponde a su usuario.", "error")
             return redirect(url_for("suscripcion_vencida"))
         plan = s["plan"]
         hoy = date.today()
@@ -2293,7 +2499,7 @@ def registrar_rutas(app):
 
     @app.route("/licencia/form")
     def licencia_form():
-        """Formulario de subida de licencia (usado en el modal 'Ampliar licencia')."""
+        """Formulario de ingreso de codigo (usado en el modal 'Ampliar licencia')."""
         return render_template("_licencia_form.html")
 
     @app.route("/")

@@ -67,16 +67,14 @@
       </div>
     </div>
     <div class="vencida-license">
-      <div class="vencida-license-title"><i class="bi bi-file-earmark-check"></i> ¿Ya tiene su archivo de licencia?</div>
-      <p class="vencida-license-txt">Suba el archivo <b>.lic</b> que le fue entregado y la suscripción se renovará automáticamente.</p>
-      <form method="post" action="{{ url_for('licencia_subir') }}" enctype="multipart/form-data" class="vencida-upload" id="vencida-upload-form">
+      <div class="vencida-license-title"><i class="bi bi-key-fill"></i> ¿Ya tiene su código de licencia?</div>
+      <p class="vencida-license-txt">Ingrese el código <b>XXXXX-XXXXX-XXXXX-XXXXX-XXXXX</b> que le fue entregado y la suscripción se renovará automáticamente.</p>
+      <form method="post" action="{{ url_for('licencia_subir') }}" class="vencida-upload" id="vencida-upload-form">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-        <label class="vencida-file">
-          <i class="bi bi-cloud-arrow-up"></i>
-          <span>Seleccionar archivo de licencia</span>
-          <input type="file" name="licencia" id="vencida-file" accept=".lic,.json,application/json" required>
-        </label>
-        <p class="vencida-file-info" id="vencida-file-info"><i class="bi bi-info-circle"></i> Sin archivo seleccionado</p>
+        <input type="text" name="licencia" id="vencida-codigo" class="lic-codigo-input"
+               placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" maxlength="35" required autocomplete="off"
+               pattern="[0-9BCDFGHJKMPQRTVWXYa-z A-Z-]*">
+        <p class="vencida-file-info" id="vencida-file-info"><i class="bi bi-info-circle"></i> El código queda atado a su usuario y al primer equipo donde lo ingrese.</p>
         <button type="submit" class="vencida-btn gold"><i class="bi bi-arrow-repeat"></i> Renovar ahora</button>
       </form>
       <p class="vencida-sub">¿Aún no lo tiene? Comuníquese con el contacto para recibirlo.</p>
@@ -89,18 +87,11 @@
   </div>
   <script>
     (function () {
-      var inp = document.getElementById('vencida-file');
-      var info = document.getElementById('vencida-file-info');
-      if (!inp || !info) return;
-      function escapar(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-      inp.addEventListener('change', function () {
-        if (inp.files && inp.files.length) {
-          info.className = 'vencida-file-info ok';
-          info.innerHTML = '<i class="bi bi-file-earmark-check"></i> Archivo listo: <b>' + escapar(inp.files[0].name) + '</b>';
-        } else {
-          info.className = 'vencida-file-info';
-          info.innerHTML = '<i class="bi bi-info-circle"></i> Sin archivo seleccionado';
-        }
+      var inp = document.getElementById('vencida-codigo');
+      if (!inp) return;
+      inp.addEventListener('input', function () {
+        inp.value = inp.value.toUpperCase().replace(/[^0-9BCDFGHJKMPQRTVWXY]/g, '')
+          .replace(/(.{5})/g, '$1-').replace(/-$/, '').slice(0, 29);
       });
     })();
 
