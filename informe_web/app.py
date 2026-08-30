@@ -4690,16 +4690,36 @@ def registrar_rutas(app):
                 if not fname.lower().endswith(".db"):
                     flash("El archivo debe ser una base de datos SQLite (.db).", "danger")
                     return redirect(url_for("respaldo"))
-                # Nombre seguro: evitar路径 traversal
+                # Nombre seguro: evitar traversal
                 safe_name = os.path.basename(fname)
                 os.makedirs(RESPALDO_DIR, exist_ok=True)
                 dest = os.path.join(RESPALDO_DIR, safe_name)
                 archivo.save(dest)
-                # Validar que sea SQLite
+                # Soportar dos formatos: respaldos propios de la app (cifrados con
+                # cabecera _MAGIC) y archivos .db SQLite planos. Para validar se
+                # normaliza el contenido (descifrando si procede) antes de abrirlo.
                 try:
-                    con = sqlite3.connect(dest)
-                    con.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()
-                    con.close()
+                    with open(dest, "rb") as f:
+                        raw = f.read()
+                except Exception:
+                    raw = b""
+                contenido = _descifrar_datos(raw)
+                try:
+                    import tempfile as _tf
+                    tmp = _tf.NamedTemporaryFile(suffix=".db", delete=False)
+                    tmp.write(contenido)
+                    tmp.close()
+                    try:
+                        con = sqlite3.connect(tmp.name)
+                        try:
+                            con.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()
+                        finally:
+                            con.close()
+                    finally:
+                        try:
+                            os.remove(tmp.name)
+                        except Exception:
+                            pass
                 except Exception:
                     try:
                         os.remove(dest)
@@ -4707,12 +4727,11 @@ def registrar_rutas(app):
                         pass
                     flash("El archivo no es una base de datos SQLite válida.", "danger")
                     return redirect(url_for("respaldo"))
-                # Cifrar el archivo cargado
+                # Guardar el archivo cifrado UNA sola vez (aunque el original ya
+                # viniera cifrado, se reescribe normalizado desde el contenido plano).
                 try:
-                    with open(dest, "rb") as f:
-                        raw = f.read()
                     with open(dest, "wb") as f:
-                        f.write(_cifrar_datos(raw))
+                        f.write(_cifrar_datos(contenido))
                 except Exception:
                     pass
                 # Restaurar desde el archivo cargado

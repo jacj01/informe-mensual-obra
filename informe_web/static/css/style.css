@@ -850,7 +850,7 @@ body.modal-open { overflow: hidden; }
   justify-content: center; align-items: center; padding: 48px;
   background-color: #06182d;
   background-image: url("../img/Fondo.png");
-  background-size: contain;
+  background-size: cover;
   background-position: center center;
   background-repeat: no-repeat;
 }
