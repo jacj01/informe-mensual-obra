@@ -156,6 +156,7 @@ begin
   Bat :=
     '@echo off' + #13#10 +
     'cd /d "%~dp0python"' + #13#10 +
+    'set "PYTHONNOUSERSITE=1"' + #13#10 +
     'echo === Configurando Python e instalando dependencias ===' + #13#10 +
     'set "PIP=no"' + #13#10 +
     'python -c "import sys, pip" >nul 2>&1 && set "PIP=yes"' + #13#10 +
@@ -166,9 +167,8 @@ begin
     '  del "%~dp0get-pip.py"' + #13#10 +
     ')' + #13#10 +
     'echo Instalando dependencias (Flask, openpyxl, Pillow, waitress)...' + #13#10 +
-    'python -m pip install -r "%~dp0..\informe_web\requirements.txt" --quiet --disable-pip-version-check' + #13#10 +
-    'echo === Listo ===' + #13#10 +
-    'del "%~f0"';
+    'python -m pip install -r "%~dp0informe_web\requirements.txt" --quiet --disable-pip-version-check' + #13#10 +
+    'echo === Listo ===' + #13#10;
   SaveStringToFile(ExpandConstant('{app}\instalar_python.bat'), Bat, False);
   Log('[INSTALL] instalar_python.bat generado.');
 end;
