@@ -834,6 +834,151 @@ def descifrar_licencia(blob):
         return None
 
 
+# ----------------------------------------------------------------------------
+# Usuarios portables (respaldo cifrado de cuentas para gestión centralizada)
+# ----------------------------------------------------------------------------
+# Se usa el mismo cifrado de licencia (clave fija LICENCIA_SECRETO), que sí es
+# portable entre máquinas, a diferencia de _cifrar_datos (XOR por hostname).
+_ARCHIVO_USUARIOS = "usuarios_cifrados.lic"  # en la raíz del repositorio
+
+
+def _datos_usuarios(admins=None):
+    """Devuelve la lista de dicts con los datos (y licencia) de los
+    Administradores, lista para cifrar. Si no se pasa 'admins', se toman
+    todos los Administradores de la base maestra."""
+    ms = _bd.master_session
+    lista = admins
+    if lista is None:
+        lista = (ms.query(Usuario)
+                 .filter(Usuario.rol == "Administrador")
+                 .order_by(Usuario.usuario).all())
+    datos = []
+    for a in lista:
+        def _f(dt):
+            return dt.strftime("%Y-%m-%d") if dt else None
+        datos.append({
+            "usuario": (a.usuario or "").strip(),
+            "nombres": (a.nombres or "").strip(),
+            "rol": a.rol,
+            "activo": bool(a.activo),
+            "susc_plan": a.susc_plan or "",
+            "susc_inicio": _f(a.susc_inicio),
+            "susc_fin": _f(a.susc_fin),
+            "susc_activa": a.susc_activa,
+        })
+    return datos
+
+
+def cifrar_usuarios(admins=None):
+    """Cifra el listado de usuarios/administradores y devuelve bytes portables
+    (prefijo 'IML1:'). Viajan por git/GitHub sin exponer nada legible."""
+    payload = {
+        "tipo": "usuarios",
+        "version": 1,
+        "generado": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "usuarios": _datos_usuarios(admins),
+    }
+    return cifrar_licencia(json.dumps(payload).encode("utf-8"))
+
+
+def descifrar_usuarios(blob):
+    """Descifra un archivo de usuarios portable y devuelve su dict, o None si
+    es inválido, está alterado o no fue generado por el emisor."""
+    try:
+        d = descifrar_licencia(blob)
+        if not d or d.get("tipo") != "usuarios":
+            return None
+        datos = d.get("usuarios")
+        if not isinstance(datos, list):
+            return None
+        return d
+    except Exception:
+        return None
+
+
+def _aplicar_usuarios_importados(datos):
+    """Aplica los datos de los usuarios (Administradores) importados a la base
+    maestra: actualiza licencia/datos de los que ya existen. Devuelve un dict
+    con resumen de lo aplicado."""
+    ms = _bd.master_session
+    aplicados = 0
+    for item in datos:
+        if not isinstance(item, dict):
+            continue
+        nombre = (item.get("usuario") or "").strip()
+        if not nombre:
+            continue
+        u = ms.query(Usuario).filter(
+            Usuario.usuario == nombre).first()
+        if u is None or u.rol != "Administrador":
+            continue
+        def _p(v):
+            try:
+                return date.fromisoformat(v) if v else None
+            except (TypeError, ValueError):
+                return None
+        u.nombres = (item.get("nombres") or u.nombres or "").strip()
+        u.activo = bool(item.get("activo", u.activo))
+        u.susc_plan = (item.get("susc_plan") or "").strip() or u.susc_plan
+        u.susc_inicio = _p(item.get("susc_inicio")) if item.get("susc_inicio") else u.susc_inicio
+        u.susc_fin = _p(item.get("susc_fin")) if item.get("susc_fin") else u.susc_fin
+        su = item.get("susc_activa")
+        if su is not None:
+            u.susc_activa = bool(su)
+        aplicados += 1
+    ms.commit()
+    return {"aplicados": aplicados}
+
+
+def _ruta_archivo_usuarios():
+    """Ruta absoluta del archivo cifrado de usuarios en la raíz del repo."""
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        _ARCHIVO_USUARIOS)
+
+
+def _subir_usuarios_a_github():
+    """Sube el archivo cifrado de usuarios a GitHub (solo commit del archivo,
+    sin disparar release ni workflow). Solamente tiene sentido en la máquina
+    central (donde git/gh ya están autenticados y origin apunta al repo).
+    Devuelve (ok, mensaje)."""
+    import subprocess
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ruta = _ruta_archivo_usuarios()
+    archivo = _ARCHIVO_USUARIOS
+    if not os.path.exists(ruta):
+        return (False, "No existe el archivo cifrado de usuarios.")
+    env = dict(os.environ)
+    try:
+        # Solo el archivo de usuarios (jamás add -A: no mezclar con releases).
+        res = subprocess.run(
+            ["git", "-C", root, "add", "--", archivo],
+            check=True, capture_output=True, text=True,
+            creationflags=0x08000000)
+        # Si no hay cambios que subir, no hace falta nada más.
+        st = subprocess.run(
+            ["git", "-C", root, "status", "--porcelain", "--", archivo],
+            check=True, capture_output=True, text=True,
+            creationflags=0x08000000)
+        if not st.stdout.strip():
+            return (True, "Sin cambios en el archivo de usuarios.")
+        msj = "Respaldo cifrado de usuarios [%s]" % datetime.now().strftime(
+            "%Y-%m-%d %H:%M")
+        subprocess.run(
+            ["git", "-C", root, "commit", "-m", msj, "--", archivo],
+            check=True, capture_output=True, text=True,
+            creationflags=0x08000000)
+        push = subprocess.run(
+            ["git", "-C", root, "push", "origin", "master"],
+            capture_output=True, text=True, creationflags=0x08000000)
+        if push.returncode != 0:
+            return (False, "push falló: %s" %
+                    (push.stderr or push.stdout or "").strip()[:200])
+        return (True, "Archivo de usuarios subido a GitHub.")
+    except Exception as e:
+        return (False, "Error al subir: %s" % str(e)[:200])
+
+
 def _licencia_valida(d):
     """True si el dict descifrado tiene datos de plan/meses correctos."""
     if not isinstance(d, dict):
@@ -1008,8 +1153,8 @@ def generar_codigo_licencia(plan, usuario):
     y usuario (Administrador) indicado.
 
     Crea el registro de emision (serie unica) y devuelve el codigo formateado.
-    El codigo solo puede activarlo el usuario titular y en el primer equipo que
-    lo use; reutilizarlo en el mismo equipo+usuario suma tiempo.
+    El codigo solo puede activarlo el usuario titular y solo se activa UNA vez:
+    reutilizarlo (mismo equipo, mismo usuario u otro) queda rechazado.
     """
     if plan not in PLANES_SUSCRIPCION:
         plan = "Mensual"
@@ -1049,9 +1194,8 @@ def _validar_codigo(codigo, usuario_actual_):
       - El codigo debe ser genuino (firma HMAC correcta) y existir en
         licencias_emitidas.
       - Solo puede activarlo el Administrador titular del codigo.
-      - El primer equipo que lo activa queda atado al codigo (primer equipo
-        gana); reutilizarlo en el mismo equipo+usuario suma tiempo; en otro
-        equipo se rechaza.
+      - Uso unico estricto: una vez activado, el codigo queda agotado para
+        siempre; reintroducirlo en el mismo u otro equipo/usuario se rechaza.
     Devuelve dict {plan, fecha_inicio, fecha_fin} o None si es invalido.
     """
     if not isinstance(codigo, str):
@@ -1083,13 +1227,13 @@ def _validar_codigo(codigo, usuario_actual_):
     if (not actor or actor.rol != "Administrador"
             or (actor.usuario or "").strip() != emision.usuario):
         return None
-    huella = _huella_maquina()
-    # Si ya fue usado: validar que sea el mismo equipo y el mismo usuario.
+    # Uso único estricto: un código emitido solo se activa UNA vez en total.
+    # Reintroducir un código ya utilizado se rechaza siempre, sin importar si
+    # es el mismo equipo/usuario o uno distinto. El cliente debe comprar o
+    # renovar con un código nuevo.
     if emision.usada:
-        if emision.usada_por != actor.usuario or not emision.maquina:
-            return None
-        if emision.maquina != huella:
-            return None
+        return None
+    huella = _huella_maquina()
     hoy = date.today()
     base = actor.susc_fin if (actor.susc_activa and actor.susc_fin
                               and actor.susc_fin >= hoy) else hoy
@@ -1125,7 +1269,9 @@ def _validar_codigo(codigo, usuario_actual_):
 _ENDPOINTS_ADMIN = ("usuarios", "usuario_nuevo", "usuario_editar", "usuario_eliminar")
 
 # Endpoints de control de la suscripción: solo el Super Usuario.
-_ENDPOINTS_SUPER = ("suscripcion", "suscripcion_renovar", "suscripcion_pausar")
+_ENDPOINTS_SUPER = ("suscripcion", "suscripcion_renovar", "suscripcion_pausar",
+                    "suscripcion_exportar_usuarios",
+                    "suscripcion_importar_usuarios")
 
 
 def permiso_requerido(ep):
@@ -2059,6 +2205,8 @@ def registrar_rutas(app):
             if ep not in ("usuarios", "usuario_nuevo", "usuario_editar",
                           "usuario_eliminar", "respaldo", "suscripcion",
                           "suscripcion_renovar", "suscripcion_pausar",
+                          "suscripcion_exportar_usuarios",
+                          "suscripcion_importar_usuarios",
                           "aplicar_actualizacion", "api_actualizacion", "publicar_nueva_version",
                           "progreso_publicacion", "progreso_actualizacion"):
                 flash("La cuenta principal gestiona cuentas y licencia; "
@@ -2223,6 +2371,20 @@ def registrar_rutas(app):
                 if es_super and rol == "Administrador":
                     # Cada Administrador tiene su propia base, que nace vacía.
                     ensure_tenant(nuevo_id)
+                    # Respaldo cifrado portable de usuarios en la raíz del repo
+                    # y subida automática a GitHub (solo commit del archivo,
+                    # sin release). Corre en un hilo para no bloquear el form.
+                    try:
+                        blob = cifrar_usuarios()
+                        with open(_ruta_archivo_usuarios(), "wb") as fh:
+                            fh.write(blob)
+                        threading.Thread(
+                            target=_subir_usuarios_a_github,
+                            daemon=True).start()
+                    except Exception:
+                        logging.getLogger("respaldo").warning(
+                            "No se pudo respaldar/subir usuarios cifrados",
+                            exc_info=True)
                     if opt_licencia == "mantener":
                         flash(f"Usuario '{nombre}' creado como Administrador. "
                               f"Mantiene la licencia actual y su proyecto "
@@ -2390,8 +2552,32 @@ def registrar_rutas(app):
         admins = (_bd.master_session.query(Usuario)
                   .filter(Usuario.rol == "Administrador", Usuario.activo.is_(True))
                   .order_by(Usuario.usuario).all())
+        # Días restantes de licencia por usuario (Administrador): usa la
+        # licencia propia del admin; si no la tiene, deriva de la global.
+        hoy = date.today()
+        dias_por_admin = []
+        todos = (_bd.master_session.query(Usuario)
+                 .filter(Usuario.rol == "Administrador")
+                 .order_by(Usuario.usuario).all())
+        for a in todos:
+            if a.susc_activa is not None and a.susc_fin:
+                rest = (a.susc_fin - hoy).days
+                propia = True
+            else:
+                base = s
+                rest = (base.fecha_fin - hoy).days if (base and base.fecha_fin) else 0
+                propia = False
+            dias_por_admin.append({
+                "usuario": a.usuario,
+                "nombres": a.nombres or "",
+                "activo": bool(a.activo),
+                "plan": a.susc_plan or "",
+                "dias": rest,
+                "propia": propia,
+            })
         return render_template("suscripcion.html", s=s, historial=historial,
-                               PLANES=PLANES_SUSCRIPCION, admins=admins)
+                               PLANES=PLANES_SUSCRIPCION, admins=admins,
+                               dias_por_admin=dias_por_admin)
 
     @app.route("/suscripcion/renovar", methods=["POST"])
     @super_requerido
@@ -2439,6 +2625,75 @@ def registrar_rutas(app):
                   else "Suscripción reactivada.", "success")
         return redirect(url_for("suscripcion"))
 
+    @app.route("/suscripcion/exportar-usuarios", methods=["POST"])
+    @super_requerido
+    def suscripcion_exportar_usuarios():
+        """Exporta un archivo cifrado (portable) con los datos y la licencia de
+        todos los Administradores. El Super lo envía al cliente (WhatsApp/email)
+        y, al importarlo, actualiza la licencia de cada usuario."""
+        blob = cifrar_usuarios()
+        # Deja también la copia del archivo en la raíz del repo (para respaldo
+        # y para facilitar la subida a GitHub).
+        try:
+            with open(_ruta_archivo_usuarios(), "wb") as fh:
+                fh.write(blob)
+        except Exception:
+            logging.getLogger("respaldo").warning(
+                "No se pudo guardar la copia local de usuarios cifrados",
+                exc_info=True)
+        buf = io.BytesIO(blob)
+        buf.seek(0)
+        nombre = "usuarios_cifrados_%s.lic" % datetime.now().strftime("%Y%m%d_%H%M%S")
+        return send_file(buf, as_attachment=True, download_name=nombre,
+                         mimetype="application/octet-stream")
+
+    @app.route("/suscripcion/importar-usuarios", methods=["POST"])
+    @super_requerido
+    def suscripcion_importar_usuarios():
+        """Importa un archivo cifrado de usuarios (generado con 'Exportar
+        usuarios' o enviado por el cliente) y actualiza la licencia/datos de
+        cada Administrador en la base maestra."""
+        arch = request.files.get("archivo")
+        if not arch or not arch.filename:
+            flash("Seleccione el archivo cifrado de usuarios.", "error")
+            return redirect(url_for("suscripcion"))
+        blob = arch.read()
+        d = descifrar_usuarios(blob)
+        if d is None:
+            flash("El archivo no es válido, está alterado o no fue generado "
+                  "por el aplicativo.", "error")
+            return redirect(url_for("suscripcion"))
+        datos = d.get("usuarios") or []
+        resumen = _aplicar_usuarios_importados(datos)
+        # Refresca la copia local del archivo con la versión importada.
+        try:
+            with open(_ruta_archivo_usuarios(), "wb") as fh:
+                fh.write(blob)
+        except Exception:
+            pass
+        flash("Se importaron datos de %d administrador(es). Licencias "
+              "actualizadas." % resumen.get("aplicados", 0), "success")
+        return redirect(url_for("suscripcion"))
+
+    @app.route("/suscripcion/exportar-mis-datos", methods=["POST"])
+    @admin_requerido
+    def suscripcion_exportar_mis_datos():
+        """El Administrador (cliente) exporta sus propios datos y licencia en un
+        archivo cifrado para enviarlo al soporte (WhatsApp/email). La central lo
+        importa con 'Importar usuarios'."""
+        actor = usuario_actual()
+        if not actor or actor.rol != "Administrador":
+            flash("Esta opción corresponde al Administrador del proyecto.",
+                  "error")
+            return redirect(url_for("dashboard"))
+        blob = cifrar_usuarios([actor])
+        buf = io.BytesIO(blob)
+        buf.seek(0)
+        nombre = ("usuarios_cifrados_%s_%s.lic"
+                  % (actor.usuario, datetime.now().strftime("%Y%m%d_%H%M%S")))
+        return send_file(buf, as_attachment=True, download_name=nombre,
+                         mimetype="application/octet-stream")
+
     @app.route("/suscripcion/vencida")
     def suscripcion_vencida():
         u = usuario_actual()
@@ -2481,8 +2736,10 @@ def registrar_rutas(app):
             return redirect(url_for("suscripcion_vencida"))
         s = _validar_codigo(codigo, usuario_actual())
         if s is None:
-            flash("El código de licencia no es válido, ya fue utilizado en otro "
-                  "equipo o no corresponde a su usuario.", "error")
+            flash("El código de licencia no es válido, ya fue utilizado con "
+                  "anterioridad o no corresponde a su usuario. Cada código "
+                  "tiene un solo uso; si ya lo usó, solicite uno nuevo.",
+                  "error")
             return redirect(url_for("suscripcion_vencida"))
         plan = s["plan"]
         hoy = date.today()

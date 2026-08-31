@@ -37,6 +37,13 @@
     {% if not usuario or usuario.rol == 'Administrador' or 'ordenes' in permisos_usuario %}
     <a class="btn btn-gold" href="{{ url_for('ordenes') }}"><i class="bi bi-plus-lg"></i> Registrar Orden</a>
     {% endif %}
+    {% if usuario and usuario.rol == 'Administrador' %}
+    <form method="post" action="{{ url_for('suscripcion_exportar_mis_datos') }}" class="inline">
+      <button type="submit" class="btn btn-white">
+        <i class="bi bi-box-arrow-down"></i> Exportar datos para el soporte
+      </button>
+    </form>
+    {% endif %}
   </div>
 </div>
 

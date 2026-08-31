@@ -286,11 +286,11 @@ class SuscripcionHistorial(db.Model):
 
 
 class LicenciaUtilizada(db.Model):
-    """Registro de licencias ya activadas (cada código tiene un solo uso,
-    ligado al usuario y al primer equipo que lo activó).
+    """Registro de licencias ya activadas (cada código tiene un solo uso).
 
     La serie del código se marca como usada al aplicar, de modo que el mismo
-    código no pueda reactivar la suscripción una segunda vez en otro equipo.
+    código no pueda reactivar la suscripción una segunda vez, ni siquiera en
+    el mismo equipo y usuario (uso único estricto).
     """
     __tablename__ = "licencias_usadas"
     id = db.Column(db.Integer, primary_key=True)
