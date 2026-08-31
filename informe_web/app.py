@@ -897,11 +897,24 @@ def descifrar_usuarios(blob):
 
 
 def _aplicar_usuarios_importados(datos):
-    """Aplica los datos de los usuarios (Administradores) importados a la base
-    maestra: actualiza licencia/datos de los que ya existen. Devuelve un dict
+    """Aplica el archivo de usuarios (Administradores) importado a la base
+    maestra: crea como Administradores nuevos los que aún no existen, sin
+    tocar a los que ya están registrados (conservan su licencia/datos).
+
+    Cada administrador creado queda con su base de proyecto vacía y una clave
+    provisional ('admin') que debe cambiar en su primer ingreso; además se
+    registra un movimiento en el historial de suscripción. Devuelve un dict
     con resumen de lo aplicado."""
     ms = _bd.master_session
     aplicados = 0
+    ya_existian = 0
+
+    def _p(v):
+        try:
+            return date.fromisoformat(v) if v else None
+        except (TypeError, ValueError):
+            return None
+
     for item in datos:
         if not isinstance(item, dict):
             continue
@@ -910,24 +923,45 @@ def _aplicar_usuarios_importados(datos):
             continue
         u = ms.query(Usuario).filter(
             Usuario.usuario == nombre).first()
-        if u is None or u.rol != "Administrador":
+        if u is not None:
+            # No se modifica ningún usuario ya existente.
+            if u.rol == "Administrador":
+                ya_existian += 1
             continue
-        def _p(v):
-            try:
-                return date.fromisoformat(v) if v else None
-            except (TypeError, ValueError):
-                return None
-        u.nombres = (item.get("nombres") or u.nombres or "").strip()
-        u.activo = bool(item.get("activo", u.activo))
-        u.susc_plan = (item.get("susc_plan") or "").strip() or u.susc_plan
-        u.susc_inicio = _p(item.get("susc_inicio")) if item.get("susc_inicio") else u.susc_inicio
-        u.susc_fin = _p(item.get("susc_fin")) if item.get("susc_fin") else u.susc_fin
-        su = item.get("susc_activa")
-        if su is not None:
-            u.susc_activa = bool(su)
+        nu = Usuario(
+            usuario=nombre,
+            clave=generate_password_hash("admin"),
+            nombres=(item.get("nombres") or "").strip(),
+            rol="Administrador",
+            activo=bool(item.get("activo", True)),
+            permisos=json.dumps([c for c, _ in PERMISOS_SECCIONES]),
+            susc_plan=(item.get("susc_plan") or "").strip() or None,
+            susc_inicio=_p(item.get("susc_inicio")),
+            susc_fin=_p(item.get("susc_fin")),
+            susc_activa=item.get("susc_activa"),
+        )
+        ms.add(nu)
+        ms.flush()
+        # Movimiento en el historial (misma transacción que el alta).
+        ms.add(SuscripcionHistorial(
+            plan=nu.susc_plan or "",
+            fecha_inicio=nu.susc_inicio,
+            fecha_fin=nu.susc_fin,
+            usuario=nombre,
+            nota=("Administrador creado desde importación de usuarios. "
+                  "Clave provisional 'admin' que debe cambiar en su primer "
+                  "ingreso."),
+            accion="Importación"))
+        # Base de proyecto vacía, igual que en el alta manual.
+        try:
+            ensure_tenant(nu.id)
+        except Exception:
+            logging.getLogger("respaldo").warning(
+                "No se pudo crear la base del administrador importado '%s'",
+                nombre, exc_info=True)
         aplicados += 1
     ms.commit()
-    return {"aplicados": aplicados}
+    return {"aplicados": aplicados, "ya_existian": ya_existian}
 
 
 def _ruta_archivo_usuarios():
@@ -2671,8 +2705,20 @@ def registrar_rutas(app):
                 fh.write(blob)
         except Exception:
             pass
-        flash("Se importaron datos de %d administrador(es). Licencias "
-              "actualizadas." % resumen.get("aplicados", 0), "success")
+        creados = resumen.get("aplicados", 0)
+        existian = resumen.get("ya_existian", 0)
+        if creados:
+            flash("Se crearon %d administrador(es) desde la importación, con "
+                  "clave provisional 'admin' (debe cambiarla en su primer "
+                  "ingreso). " % creados +
+                  ("Además %d ya existían y no se modificaron." % existian
+                   if existian else ""), "success")
+        elif existian:
+            flash("El archivo no trae administradores nuevos; los %d ya "
+                  "existían y no se modificaron." % existian, "success")
+        else:
+            flash("No se encontraron administradores para crear en el "
+                  "archivo importado.", "warning")
         return redirect(url_for("suscripcion"))
 
     @app.route("/suscripcion/exportar-mis-datos", methods=["POST"])
