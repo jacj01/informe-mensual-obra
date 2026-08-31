@@ -226,24 +226,26 @@
 
 <!-- Modal: importar usuarios cifrados -->
 <div class="modal-overlay" id="modalImportar" role="dialog" aria-modal="true" aria-labelledby="modalImportarTitle">
-  <div class="modal">
+  <div class="modal-pub" role="document">
     <div class="modal-head">
-      <h3><i class="bi bi-upload"></i> Importar usuarios</h3>
-      <button type="button" class="modal-close" onclick="cerrarImportarUsuarios();">&times;</button>
+      <h3 id="modalImportarTitle"><i class="bi bi-upload"></i> Importar usuarios</h3>
+      <button type="button" class="modal-close" aria-label="Cerrar" onclick="cerrarImportarUsuarios();">&times;</button>
     </div>
-    <form method="post" action="{{ url_for('suscripcion_importar_usuarios') }}" enctype="multipart/form-data" class="form-panel">
-      <div class="field full">
-        <label for="f-iu-archivo">Archivo cifrado de usuarios (.lic)</label>
-        <input type="file" name="archivo" id="f-iu-archivo" accept=".lic" required>
-        <div class="field-hint">
-          Seleccione el archivo generado con <b>Exportar usuarios</b> o enviado por
-          el cliente. Al importarlo se actualizan los datos y la licencia de cada
-          administrador.
+    <form method="post" action="{{ url_for('suscripcion_importar_usuarios') }}" enctype="multipart/form-data">
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="f-iu-archivo">Archivo cifrado de usuarios (.lic)</label>
+          <input type="file" name="archivo" id="f-iu-archivo" accept=".lic" required>
+          <p class="modal-help">
+            Seleccione el archivo generado con <b>Exportar usuarios</b> o enviado por
+            el cliente. Al importarlo se actualizan los datos y la licencia de cada
+            administrador.
+          </p>
         </div>
       </div>
-      <div class="form-actions">
-        <button type="button" class="btn" onclick="cerrarImportarUsuarios();">Cancelar</button>
-        <button type="submit" class="btn btn-gold"><i class="bi bi-upload"></i> Importar</button>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" onclick="cerrarImportarUsuarios();">Cancelar</button>
+        <button type="submit" class="btn btn-upd"><i class="bi bi-upload"></i> Importar</button>
       </div>
     </form>
   </div>
@@ -263,17 +265,26 @@
 
   function abrirImportarUsuarios() {
     var m = document.getElementById('modalImportar');
-    if (m) m.classList.add('active');
+    if (m && !m.classList.contains('active')) {
+      m.classList.add('active');
+      var f = m.querySelector('input[name="archivo"]');
+      if (f) f.focus();
+    }
   }
   function cerrarImportarUsuarios() {
     var m = document.getElementById('modalImportar');
-    if (m) m.classList.remove('active');
+    if (m && m.classList.contains('active')) {
+      m.classList.remove('active');
+    }
   }
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') cerrarImportarUsuarios();
-  });
-  document.getElementById('modalImportar').addEventListener('click', function (e) {
-    if (e.target === this) cerrarImportarUsuarios();
-  });
+    if (e.key === 'Escape' &&
+        document.getElementById('modalImportar').classList.contains('active')) {
+      // Fase de captura: detiene la propagación para que el handler global de
+      // base.html no haga history.back() al cerrar este modal.
+      e.stopPropagation();
+      cerrarImportarUsuarios();
+    }
+  }, true);
 </script>
 {% endblock %}
