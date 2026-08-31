@@ -1300,7 +1300,8 @@ def _validar_codigo(codigo, usuario_actual_):
     return {"plan": emision.plan, "fecha_inicio": base, "fecha_fin": fin}
 
 # Endpoints a los que solo accede el Administrador.
-_ENDPOINTS_ADMIN = ("usuarios", "usuario_nuevo", "usuario_editar", "usuario_eliminar")
+_ENDPOINTS_ADMIN = ("usuarios", "usuario_nuevo", "usuario_editar",
+                    "usuario_eliminar", "usuario_cambiar_clave")
 
 # Endpoints de control de la suscripción: solo el Super Usuario.
 _ENDPOINTS_SUPER = ("suscripcion", "suscripcion_renovar", "suscripcion_pausar",
@@ -2237,7 +2238,8 @@ def registrar_rutas(app):
             if ep == "dashboard":
                 return redirect(url_for("usuarios"))
             if ep not in ("usuarios", "usuario_nuevo", "usuario_editar",
-                          "usuario_eliminar", "respaldo", "suscripcion",
+                          "usuario_eliminar", "usuario_cambiar_clave",
+                          "respaldo", "suscripcion",
                           "suscripcion_renovar", "suscripcion_pausar",
                           "suscripcion_exportar_usuarios",
                           "suscripcion_importar_usuarios",
@@ -2531,6 +2533,55 @@ def registrar_rutas(app):
                                es_super=es_super, es_cuenta_propia=_es_cuenta_propia(u),
                                hay_datos=bool(es_super and u.rol == "Administrador"
                                               and _hay_datos_proyecto(uid))), status
+
+    @app.route("/usuarios/cambiar-clave/<int:uid>", methods=["GET", "POST"])
+    @admin_requerido
+    def usuario_cambiar_clave(uid):
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        actor = usuario_actual()
+        es_super = bool(actor and actor.rol == ROL_SUPER)
+        # La cuenta de un Administrador (y la principal) vive en la base
+        # maestra; la de un operador (rol Usuario) vive en la base del
+        # Administrador que lo gestiona. El Super y un Administrator sobre su
+        # propia cuenta trabajan sobre la maestra; el resto sobre el tenant.
+        es_propia = bool(session.get("usuario_id") == uid
+                         and session.get("usuario_rol") == "Administrador")
+        S = _bd.master_session if (es_super or es_propia) else db.session
+        u = S.get(Usuario, uid)
+        if not u:
+            abort(404)
+        # Permisos: el Super cambia la clave de los Administradores y de la
+        # cuenta principal; el Administrador solo de su propia cuenta o de los
+        # operadores (rol Usuario) de su propia base.
+        if not es_super and not _es_cuenta_propia(u) \
+                and u.rol in ("Administrador", ROL_SUPER):
+            flash("No tiene permisos para cambiar la contraseña de esa cuenta.",
+                  "error")
+            return redirect(url_for("usuarios"))
+        error = None
+        if request.method == "POST":
+            clave = request.form.get("clave", "")
+            clave2 = request.form.get("clave2", "")
+            if not clave:
+                error = "Debe indicar la nueva contraseña."
+            elif len(clave) < 6:
+                error = "La contraseña debe tener al menos 6 caracteres."
+            elif clave != clave2:
+                error = "Las contraseñas no coinciden."
+            else:
+                u.clave = generate_password_hash(clave)
+                S.commit()
+                try:
+                    crear_respaldo(
+                        f".cambiar_clave_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
+                except Exception:
+                    logging.getLogger("respaldo").warning(
+                        "No se pudo crear respaldo al cambiar contraseña",
+                        exc_info=True)
+                flash(f"Contraseña de '{u.usuario}' actualizada.", "success")
+                return redirect(url_for("usuarios"))
+        status = 400 if (es_modal and error) else 200
+        return render_template("_cambiar_clave.html", u=u, error=error), status
 
     @app.route("/usuarios/eliminar/<int:uid>", methods=["POST"])
     @admin_requerido

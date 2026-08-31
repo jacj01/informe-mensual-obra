@@ -78,6 +78,12 @@
               <i class="bi bi-pencil"></i>
             </button>
             {% endif %}
+            {% if es_super or u.rol != 'Administrador' or (usuario and u.id == usuario.id) %}
+            <button class="icon-btn" title="Cambiar contraseña" aria-label="Cambiar contraseña"
+                    onclick="return abrirModal('{{ url_for('usuario_cambiar_clave', uid=u.id) }}')">
+              <i class="bi bi-key"></i>
+            </button>
+            {% endif %}
             {% if not (usuario and u.id == usuario.id) and (es_super or u.rol != 'Administrador') %}
             <form method="post" action="{{ url_for('usuario_eliminar', uid=u.id) }}" class="inline"
                   data-confirm="¿Eliminar al usuario {{ u.usuario }}?" data-confirm-title="Eliminar usuario" data-confirm-btn="Eliminar">
