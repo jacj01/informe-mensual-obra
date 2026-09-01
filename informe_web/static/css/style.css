@@ -155,9 +155,9 @@ body {
 .credit-version { font-size: 10px; font-weight: 700; color: rgba(255,255,255,.7); margin-top: 4px; letter-spacing: .5px; }
 
 /* Updaters (sidebar) */
-.credit-update { margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.credit-update { margin-top: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .btn-upd {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
   font-size: 10px; font-weight: 600; letter-spacing: .3px;
   color: #1F4E79; background: var(--oro); border: 1px solid var(--oro);
   border-radius: 6px; padding: 3px 10px; cursor: pointer;

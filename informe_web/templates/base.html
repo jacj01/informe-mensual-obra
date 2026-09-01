@@ -437,13 +437,16 @@
         <div class="credit-line">Elaborado y Diseñado por INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA SOCIEDAD ANONIMA CERRADA</div>
         <div class="credit-contact">RUC: 20603860935<br>Cel: 918 358 910<br>Cel: 974 369 366<br>Correo: ingcpa.sac@gmail.com</div>
         <div class="credit-version">Versi&oacute;n {{ version_actual }}</div>
-        {% if es_admin_actual() %}
         <div class="credit-update" id="upChk">
+          <button id="btnBug" type="button" class="btn-upd btn-upd-bug" onclick="abrirModalBug();" title="Reportar un error">
+            <i class="bi bi-bug-fill"></i> Error
+          </button>
+          {% if es_admin_actual() %}
           <button id="btnUpd" type="button" class="btn-upd" onclick="abrirModalActualizacion();">
             <i class="bi bi-arrow-repeat"></i> Buscar Actualizaci&oacute;n
           </button>
+          {% endif %}
         </div>
-        {% endif %}
       </div>
     </div>
   </aside>
@@ -1074,6 +1077,159 @@
     </div>
   </div>
 
+  <!-- Modal: Reportar Error (Bug) -->
+  <div id="modalBug" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalBugTitle">
+    <div class="modal-pub modal-pub-bug" role="document">
+      <div class="modal-head">
+        <h3 id="modalBugTitle"><i class="bi bi-bug-fill"></i> Reportar Error (Bug)</h3>
+        <button type="button" class="modal-close" aria-label="Cerrar" onclick="cerrarModalBug();">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-help">Describa el problema encontrado. El reporte se enviar&aacute; al correo de soporte de la entidad (ingcpa.sac@gmail.com), junto con hasta 5 capturas de pantalla si lo desea.</p>
+        <form id="formBug" enctype="multipart/form-data" novalidate>
+          <div class="form-group">
+            <label for="bugNombre">Nombre completo</label>
+            <input type="text" id="bugNombre" name="nombre" maxlength="150" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="bugUsuario">Usuario</label>
+            <input type="text" id="bugUsuario" name="usuario" maxlength="100" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="bugEntidad">Entidad ejecutora</label>
+            <input type="text" id="bugEntidad" name="entidad" maxlength="200" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="bugMeta">Meta</label>
+            <input type="text" id="bugMeta" name="meta" maxlength="200" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="bugAsunto">Asunto <span class="req">*</span></label>
+            <input type="text" id="bugAsunto" name="asunto" maxlength="200" required autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="bugDetalle">Detalle del error <span class="req">*</span></label>
+            <textarea id="bugDetalle" name="detalle" rows="4" maxlength="5000" required></textarea>
+          </div>
+          <div class="form-group">
+            <label>Im&aacute;genes (m&aacute;ximo 5)
+              <small>&mdash; <span id="bugImgCont">0</span>/5 seleccionadas</small></label>
+            <input type="file" id="bugImagenes" name="imagenes" accept="image/*" multiple>
+            <div class="bug-previews" id="bugPreviews"></div>
+          </div>
+          <div class="bug-err" id="bugErr"></div>
+        </form>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" onclick="cerrarModalBug();">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="bugEnviar" onclick="enviarBug();"><i class="bi bi-send"></i> Enviar reporte</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.abrirModalBug = function () {
+      var m = document.getElementById('modalBug');
+      if (!m) return;
+      var nombreEl = document.getElementById('bugNombre');
+      var usuarioEl = document.getElementById('bugUsuario');
+      var entidadEl = document.getElementById('bugEntidad');
+      var metaEl = document.getElementById('bugMeta');
+      if (nombreEl && !nombreEl.value) nombreEl.value = '{{ usuario.nombres if usuario else "" }}';
+      if (usuarioEl && !usuarioEl.value) usuarioEl.value = '{{ usuario.usuario if usuario else "" }}';
+      if (entidadEl && !entidadEl.value) entidadEl.value = '{{ p.entidad if p else "" }}';
+      if (metaEl && !metaEl.value) metaEl.value = '{{ p.meta if p and p.meta else "" }}';
+      document.getElementById('bugErr').classList.remove('show');
+      m.classList.add('active');
+    };
+    window.cerrarModalBug = function () {
+      var m = document.getElementById('modalBug');
+      if (m) m.classList.remove('active');
+    };
+    document.addEventListener('DOMContentLoaded', function () {
+      var input = document.getElementById('bugImagenes');
+      if (!input) return;
+      input.addEventListener('change', function () {
+        var pv = document.getElementById('bugPreviews');
+        var cont = document.getElementById('bugImgCont');
+        var archivos = Array.prototype.slice.call(input.files).slice(0, 5);
+        var fdt = new DataTransfer();
+        archivos.forEach(function (f) { fdt.items.add(f); });
+        input.files = fdt.files;
+        if (cont) cont.textContent = input.files.length;
+        pv.innerHTML = '';
+        Array.prototype.slice.call(input.files).forEach(function (f, i) {
+          var fr = new FileReader();
+          fr.onload = function (e) {
+            var d = document.createElement('div');
+            d.className = 'bug-pv';
+            var im = document.createElement('img');
+            im.src = e.target.result;
+            var x = document.createElement('button');
+            x.type = 'button'; x.className = 'bug-pv-x'; x.innerHTML = '&times;';
+            x.setAttribute('aria-label', 'Quitar imagen');
+            x.onclick = function () { quitarBugImagen(i); };
+            d.appendChild(im); d.appendChild(x);
+            pv.appendChild(d);
+          };
+          fr.readAsDataURL(f);
+        });
+      });
+      document.getElementById('bugDetalle').addEventListener('input', function () {
+        var e = document.getElementById('bugErr');
+        e.classList.remove('show');
+      });
+    });
+    function quitarBugImagen(indice) {
+      var input = document.getElementById('bugImagenes');
+      var archivos = Array.prototype.slice.call(input.files);
+      archivos.splice(indice, 1);
+      var fdt = new DataTransfer();
+      archivos.forEach(function (f) { fdt.items.add(f); });
+      input.files = fdt.files;
+      var cont = document.getElementById('bugImgCont');
+      if (cont) cont.textContent = input.files.length;
+      input.dispatchEvent(new Event('change'));
+    }
+    window.enviarBug = function () {
+      var asunto = document.getElementById('bugAsunto').value.trim();
+      var detalle = document.getElementById('bugDetalle').value.trim();
+      var err = document.getElementById('bugErr');
+      function fallo(msg) { err.textContent = msg; err.classList.add('show'); return; }
+      if (!asunto) return fallo('El asunto es obligatorio.');
+      if (!detalle) return fallo('El detalle del error es obligatorio.');
+      if (document.getElementById('bugImagenes').files.length > 5) return fallo('Solo se permiten hasta 5 imagenes.');
+      var btn = document.getElementById('bugEnviar');
+      btn.classList.add('bug-sending');
+      var fd = new FormData();
+      fd.append('_csrf', csrfValor);
+      fd.append('nombre', document.getElementById('bugNombre').value);
+      fd.append('usuario', document.getElementById('bugUsuario').value);
+      fd.append('entidad', document.getElementById('bugEntidad').value);
+      fd.append('meta', document.getElementById('bugMeta').value);
+      fd.append('asunto', asunto);
+      fd.append('detalle', detalle);
+      Array.prototype.slice.call(document.getElementById('bugImagenes').files).forEach(function (f) {
+        fd.append('imagenes', f);
+      });
+      fetch('/api/reportar-bug', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { status: r.status, d: d }; }); })
+        .then(function (res) {
+          btn.classList.remove('bug-sending');
+          if (res.d.ok) {
+            cerrarModalBug();
+            mostrarToast('success', res.d.msg || 'Reporte enviado correctamente.');
+          } else {
+            fallo(res.d.error || 'No se pudo enviar el reporte.');
+          }
+        })
+        .catch(function (e) {
+          btn.classList.remove('bug-sending');
+          fallo('Error de conexion al enviar el reporte.');
+        });
+    };
+  </script>
+
   <style>
     .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.52); display:none; align-items:center; justify-content:center; z-index:9000; }
     .modal-overlay.active { display:flex !important; }
@@ -1089,6 +1245,20 @@
     .modal-help { font-size:12px; color:#6b7280; margin:10px 0 0; line-height:1.4; }
     .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:12px 20px; border-top:1px solid #eee; background:#fafafa; border-radius:0 0 10px 10px; }
     .btn-ghost { background:#f3f4f6; color:#374151; }
+    .modal-pub-bug { max-width:520px; max-height:90vh; overflow-y:auto; }
+    .modal-body .form-group textarea { width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px; font-family:inherit; resize:vertical; }
+    .modal-body .form-group .req { color:#dc2626; }
+    .modal-body .form-group input[type="file"] { padding:6px; }
+    .bug-previews { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .bug-previews .bug-pv { position:relative; width:72px; height:72px; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden; }
+    .bug-previews .bug-pv img { width:100%; height:100%; object-fit:cover; display:block; }
+    .bug-previews .bug-pv .bug-pv-x { position:absolute; top:1px; right:1px; width:18px; height:18px; line-height:18px; text-align:center; background:rgba(0,0,0,.55); color:#fff; border-radius:50%; font-size:12px; cursor:pointer; border:0; }
+    .bug-err { display:none; margin-top:8px; padding:8px 10px; border-radius:6px; background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; font-size:13px; }
+    .bug-err.show { display:block; }
+    .bug-sending { opacity:.6; pointer-events:none; }
+    .credit-update { display:flex; align-items:center; justify-content:center; gap:6px; margin-top:10px; white-space:nowrap; }
+    .btn-upd-bug { background:transparent; border:1px solid rgba(255,255,255,.35); color:#fff; }
+    .btn-upd-bug:hover { background:rgba(255,255,255,.12); }
   </style>
 </body>
 </html>

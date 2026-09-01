@@ -37,3 +37,6 @@ installer_output/
 
 # Entorno
 .env
+
+# Configuracion SMTP con credenciales (no subir)
+informe_web/config_correo.py

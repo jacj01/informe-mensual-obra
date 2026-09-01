@@ -7,6 +7,7 @@ import json
 import logging
 import shutil
 import socket
+import smtplib
 import struct
 import os
 import secrets
@@ -15,6 +16,8 @@ import threading
 import time
 import uuid
 from datetime import date, datetime, timedelta
+from email.message import EmailMessage
+from email.utils import formataddr
 from functools import wraps
 
 from flask import (Flask, render_template, request, redirect, url_for,
@@ -731,6 +734,118 @@ def _es_cuenta_propia(u):
     """
     return bool(u and u.id == session.get("usuario_id")
                 and u.rol == session.get("usuario_rol"))
+
+
+def _resolver_usuario(uid):
+    """Devuelve (usuario, sesion) del registro con id 'uid' resolviendo la
+    base correcta.
+
+    La maestra aloja las cuentas de Administrador y Super Usuario; la base de
+    cada Administrador aloja a sus operadores (rol Usuario).
+
+    - El Super Usuario opera siempre sobre la maestra.
+    - Un Administrador opera sobre su propia cuenta (que vive en la maestra)
+      o sobre sus operadores (que viven en su base, enlazada en esta petición).
+      Se verifica primero la maestra: si el registro es la cuenta propia del
+      actor se opera sobre ella; en caso contrario se busca el operador en la
+      base del Administrador."""
+    actor = usuario_actual()
+    if actor and actor.rol == ROL_SUPER:
+        return _bd.master_session.get(Usuario, uid), _bd.master_session
+    propia = _bd.master_session.get(Usuario, uid)
+    if propia is not None and _es_cuenta_propia(propia):
+        return propia, _bd.master_session
+    op = db.session.get(Usuario, uid)
+    return (op, db.session) if op is not None else (None, db.session)
+
+
+# ----------------------------------------------------------------------------
+# Envio de reportes de errores (Bugs) por correo
+# ----------------------------------------------------------------------------
+# Los datos SMTP se leen de informe_web/config_correo.py (privado, en
+# .gitignore). Se permiten sobrescrituras por variables de entorno.
+def _config_correo():
+    conf = {}
+    try:
+        import config_correo as _cc
+        conf = {
+            "host": getattr(_cc, "SMTP_HOST", "smtp.gmail.com"),
+            "port": int(getattr(_cc, "SMTP_PORT", 587) or 587),
+            "usuario": (getattr(_cc, "SMTP_USUARIO", "") or "").strip(),
+            "clave": (getattr(_cc, "SMTP_CLAVE", "") or "").strip(),
+            "destino": (getattr(_cc, "CORREO_DESTINO", "ingcpa.sac@gmail.com")
+                        or "ingcpa.sac@gmail.com").strip(),
+        }
+    except Exception:
+        conf = {"host": "smtp.gmail.com", "port": 587,
+                "usuario": "", "clave": "", "destino": "ingcpa.sac@gmail.com"}
+    conf["host"] = os.environ.get("INFORME_SMTP_HOST", conf["host"])
+    conf["port"] = int(os.environ.get("INFORME_SMTP_PORT", conf["port"]))
+    conf["usuario"] = os.environ.get("INFORME_SMTP_USUARIO", conf["usuario"])
+    conf["clave"] = os.environ.get("INFORME_SMTP_CLAVE", conf["clave"])
+    conf["destino"] = os.environ.get("INFORME_CORREO_DESTINO", conf["destino"])
+    return conf
+
+
+def _enviar_reporte_bug(datos, imagenes):
+    """Envía por SMTP el reporte de errores con sus capturas (hasta 5).
+
+    'datos' es un dict con los campos del reporte; 'imagenes' una lista de
+    (nombre, contenido_bytes, mimetype). Devuelve (ok, mensaje). Levanta la
+    excepción si no hay SMTP configurado."""
+    conf = _config_correo()
+    if not conf["usuario"] or not conf["clave"]:
+        raise RuntimeError(
+            "Falta configurar SMTP. Complete sus credenciales en "
+            "informe_web/config_correo.py y reinicie el servidor.")
+    destino = conf["destino"] or conf["usuario"]
+    remitente = conf["usuario"]
+
+    asunto = "[Informe Mensual] Reporte de error: %s" % (
+        datos.get("asunto") or "Sin asunto")
+
+    cuerpo = []
+    cuerpo.append("Se ha reportado un error en el aplicativo Informe Mensual "
+                  "de Obra.\n")
+    cuerpo.append("NOMBRE COMPLETO: %s" % (datos.get("nombre") or "-"))
+    cuerpo.append("USUARIO: %s" % (datos.get("usuario") or "-"))
+    cuerpo.append("ENTIDAD EJECUTORA: %s" % (datos.get("entidad") or "-"))
+    cuerpo.append("META: %s" % (datos.get("meta") or "-"))
+    cuerpo.append("ASUNTO: %s" % (datos.get("asunto") or "-"))
+    cuerpo.append("DETALLE DEL ERROR:")
+    cuerpo.append(datos.get("detalle") or "-")
+    cuerpo.append("")
+    cuerpo.append("Adjuntos: %d imagen(es)" % len(imagenes))
+
+    msg = EmailMessage()
+    msg["Subject"] = asunto
+    msg["From"] = formataddr(("Informe Mensual de Obra", remitente))
+    msg["To"] = destino
+    msg.set_content("\n".join(cuerpo))
+
+    for i, (nombre, contenido, mimetype) in enumerate(imagenes, start=1):
+        tipo = (mimetype or "image/png").split("/", 1)[0]
+        sub = None
+        if len(imagenes) == 1:
+            sub = "captura.png"
+        else:
+            ext = "png"
+            if mimetype and "/" in mimetype:
+                ext = mimetype.split("/", 1)[1].split(";")[0]
+            sub = "captura_%d.%s" % (i, ext or "png")
+        msg.add_attachment(contenido, maintype=tipo,
+                           subtype=mimetype.split("/", 1)[1].split(";")[0]
+                           if mimetype and "/" in mimetype else "png",
+                           filename=sub)
+
+    with smtplib.SMTP(conf["host"], conf["port"], timeout=30) as servidor:
+        servidor.ehlo()
+        if conf["port"] == 587:
+            servidor.starttls()
+            servidor.ehlo()
+        servidor.login(conf["usuario"], conf["clave"])
+        servidor.send_message(msg)
+    return True, "Reporte enviado correctamente a %s" % destino
 
 
 PERMISOS_SECCIONES = [
@@ -1988,6 +2103,75 @@ def registrar_rutas(app):
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
 
+    @app.route("/api/reportar-bug", methods=["POST"])
+    def reportar_bug():
+        """Recibe un reporte de error (Bug) con hasta 5 imagenes y lo envia
+        por correo. Accesible para cualquier usuario autenticado."""
+        u = usuario_actual()
+        if not u:
+            return jsonify({"ok": False, "error": "No autorizado"}), 401
+
+        nombre = request.form.get("nombre", "").strip()
+        usuario = request.form.get("usuario", "").strip()
+        entidad = request.form.get("entidad", "").strip()
+        meta = request.form.get("meta", "").strip()
+        asunto = request.form.get("asunto", "").strip()
+        detalle = request.form.get("detalle", "").strip()
+
+        if not asunto:
+            return jsonify({"ok": False, "error": "El asunto es obligatorio."}), 400
+        if not detalle:
+            return jsonify({"ok": False, "error": "El detalle del error es obligatorio."}), 400
+        if len(asunto) > 200:
+            return jsonify({"ok": False, "error": "El asunto no puede exceder 200 caracteres."}), 400
+        if len(detalle) > 5000:
+            return jsonify({"ok": False, "error": "El detalle no puede exceder 5000 caracteres."}), 400
+
+        archivos = request.files.getlist("imagenes")
+        archivos = [a for a in archivos if a and a.filename]
+        if len(archivos) > 5:
+            return jsonify({"ok": False,
+                            "error": "Solo se permiten hasta 5 imagenes."}), 400
+
+        permitidos = {"image/png", "image/jpeg", "image/webp", "image/gif",
+                      "image/bmp", "image/tiff"}
+        imagenes = []
+        for a in archivos:
+            if a.mimetype not in permitidos:
+                return jsonify({"ok": False,
+                                "error": "El archivo '%s' no es una imagen valida."
+                                          % a.filename}), 400
+            contenido = a.read()
+            if len(contenido) > 8 * 1024 * 1024:
+                return jsonify({"ok": False,
+                                "error": "Cada imagen no puede superar los 8 MB."}), 400
+            imagenes.append((a.filename, contenido, a.mimetype))
+
+        datos = {
+            "nombre": nombre,
+            "usuario": usuario,
+            "entidad": entidad,
+            "meta": meta,
+            "asunto": asunto,
+            "detalle": detalle,
+        }
+        try:
+            ok, msg = _enviar_reporte_bug(datos, imagenes)
+        except smtplib.SMTPAuthenticationError:
+            return jsonify({"ok": False,
+                            "error": "SMTP rechazo la autenticacion. Revise el "
+                                     "usuario y la contrasena de aplicacion en "
+                                     "informe_web/config_correo.py."}), 500
+        except smtplib.SMTPException as e:
+            return jsonify({"ok": False,
+                            "error": "No se pudo enviar el correo: %s" % e}), 500
+        except RuntimeError as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+        except Exception as e:
+            return jsonify({"ok": False,
+                            "error": "Error al enviar el reporte: %s" % e}), 500
+        return jsonify({"ok": True, "msg": msg})
+
     @app.route("/api/actualizacion/progreso")
     def progreso_actualizacion():
         """Lee el archivo de progreso escrito por actualizar.ps1.
@@ -2244,7 +2428,7 @@ def registrar_rutas(app):
                           "suscripcion_exportar_usuarios",
                           "suscripcion_importar_usuarios",
                           "aplicar_actualizacion", "api_actualizacion", "publicar_nueva_version",
-                          "progreso_publicacion", "progreso_actualizacion"):
+                          "progreso_publicacion", "progreso_actualizacion", "reportar_bug"):
                 flash("La cuenta principal gestiona cuentas y licencia; "
                       "esta sección corresponde a los datos de un proyecto.",
                       "error")
@@ -2347,10 +2531,22 @@ def registrar_rutas(app):
         orden = {ROL_SUPER: 0, "Administrador": 1}
         actor = usuario_actual()
         es_super = bool(actor and actor.rol == ROL_SUPER)
-        lista = sorted(Usuario.query.all(),
-                       key=lambda u: (orden.get(u.rol, 2), u.usuario.lower()))
-        if not es_super:
-            lista = [u for u in lista if u.rol != ROL_SUPER]
+        if es_super:
+            # El Super usa la base maestra (no tiene tenant): ve todas las
+            # cuentas de Administrador y la cuenta principal.
+            lista = sorted(Usuario.query.all(),
+                           key=lambda u: (orden.get(u.rol, 2), u.usuario.lower()))
+        else:
+            # Un Administrador gestiona su propia cuenta (vive en la maestra)
+            # y a sus operadores (rol Usuario, que viven en su propia base).
+            operadores = sorted(
+                (u for u in Usuario.query.all() if u.rol == "Usuario"),
+                key=lambda u: u.usuario.lower())
+            lista = operadores
+            propio = _bd.master_session.get(Usuario, actor.id) if actor else None
+            if propio is not None:
+                lista.append(propio)
+            lista.sort(key=lambda u: (u.rol != "Administrador", u.usuario.lower()))
         return render_template("usuarios.html", usuarios=lista,
                                labels=dict(PERMISOS_SECCIONES),
                                total=len(lista),
@@ -2445,7 +2641,7 @@ def registrar_rutas(app):
         es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
         actor = usuario_actual()
         es_super = bool(actor and actor.rol == ROL_SUPER)
-        u = db.session.get(Usuario, uid)
+        u, S = _resolver_usuario(uid)
         if not u:
             abort(404)
         # La cuenta principal solo la administra su propio responsable.
@@ -2478,8 +2674,8 @@ def registrar_rutas(app):
                     and nuevo_rol != "Administrador" and not es_super):
                 error = "No puede quitarse el rol de Administrador a sí mismo."
             else:
-                otro = Usuario.query.filter(Usuario.usuario == nombre,
-                                            Usuario.id != uid).first()
+                otro = S.query(Usuario).filter(Usuario.usuario == nombre,
+                                               Usuario.id != uid).first()
                 if otro:
                     error = f"El usuario '{nombre}' ya existe."
                 elif (_es_cuenta_propia(u)
@@ -2501,7 +2697,7 @@ def registrar_rutas(app):
                     clave = request.form.get("clave", "")
                     if clave:
                         u.clave = generate_password_hash(clave)
-                    db.session.commit()
+                    S.commit()
                     try:
                         crear_respaldo(
                             f".usuario_editar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
@@ -2588,7 +2784,7 @@ def registrar_rutas(app):
     def usuario_eliminar(uid):
         actor = usuario_actual()
         es_super = bool(actor and actor.rol == ROL_SUPER)
-        u = db.session.get(Usuario, uid)
+        u, S = _resolver_usuario(uid)
         if not u:
             flash("Usuario no encontrado.", "error")
         elif _es_cuenta_propia(u):
@@ -2620,7 +2816,7 @@ def registrar_rutas(app):
                         borrado_bd = True
                     shutil.rmtree(os.path.dirname(ruta_ten), ignore_errors=True)
                 db.session.delete(u)
-                db.session.commit()
+                S.commit()
                 flash(f"Usuario '{u.usuario}' eliminado."
                       + (" Su base de datos fue respaldada y eliminada."
                          if borrado_bd else ""), "success")
