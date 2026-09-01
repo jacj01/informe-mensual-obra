@@ -546,6 +546,14 @@ def create_app():
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "img-src 'self' data:; "
             "font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'")
+        # Revalidacion de paginas HTML: garantiza que el navegador vuelva a
+        # descargar la plantilla actualizada (con las referencias ?v= vigentes)
+        # y no sirva una version en cache. Los estaticos mantienen su cache
+        # larga gracias al versionado (?v=N).
+        if resp.mimetype == "text/html":
+            resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
         return resp
 
     _GZIP_TIPOS = {"text/html", "text/css", "text/plain", "application/javascript",

@@ -866,7 +866,12 @@ body.modal-open { overflow: hidden; }
 /* ---------------- LOGIN (acceso al aplicativo) ---------------- */
 .login-body {
   display: flex; min-height: 100vh;
-  background: var(--bg); position: relative; overflow: hidden;
+  background:
+    radial-gradient(1100px 480px at 100% -10%, rgba(201, 162, 39, .12), transparent 60%),
+    radial-gradient(900px 420px at -10% 0%, rgba(46, 82, 122, .18), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+  position: relative; overflow: hidden;
 }
 /* Panel izquierdo: branding con fondo técnico */
 .login-brand {
@@ -950,8 +955,9 @@ body.modal-open { overflow: hidden; }
 .login-logo { display: none; }
 .login-header { margin-bottom: 8px; }
 .login-title {
-  text-align: left; font-size: 26px; font-weight: 800; color: var(--azul-osc);
+  text-align: left; font-size: 26px; font-weight: 600; color: var(--azul-osc);
   letter-spacing: -.5px; line-height: 1.2;
+  font-family: 'DM Serif Display', Georgia, 'Times New Roman', serif;
 }
 .login-sub {
   text-align: left; font-size: 13.5px; color: var(--texto2); margin-top: 6px;
