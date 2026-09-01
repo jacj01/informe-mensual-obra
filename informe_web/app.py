@@ -845,7 +845,7 @@ def _enviar_reporte_bug(datos, imagenes):
             servidor.ehlo()
         servidor.login(conf["usuario"], conf["clave"])
         servidor.send_message(msg)
-    return True, "Reporte enviado correctamente a %s" % destino
+    return True, "Informe enviado correctamente a %s" % destino
 
 
 PERMISOS_SECCIONES = [
@@ -2131,7 +2131,7 @@ def registrar_rutas(app):
         archivos = [a for a in archivos if a and a.filename]
         if len(archivos) > 5:
             return jsonify({"ok": False,
-                            "error": "Solo se permiten hasta 5 imagenes."}), 400
+                            "error": "Solo se permiten hasta 5 imágenes."}), 400
 
         permitidos = {"image/png", "image/jpeg", "image/webp", "image/gif",
                       "image/bmp", "image/tiff"}
@@ -2139,7 +2139,7 @@ def registrar_rutas(app):
         for a in archivos:
             if a.mimetype not in permitidos:
                 return jsonify({"ok": False,
-                                "error": "El archivo '%s' no es una imagen valida."
+                                "error": "El archivo '%s' no es una imagen válida."
                                           % a.filename}), 400
             contenido = a.read()
             if len(contenido) > 8 * 1024 * 1024:
@@ -2159,8 +2159,8 @@ def registrar_rutas(app):
             ok, msg = _enviar_reporte_bug(datos, imagenes)
         except smtplib.SMTPAuthenticationError:
             return jsonify({"ok": False,
-                            "error": "SMTP rechazo la autenticacion. Revise el "
-                                     "usuario y la contrasena de aplicacion en "
+                            "error": "SMTP rechazó la autenticación. Revise el "
+                                     "usuario y la contraseña de aplicación en "
                                      "informe_web/config_correo.py."}), 500
         except smtplib.SMTPException as e:
             return jsonify({"ok": False,
