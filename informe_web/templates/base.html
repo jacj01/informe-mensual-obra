@@ -1146,34 +1146,53 @@
       var m = document.getElementById('modalBug');
       if (m) m.classList.remove('active');
     };
+    var bugImagenesAcum = [];
+    function redibujarBugPreviews() {
+      var pv = document.getElementById('bugPreviews');
+      var cont = document.getElementById('bugImgCont');
+      if (cont) cont.textContent = bugImagenesAcum.length;
+      pv.innerHTML = '';
+      bugImagenesAcum.forEach(function (f, i) {
+        var fr = new FileReader();
+        fr.onload = function (e) {
+          var d = document.createElement('div');
+          d.className = 'bug-pv';
+          var im = document.createElement('img');
+          im.src = e.target.result;
+          var x = document.createElement('button');
+          x.type = 'button'; x.className = 'bug-pv-x'; x.innerHTML = '&times;';
+          x.setAttribute('aria-label', 'Quitar imagen');
+          x.onclick = function () { quitarBugImagen(i); };
+          d.appendChild(im); d.appendChild(x);
+          pv.appendChild(d);
+        };
+        fr.readAsDataURL(f);
+      });
+    }
+    function sincronizarBugInput() {
+      var input = document.getElementById('bugImagenes');
+      if (!input) return;
+      var fdt = new DataTransfer();
+      bugImagenesAcum.forEach(function (f) { fdt.items.add(f); });
+      input.files = fdt.files;
+    }
     document.addEventListener('DOMContentLoaded', function () {
       var input = document.getElementById('bugImagenes');
       if (!input) return;
       input.addEventListener('change', function () {
-        var pv = document.getElementById('bugPreviews');
-        var cont = document.getElementById('bugImgCont');
-        var archivos = Array.prototype.slice.call(input.files).slice(0, 5);
-        var fdt = new DataTransfer();
-        archivos.forEach(function (f) { fdt.items.add(f); });
-        input.files = fdt.files;
-        if (cont) cont.textContent = input.files.length;
-        pv.innerHTML = '';
-        Array.prototype.slice.call(input.files).forEach(function (f, i) {
-          var fr = new FileReader();
-          fr.onload = function (e) {
-            var d = document.createElement('div');
-            d.className = 'bug-pv';
-            var im = document.createElement('img');
-            im.src = e.target.result;
-            var x = document.createElement('button');
-            x.type = 'button'; x.className = 'bug-pv-x'; x.innerHTML = '&times;';
-            x.setAttribute('aria-label', 'Quitar imagen');
-            x.onclick = function () { quitarBugImagen(i); };
-            d.appendChild(im); d.appendChild(x);
-            pv.appendChild(d);
-          };
-          fr.readAsDataURL(f);
+        // Acumular las imagenes recien seleccionadas sobre las ya cargadas
+        // (hasta 5), sin perder las anteriores.
+        Array.prototype.slice.call(input.files).forEach(function (f) {
+          if (bugImagenesAcum.length >= 5) return;
+          var duplicado = bugImagenesAcum.some(function (e) {
+            return e.name === f.name && e.size === f.size &&
+                   e.lastModified === f.lastModified;
+          });
+          if (!duplicado) bugImagenesAcum.push(f);
         });
+        sincronizarBugInput();
+        redibujarBugPreviews();
+        if (bugImagenesAcum.length >= 5) input.value = '';
       });
       document.getElementById('bugDetalle').addEventListener('input', function () {
         var e = document.getElementById('bugErr');
@@ -1181,15 +1200,9 @@
       });
     });
     function quitarBugImagen(indice) {
-      var input = document.getElementById('bugImagenes');
-      var archivos = Array.prototype.slice.call(input.files);
-      archivos.splice(indice, 1);
-      var fdt = new DataTransfer();
-      archivos.forEach(function (f) { fdt.items.add(f); });
-      input.files = fdt.files;
-      var cont = document.getElementById('bugImgCont');
-      if (cont) cont.textContent = input.files.length;
-      input.dispatchEvent(new Event('change'));
+      bugImagenesAcum.splice(indice, 1);
+      sincronizarBugInput();
+      redibujarBugPreviews();
     }
     window.enviarBug = function () {
       var asunto = document.getElementById('bugAsunto').value.trim();
