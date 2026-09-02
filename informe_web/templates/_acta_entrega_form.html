@@ -1,0 +1,60 @@
+<form method="post" class="form-panel" action="{{ url_for('acta_entrega') }}">
+  <input type="hidden" name="modal" value="1">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  {% if error %}
+  <div class="alert alert-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div>
+  {% endif %}
+  <div class="card">
+    <div class="card-head between">
+      <h3><i class="bi bi-file-earmark-diff"></i> Acta de entrega de materiales sobrantes</h3>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="f-acta-fecha">Fecha del acta</label>
+        <input type="date" name="fecha" id="f-acta-fecha" value="{{ fecha }}" required>
+      </div>
+      <div class="field">
+        <label for="f-acta-hora">Hora del acta</label>
+        <input type="time" name="hora" id="f-acta-hora" value="{{ hora }}" required>
+      </div>
+      <div class="field full">
+        <label for="n-acta-input">N.° de acta</label>
+        <input type="text" name="n_acta" id="n-acta-input" value="{{ n_acta }}" placeholder="Ej.: AE-001-2026">
+        <div class="field-hint">Número correlativo del acta. Si se deja vacío se genera automáticamente (AE-001-AÑO).</div>
+      </div>
+      <div class="field">
+        <label for="entrega-input">Entrega</label>
+        <input type="text" name="entrega" id="entrega-input" value="{{ entrega }}" placeholder="Nombre de quien entrega los materiales" required>
+        <div class="field-hint">Por defecto el responsable de almacén de la cabecera; puede corregirlo si quien entrega es otra persona.</div>
+      </div>
+      <div class="field">
+        <label for="cargo-entrega-input">Cargo de quien entrega</label>
+        <input type="text" name="cargo_entrega" id="cargo-entrega-input" value="{{ cargo_entrega }}" required>
+      </div>
+      <div class="field">
+        <label for="recibe-input">Recibe</label>
+        <input type="text" name="recibe" id="recibe-input" value="{{ recibe }}" placeholder="Nombre de quien recibe los materiales" required>
+        <div class="field-hint">Por defecto el administrador de obra de la cabecera; puede corregirlo si quien recibe es otra persona.</div>
+      </div>
+      <div class="field">
+        <label for="cargo-recibe-input">Cargo de quien recibe</label>
+        <input type="text" name="cargo_recibe" id="cargo-recibe-input" value="{{ cargo_recibe }}" required>
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <i class="bi bi-info-circle"></i>
+    El acta se genera automáticamente con los materiales que tienen saldo disponible en almacén, con cantidad, precio y valor.
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-file-earmark-text"></i> Generar acta</button>
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</form>
+
+<script>
+  (function () {
+    var modal = document.getElementById('modal');
+    if (modal) modal.querySelector('.modal-box').classList.add('lg');
+  })();
+</script>

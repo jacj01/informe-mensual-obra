@@ -48,6 +48,7 @@ from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      ejecucion_por_mes, ejecucion_por_componente, fe06_rows,
                      fe06_resumen, fe06_sintesis, f05_datos, almacen_items, almacen_diario,
                      saldo_insumo, almacen_valorizado, oc_para_material,
+                     materiales_sobrantes_acta,
                      meses_con_ejecucion, meses_visibles, ampliacion_presupuestal,
                      mes_inicio_manifiesto, clasificadores_proyecto,
                      calendario_mes, resumen_tareo, panel_cuadro1, panel_datos,
@@ -677,6 +678,15 @@ def fecha_defecto(p):
         return date(p.anio, p.mes_actual, 1)
     except (TypeError, ValueError):
         return date.today()
+
+
+def default_n_acta(anio):
+    """Numero correlativo sugerido para el Acta de Entrega (AE-001-AAAA)."""
+    try:
+        anio_i = int(anio)
+    except (TypeError, ValueError):
+        anio_i = date.today().year
+    return f"AE-001-{anio_i}"
 
 
 def param_int(name, default, lo=None, hi=None):
@@ -6406,6 +6416,114 @@ def registrar_rutas(app):
         }
         return render_template("inventario_imprimir.html", p=p, mes=mes, anio=anio,
                                MESES=MESES, items=items, totals=totals)
+
+    @app.route("/almacen/acta/entrega", methods=["GET", "POST"])
+    def acta_entrega():
+        """Vista profesional (dashboard) del Acta de Entrega de Materiales
+        Sobrantes de Obra: responsables, quien entrega y quien recibe, y un
+        cuadro con los insumos que tienen saldo disponible en almacen."""
+        p = get_proyecto()
+        items, total_cant, total_valor = materiales_sobrantes_acta()
+        if request.method == "POST":
+            fecha = (request.form.get("fecha", "") or "").strip()
+            hora = (request.form.get("hora", "") or "").strip()
+            entrega = (request.form.get("entrega", "").strip().upper()
+                       or (p.responsable_almacen or "").upper())
+            recibe = (request.form.get("recibe", "").strip().upper()
+                      or (p.administrador_obra or p.asistente or "").upper())
+            cargo_entrega = (request.form.get("cargo_entrega", "").strip().upper()
+                             or "RESPONSABLE DE ALMACEN")
+            cargo_recibe = (request.form.get("cargo_recibe", "").strip().upper()
+                            or "ADMINISTRADOR DE OBRA")
+            n_acta = (request.form.get("n_acta", "").strip().upper()
+                      or default_n_acta(p.anio))
+            error = None
+            if not fecha or not hora:
+                error = "Ingrese la fecha y hora del acta."
+            if not entrega:
+                error = error or "Indique quien entrega los materiales."
+            if not recibe:
+                error = error or "Indique quien recibe los materiales."
+            es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+            if error:
+                return render_template("_acta_entrega_form.html", p=p, MESES=MESES,
+                                       fecha=fecha, hora=hora, entrega=entrega,
+                                       recibe=recibe, cargo_entrega=cargo_entrega,
+                                       cargo_recibe=cargo_recibe, n_acta=n_acta,
+                                       error=error), 400
+            params = url_for("acta_entrega", fecha=fecha, hora=hora,
+                             entrega=entrega, recibe=recibe,
+                             cargo_entrega=cargo_entrega, cargo_recibe=cargo_recibe,
+                             n_acta=n_acta)
+            if es_modal:
+                return redirect(params)
+            return redirect(params)
+        fecha = request.args.get("fecha", date.today().strftime("%Y-%m-%d"))
+        hora = request.args.get("hora", datetime.now().strftime("%H:%M"))
+        entrega = (request.args.get("entrega", "")
+                   or (p.responsable_almacen or "").upper())
+        recibe = (request.args.get("recibe", "")
+                  or (p.administrador_obra or p.asistente or "").upper())
+        cargo_entrega = request.args.get("cargo_entrega", "") or "RESPONSABLE DE ALMACEN"
+        cargo_recibe = request.args.get("cargo_recibe", "") or "ADMINISTRADOR DE OBRA"
+        n_acta = (request.args.get("n_acta", "").strip().upper()
+                  or default_n_acta(p.anio))
+        fecha_mostrar = fecha
+        try:
+            fecha_mostrar = date.strptime(fecha, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except (ValueError, TypeError):
+            pass
+        return render_template("acta_entrega.html", p=p, MESES=MESES,
+                               items=items, total_cant=total_cant,
+                               total_valor=total_valor, fecha=fecha_mostrar,
+                               fecha_iso=fecha, hora=hora,
+                               entrega=entrega, recibe=recibe,
+                               cargo_entrega=cargo_entrega, cargo_recibe=cargo_recibe,
+                               n_acta=n_acta)
+
+    @app.route("/almacen/acta/entrega/form")
+    def acta_entrega_form():
+        """Formulario (modal) para armar el acta: fecha, hora, quien entrega y recibe."""
+        p = get_proyecto()
+        return render_template("_acta_entrega_form.html", p=p, MESES=MESES,
+                               fecha=date.today().strftime("%Y-%m-%d"),
+                               hora=datetime.now().strftime("%H:%M"),
+                               entrega=(p.responsable_almacen or "").upper(),
+                               recibe=(p.administrador_obra or p.asistente or "").upper(),
+                               cargo_entrega="RESPONSABLE DE ALMACEN",
+                               cargo_recibe="ADMINISTRADOR DE OBRA",
+                               n_acta=default_n_acta(p.anio),
+                               error=None)
+
+    @app.route("/almacen/acta/entrega/imprimir")
+    def acta_entrega_imprimir():
+        """Hoja de impresion del Acta de Entrega de Materiales Sobrantes."""
+        p = get_proyecto()
+        items, total_cant, total_valor = materiales_sobrantes_acta()
+        fecha = request.args.get("fecha", date.today().strftime("%Y-%m-%d"))
+        hora = request.args.get("hora", datetime.now().strftime("%H:%M"))
+        entrega = (request.args.get("entrega", "")
+                   or (p.responsable_almacen or "").upper())
+        recibe = (request.args.get("recibe", "")
+                  or (p.administrador_obra or p.asistente or "").upper())
+        cargo_entrega = request.args.get("cargo_entrega", "") or "RESPONSABLE DE ALMACEN"
+        cargo_recibe = request.args.get("cargo_recibe", "") or "ADMINISTRADOR DE OBRA"
+        n_acta = (request.args.get("n_acta", "").strip().upper()
+                  or default_n_acta(p.anio))
+        estados = [e.strip() for e in (request.args.get("est", "") or "").split(",")
+                   if e.strip()]
+        fecha_mostrar = fecha
+        try:
+            fecha_mostrar = date.strptime(fecha, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except (ValueError, TypeError):
+            pass
+        return render_template("acta_entrega_imprimir.html", p=p, MESES=MESES,
+                               items=items, total_cant=total_cant,
+                               total_valor=total_valor, fecha=fecha_mostrar,
+                               fecha_iso=fecha, hora=hora,
+                               entrega=entrega, recibe=recibe,
+                               cargo_entrega=cargo_entrega, cargo_recibe=cargo_recibe,
+                               n_acta=n_acta, estados=estados)
 
     @app.route("/api/resumen")
     def api_resumen():

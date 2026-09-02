@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Acta de entrega de materiales sobrantes de obra: fecha y hora de entrega, quien entrega y quien recibe, responsables de obra y cuadro de materiales sobrantes con valorización. Hoja A4 horizontal imprimible.">
+<title>Acta de Entrega de Materiales Sobrantes</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=7) }}">
+<style>
+  /* Hoja en VERTICAL A4 (portrait) - una sola hoja */
+  @page { size: A4 portrait; margin: 10mm 12mm 12mm; }
+  .hoja { width: 210mm; min-height: 297mm; padding: 10mm 12mm; }
+  /* Proyecto: cuadro blanco como los responsables, label estilo "Fecha del acta" */
+  .proyecto { display: flex; align-items: stretch; border: .6px solid var(--borde); border-radius: var(--radio-sm); overflow: hidden; margin: 2px 0 6px; }
+  .proyecto .p-label { flex: 0 0 34%; background: var(--bg); color: var(--azul-osc); font-weight: 700; font-size: 7.2pt; text-transform: uppercase; border-right: .6px solid var(--borde); padding: 4px 8px; display: flex; align-items: center; }
+  .proyecto .p-nombre { flex: 1; min-width: 0; padding: 5px 10px; font-size: 9pt; font-weight: 700; color: var(--azul-osc); background: #fff; line-height: 1.35; overflow-wrap: anywhere; }
+  /* Datos generales: lineas ajustadas al alto del texto */
+  .info-grid { gap: 6px 12px; margin: 7px 0 5px; }
+  .info-label { padding: 2px 9px; font-size: 7.4pt; }
+  .info-val { padding: 2px 9px; font-size: 8.6pt; min-height: 0; line-height: 1.35; }
+  /* Tabla con mas espacio entre filas */
+  table.tabla th, table.tabla td { padding: 5px 6px; font-size: 8pt; }
+  table.tabla thead th { padding: 6px 6px; }
+  .fila-total td { font-size: 8.5pt; }
+  .acta-precambulo { margin: 5px 0 10px; padding: 9px 12px; border-left: 3px solid var(--azul); background: var(--bg); }
+  .acta-precambulo p { margin: 0; font-size: 8.4pt; line-height: 1.6; color: var(--texto); text-align: justify; }
+  .tabla-titulo { font-size: 8.4pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase; letter-spacing: .4px; margin: 8px 0 5px; text-align: center; }
+  .acta-declaracion { margin-top: 12px; }
+  .acta-declaracion p { font-size: 8.4pt; line-height: 1.6; color: var(--texto); text-align: justify; }
+  /* Firmas: espacio antes de la 1.ª fila igual al espacio entre filas */
+  .firmas { flex-wrap: wrap; gap: 0 6%; margin-top: 126px; padding: 0; }
+  .firma { flex: 1 1 47%; box-sizing: border-box; margin-bottom: 10px; }
+  .firma:nth-child(-n+2) { margin-bottom: 92px; }
+  .firma .linea { width: 72%; margin-bottom: 6px; }
+  @media print {
+    @page { size: A4 portrait; margin: 10mm 12mm 12mm; }
+    .hoja { width: auto; min-height: auto; height: auto; margin: 0; box-shadow: none; padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h2>Acta de Entrega de Materiales Sobrantes</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('acta_entrega', fecha=fecha_iso, hora=hora, entrega=entrega, recibe=recibe, cargo_entrega=cargo_entrega, cargo_recibe=cargo_recibe, n_acta=n_acta) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+
+<div class="hoja">
+
+  <!-- ===================== ENCABEZADO OFICIAL ===================== -->
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Acta de Entrega de Materiales Sobrantes</div>
+      <div class="subtitulo">ADMINISTRACION DIRECTA</div>
+    </div>
+    <div class="enc-der">
+      <div class="num-doc">N.°&nbsp;{{ n_acta or '______' }}</div>
+    </div>
+  </div>
+
+  <!-- ===================== PROYECTO ===================== -->
+  <div class="proyecto">
+    <span class="p-label">Proyecto</span>
+    <span class="p-nombre">{{ p.nombre or '' }}</span>
+  </div>
+
+  <!-- ===================== DATOS GENERALES ===================== -->
+  <div class="info-grid">
+    <div class="info-item"><span class="info-label">Fecha del acta</span><span class="info-val">{{ fecha }}</span></div>
+    <div class="info-item"><span class="info-label">Hora del acta</span><span class="info-val">{{ hora }}</span></div>
+    <div class="info-item"><span class="info-label">Entrega</span><span class="info-val">{{ entrega or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Cargo entrega</span><span class="info-val">{{ cargo_entrega or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Recibe</span><span class="info-val">{{ recibe or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Cargo recibe</span><span class="info-val">{{ cargo_recibe or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Código Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
+  </div>
+
+  <!-- ===================== PRECÁMBULO ===================== -->
+  <div class="acta-precambulo">
+    <p>En las instalaciones del Almacén de Obra del distrito de Toraya, siendo el día
+    {{ fecha }} a la hora {{ hora }}, se reúnen los abajo firmantes con la finalidad de
+    suscribir la presente <b>ACTA DE ENTREGA Y RECEPCIÓN DE MATERIALES SOBRANTES</b>,
+    correspondientes a la ejecución de la obra por Administración Directa indicada,
+    conforme a la verificación física y a los saldos registrados en el Movimiento de
+    Almacén.</p>
+  </div>
+
+  <!-- ===================== CUADRO DE MATERIALES SOBRANTES ===================== -->
+  <div class="tabla-titulo">DETALLE DE MATERIALES SOBRANTES A ENTREGAR</div>
+  <table class="tabla">
+    <colgroup>
+      <col style="width:26px"><col style="width:auto"><col style="width:40px">
+      <col style="width:58px"><col style="width:58px"><col style="width:70px">
+      <col style="width:74px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>N.º</th>
+        <th>Material sobrante</th>
+        <th>Und</th>
+        <th class="num">Cantidad</th>
+        <th class="num">P.U. (S/)</th>
+        <th class="num">Valor (S/)</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="ctr">{{ loop.index }}</td>
+        <td><b>{{ item.descripcion }}</b></td>
+        <td class="ctr">{{ item.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(item.cantidad) }}</td>
+        <td class="num">{{ "{:,.2f}".format(item.pu) }}</td>
+        <td class="num strong">{{ "{:,.2f}".format(item.valor) }}</td>
+        <td class="ctr">{{ estados[loop.index0] if estados and loop.index0 < estados|length else '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="ctr">SIN MATERIALES SOBRANTES CON SALDO EN ALMACÉN</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total">
+        <td colspan="3" class="right">TOTAL SOBRANTES</td>
+        <td class="num">{{ "{:,.2f}".format(total_cant) }}</td>
+        <td class="num"></td>
+        <td class="num">S/ {{ "{:,.2f}".format(total_valor) }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- ===================== DECLARACIÓN ===================== -->
+  <div class="acta-declaracion">
+    <p>Con el llenado y suscripción de la presente acta, el personal que entrega declara
+    haber verificado físicamente los materiales indicados y entrega los mismos en las
+    condiciones descritas, y el personal que recibe declara conformidad con su recepción,
+    dejando constancia de los materiales sobrantes de la obra por Administración Directa
+    a la fecha del presente acto, quedando ambas partes obligadas a su fiel cumplimiento.</p>
+  </div>
+
+  <!-- ===================== FIRMAS ===================== -->
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ entrega or '' }}</div>
+      <div class="cargo">{{ cargo_entrega or 'Entrega' }}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ recibe or '' }}</div>
+      <div class="cargo">{{ cargo_recibe or 'Recibe' }}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.residente or '' }}</div>
+      <div class="cargo">Residente de Obra</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.supervisor or '' }}</div>
+      <div class="cargo">Supervisor de Obra</div>
+    </div>
+  </div>
+
+  <div style="margin-top:10px;font-size:7.5pt;color:var(--texto2);text-align:center">
+    Los valores del cuadro se calculan al último precio de ingreso registrado en almacén.
+    Para las cantidades se considera todo el movimiento de almacén del proyecto.
+  </div>
+
+</div>
+
+</body>
+</html>

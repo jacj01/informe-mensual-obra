@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Acta de Entrega de Materiales Sobrantes{% endblock %}
+{% block og_title %}Acta de Entrega de Materiales Sobrantes{% endblock %}
+{% block meta_description %}Acta de entrega de materiales sobrantes de obra: responsables de obra, quien entrega y quien recibe, y cuadro de materiales con saldo disponible.{% endblock %}
+{% block heading %}Acta de Entrega de Materiales Sobrantes{% endblock %}
+{% block subheading %}Entrega física de materiales sobrantes de obra{% endblock %}
+
+{% block content %}
+<style>
+  .acta-doc{max-width:980px;margin:0 auto}
+  .acta-cab{display:flex;align-items:center;gap:14px;padding:18px;background:linear-gradient(135deg,var(--azul-osc,#1e3a5f),var(--azul,#2c527a));color:#fff;border-radius:12px 12px 0 0}
+  .acta-cab .logo{width:56px;height:56px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 56px}
+  .acta-cab .logo img{max-width:52px;max-height:52px}
+  .acta-cab .logo .sin-logo{font-size:.55em;text-align:center;color:#64748b;line-height:1.2;padding:2px}
+  .acta-cab .ent{flex:1;min-width:0}
+  .acta-cab .ent .e1{font-size:.9em;font-weight:700;text-transform:uppercase;letter-spacing:.4px;overflow-wrap:anywhere}
+  .acta-cab .ent .e2{font-size:.72em;opacity:.85;margin-top:2px;overflow-wrap:anywhere}
+  .acta-cab .ent .titulo{font-size:1.25em;font-weight:800;text-transform:uppercase;letter-spacing:.6px;margin-top:6px;line-height:1.15}
+  .acta-cab .num{text-align:right;flex:0 0 auto}
+  .acta-cab .num .lbl{font-size:.68em;text-transform:uppercase;letter-spacing:.5px;opacity:.85}
+  .acta-cab .num .val{font-size:1.1em;font-weight:800;border:1.5px solid #fff;border-radius:8px;padding:4px 10px;display:inline-block;margin-top:2px}
+  .acta-body{background:var(--card,#fff);border:1px solid var(--borde,#e2e8f0);border-radius:0 0 12px 12px;padding:18px;margin-bottom:16px}
+  .acta-fecha{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .acta-chip{display:flex;align-items:center;gap:10px;background:var(--bg2,#f0f4f8);border:1px solid var(--borde,#e2e8f0);border-radius:10px;padding:10px 14px}
+  .acta-chip .ico{width:34px;height:34px;border-radius:50%;background:#dbeafe;color:#2563eb;display:flex;align-items:center;justify-content:center;font-size:1em;flex:0 0 34px}
+  .acta-chip .ct{display:flex;flex-direction:column}
+  .acta-chip .ct .lbl{font-size:.7em;color:var(--texto2,#666);text-transform:uppercase;letter-spacing:.5px}
+  .acta-chip .ct .val{font-size:1.05em;font-weight:700;color:var(--texto,#1e293b)}
+  .acta-resp{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+  .acta-ri{background:var(--bg2,#f0f4f8);border:1px solid var(--borde,#e2e8f0);border-radius:12px;padding:16px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .acta-ri .ico{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1em}
+  .acta-ri .ico.azul{background:#dbeafe;color:#2563eb}
+  .acta-ri .ico.verde{background:#dcfce7;color:#16a34a}
+  .acta-ri .ico.rojo{background:#fee2e2;color:#dc2626}
+  .acta-ri .ico.oro{background:#fef3c7;color:#d97706}
+  .acta-ri .rol{font-size:.72em;text-transform:uppercase;letter-spacing:.6px;color:var(--texto2,#666);font-weight:700}
+  .acta-ri .nom{font-size:.98em;font-weight:700;color:var(--texto,#1e293b);line-height:1.3}
+  .acta-ri .cargo{font-size:.78em;color:var(--texto2,#666);background:var(--card,#fff);border:1px solid var(--borde,#e2e8f0);border-radius:20px;padding:2px 10px;margin-top:2px}
+  .acta-tabla th{background:var(--azul-osc,#1e3a5f);color:#fff;font-size:.8em;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;padding:9px 10px}
+  .acta-tabla td{font-size:.86em;padding:7px 10px;vertical-align:middle}
+  .acta-tabla .fila-total td{background:var(--azul-osc,#1e3a5f);color:#fff;font-weight:800;border:none}
+  .acta-nota{display:flex;align-items:center;gap:8px;font-size:.82em;color:var(--texto2,#666);margin:14px 0 0;padding:10px 14px;background:var(--bg2,#f0f4f8);border-radius:10px}
+  .acta-prel{margin:4px 0 16px;padding:14px 16px;background:var(--bg2,#f8fafc);border-left:4px solid var(--azul,#2c527a);border-radius:8px}
+  .acta-prel h4{margin:0 0 8px;font-size:.8em;text-transform:uppercase;letter-spacing:.6px;color:var(--azul-osc,#1e3a5f)}
+  .acta-prel p{margin:0;font-size:.92em;line-height:1.65;color:var(--texto,#334155);text-align:justify}
+  .acta-titulo-tabla{display:flex;align-items:center;gap:8px;margin:4px 0 10px;font-size:.82em;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--azul-osc,#1e3a5f)}
+  .estado-select{width:100%;padding:6px 8px;font-size:.85em;font-weight:600;color:var(--texto,#1e293b);background:var(--bg2,#f0f4f8);border:1px solid var(--borde,#e2e8f0);border-radius:8px;cursor:pointer}
+  .estado-select:focus{outline:2px solid var(--azul,#2c527a);outline-offset:1px}
+  .estado-select[data-bueno]{border-color:#16a34a;background:#dcfce7}
+  @media (max-width:520px){
+    .acta-fecha{grid-template-columns:1fr}
+  }
+</style>
+
+<div class="acta-doc">
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-head between">
+      <h3><i class="bi bi-file-earmark-diff"></i> Acta de entrega</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <a class="btn btn-print" id="btn-hoja-impresion" href="{{ url_for('acta_entrega_imprimir', fecha=fecha_iso, hora=hora, entrega=entrega, recibe=recibe, cargo_entrega=cargo_entrega, cargo_recibe=cargo_recibe, n_acta=n_acta) }}" target="_blank"><i class="bi bi-printer"></i> Hoja de impresión</a>
+        <a class="btn btn-outline" href="{{ url_for('almacen') }}"><i class="bi bi-arrow-left"></i> Volver al almacén</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="acta-cab">
+    <div class="logo">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="ent">
+      <div class="e1">{{ p.entidad or '' }}</div>
+      <div class="e2">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Acta de entrega de materiales sobrantes</div>
+    </div>
+    <div class="num">
+      <div class="lbl">N.° de acta</div>
+      <div class="val">{{ n_acta }}</div>
+    </div>
+  </div>
+
+  <div class="acta-body">
+    <div class="acta-fecha">
+      <div class="acta-chip">
+        <span class="ico"><i class="bi bi-calendar3"></i></span>
+        <span class="ct">
+          <span class="lbl">Fecha del acta</span>
+          <span class="val">{{ fecha }}</span>
+        </span>
+      </div>
+      <div class="acta-chip">
+        <span class="ico"><i class="bi bi-clock"></i></span>
+        <span class="ct">
+          <span class="lbl">Hora del acta</span>
+          <span class="val">{{ hora }}</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="acta-prel">
+      <h4><i class="bi bi-card-checklist"></i> CONSIDERANDO</h4>
+      <p>En las instalaciones del Almacén de Obra del distrito de Toraya, siendo el día
+      {{ fecha }} a la hora {{ hora }}, se reúnen los abajo firmantes con la finalidad de
+      suscribir la presente <b>ACTA DE ENTREGA Y RECEPCIÓN DE MATERIALES SOBRANTES</b>,
+      correspondientes a la ejecución de la obra por Administración Directa indicada,
+      conforme a la verificación física y a los saldos registrados en el Movimiento de
+      Almacén.</p>
+    </div>
+
+    <div class="acta-resp">
+      <div class="acta-ri">
+        <span class="ico verde"><i class="bi bi-box-arrow-up-right"></i></span>
+        <span class="rol">Entrega</span>
+        <span class="nom">{{ entrega or '—' }}</span>
+        <span class="cargo">{{ cargo_entrega }}</span>
+      </div>
+      <div class="acta-ri">
+        <span class="ico rojo"><i class="bi bi-box-arrow-in-down-left"></i></span>
+        <span class="rol">Recibe</span>
+        <span class="nom">{{ recibe or '—' }}</span>
+        <span class="cargo">{{ cargo_recibe }}</span>
+      </div>
+      <div class="acta-ri">
+        <span class="ico azul"><i class="bi bi-person-badge"></i></span>
+        <span class="rol">Responsable de obra</span>
+        <span class="nom">{{ p.residente or '—' }}</span>
+        <span class="cargo">Residente de obra</span>
+      </div>
+      <div class="acta-ri">
+        <span class="ico oro"><i class="bi bi-vector-pen"></i></span>
+        <span class="rol">Supervisor de obra</span>
+        <span class="nom">{{ p.supervisor or '—' }}</span>
+        <span class="cargo">Supervisor de obra</span>
+      </div>
+    </div>
+
+    {% if items %}
+    <div class="acta-titulo-tabla"><i class="bi bi-box-seam"></i> Detalle de materiales sobrantes a entregar</div>
+    <div class="table-scroll">
+      <table class="table table-compact acta-tabla">
+        <colgroup>
+          <col style="width:4%"><col style="width:36%"><col style="width:8%">
+          <col style="width:11%"><col style="width:12%"><col style="width:16%">
+          <col style="width:13%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>N.º</th>
+            <th>Material sobrante</th>
+            <th>Und</th>
+            <th class="num">Cantidad</th>
+            <th class="num">P.U. (S/)</th>
+            <th class="num">Valor (S/)</th>
+            <th>ESTADO / CONDICIÓN</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td class="ctr">{{ loop.index }}</td>
+            <td class="wrap strong">{{ item.descripcion }}</td>
+            <td class="ctr">{{ item.und }}</td>
+            <td class="num">{{ "{:,.2f}".format(item.cantidad) }}</td>
+            <td class="num">{{ "S/ {:,.2f}".format(item.pu) }}</td>
+            <td class="num strong">{{ "S/ {:,.2f}".format(item.valor) }}</td>
+            <td class="ctr">
+              <select class="estado-select" data-material="{{ item.descripcion }}">
+                <option value="Bueno">Bueno</option>
+                <option value="Operativo">Operativo</option>
+                <option value="Malo">Malo</option>
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="fila-total">
+            <td colspan="3" class="right">TOTAL SOBRANTES</td>
+            <td class="num">{{ "{:,.2f}".format(total_cant) }}</td>
+            <td class="num"></td>
+            <td class="num">S/ {{ "{:,.2f}".format(total_valor) }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <div class="card"><p class="empty">No hay materiales sobrantes con saldo disponible en almacén.</p></div>
+    {% endif %}
+
+    <div class="acta-prel acta-declaracion">
+      <h4><i class="bi bi-pencil-square"></i> DECLARACIÓN</h4>
+      <p>Con el llenado y suscripción de la presente acta, el personal que entrega declara
+      haber verificado físicamente los materiales indicados y entrega los mismos en las
+      condiciones descritas, y el personal que recibe declara conformidad con su recepción,
+      dejando constancia de los materiales sobrantes de la obra por Administración Directa
+      a la fecha del presente acto, quedando ambas partes obligadas a su fiel cumplimiento.</p>
+    </div>
+
+    <p class="acta-nota"><i class="bi bi-info-circle"></i> Los importes se valorizan al último precio de ingreso registrado en almacén.</p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById('btn-hoja-impresion');
+    if (!btn) return;
+    btn.addEventListener('click', function (ev) {
+      var selects = document.querySelectorAll('.acta-tabla tbody tr .estado-select');
+      var est = Array.prototype.map.call(selects, function (s) { return s.value; }).filter(function (v) { return v.trim() !== ''; });
+      var url = new URL(btn.href);
+      if (est.length) { url.searchParams.set('est', est.join(',')); }
+      if (btn.target === '_blank') {
+        ev.preventDefault();
+        var blank = window.open(url.href, '_blank', 'noopener');
+        if (blank) { blank.opener = null; }
+      } else {
+        btn.href = url.href;
+      }
+    });
+  })();
+</script>
+{% endblock %}

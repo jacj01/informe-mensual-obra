@@ -1200,6 +1200,47 @@ def almacen_items(mes, anio):
     return result
 
 
+def materiales_sobrantes_acta():
+    """Materiales sobrantes de obra: insumos con saldo positivo (entradas menos
+    salidas) acumulado de todos los periodos, listos para un acta de entrega.
+    El precio unitario se toma de la ultima entrada registrada."""
+    movs = (AlmacenMovimiento.query
+            .order_by(AlmacenMovimiento.descripcion,
+                      AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
+    agg = {}
+    for m in movs:
+        desc = (m.descripcion or "").strip()
+        if not desc:
+            continue
+        key = (desc, m.und or "")
+        rec = agg.setdefault(key, {"descripcion": desc, "und": m.und or "",
+                                   "saldo": 0.0, "pu": 0.0})
+        cant = m.cantidad or 0
+        if m.tipo == "E":
+            rec["saldo"] += cant
+            if m.precio_unitario:
+                rec["pu"] = m.precio_unitario
+        else:
+            rec["saldo"] -= cant
+    items = []
+    for key, rec in agg.items():
+        saldo = round(rec["saldo"], 2)
+        if saldo <= 0:
+            continue
+        pu = round(rec["pu"], 2)
+        items.append({
+            "descripcion": rec["descripcion"].upper(),
+            "und": rec["und"].upper(),
+            "cantidad": saldo,
+            "pu": pu,
+            "valor": round(saldo * pu, 2),
+        })
+    items.sort(key=lambda x: (x["descripcion"], x["und"]))
+    total_cant = round(sum(i["cantidad"] for i in items), 2)
+    total_valor = round(sum(i["valor"] for i in items), 2)
+    return items, total_cant, total_valor
+
+
 def pascua(anio):
     """Fecha del Domingo de Pascua segun el algoritmo de Meeus/Jones/Butcher."""
     a = anio % 19
