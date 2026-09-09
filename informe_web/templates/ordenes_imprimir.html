@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Reporte general de órdenes de compra y servicio (O/C y O/S) del informe financiero mensual de obra: todas las órdenes registradas sin excepción, agrupadas por periodo y separadas por tipo de documento (O/C y O/S). Hoja continua tamaño A4 horizontal.">
+<title>Reporte General de Órdenes (O/C y O/S)</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<style>
+  .strong { font-weight: 700; }
+  .right { text-align: right; }
+  .empty-print { text-align: center; color: var(--texto2); font-size: 9pt; padding: 18px 0; }
+
+  /* Hoja continua: A4 vertical (210mm) sin límite de altura */
+  .hoja { width: 210mm; min-height: auto; }
+
+  /* Resumen principal */
+  .resumen-print { display: flex; gap: 8px; margin: 8px 0 2px; page-break-inside: avoid; }
+  .resumen-print .rb {
+    flex: 1; border: 1px solid var(--borde); border-radius: 6px;
+    padding: 6px 8px; text-align: center; background: var(--bg);
+  }
+  .resumen-print .rb-val { font-size: 11.5pt; font-weight: 800; color: var(--azul-osc); }
+  .resumen-print .rb-lbl { font-size: 6.3pt; text-transform: uppercase; color: var(--texto2); letter-spacing: .4px; margin-top: 2px; }
+  .rb.rb-total { background: linear-gradient(135deg, var(--azul-osc), var(--azul)); border-color: var(--azul-osc); }
+  .rb.rb-total .rb-val { color: #fff; }
+  .rb.rb-total .rb-lbl { color: rgba(255,255,255,.85); }
+
+  /* Encabezado de periodo */
+  .periodo-head {
+    display: flex; align-items: center; gap: 10px;
+    background: linear-gradient(90deg, var(--azul-osc), var(--azul));
+    color: #fff; border-radius: 5px;
+    padding: 6px 12px; margin: 16px 0 8px; page-break-inside: avoid;
+  }
+  .periodo-head .ph-periodo { text-transform: uppercase; letter-spacing: .5px; font-size: 9.5pt; font-weight: 800; }
+  .periodo-head .ph-spacer { flex: 1; }
+  .periodo-head .ph-meta {
+    font-size: 7.5pt; font-weight: 700; opacity: .95;
+    background: rgba(255,255,255,.14); border-radius: 20px; padding: 3px 12px;
+  }
+
+  /* Encabezado de tipo de documento (O/C / O/S) */
+  .tipo-head {
+    display: flex; align-items: center; gap: 10px;
+    background: #fff; border: 1px solid var(--borde);
+    border-left: 6px solid var(--azul);
+    border-radius: 5px; padding: 5px 10px; margin: 10px 0 5px;
+    page-break-inside: avoid;
+  }
+  .tipo-head .tipo-tag {
+    font-size: 8pt; font-weight: 800; color: #fff;
+    background: var(--azul); border-radius: 4px; padding: 2px 9px; letter-spacing: .5px;
+  }
+  .tipo-head .tipo-txt { font-size: 8.5pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase; letter-spacing: .4px; flex: 1; }
+  .tipo-head .tipo-sub { font-size: 7.5pt; color: var(--texto2); font-weight: 700; }
+  .tipo-head.tipo-oc { border-left-color: var(--azul); }
+  .tipo-head.tipo-os { border-left-color: var(--oro); }
+  .tipo-head.tipo-os .tipo-tag { background: var(--oro); }
+  .tipo-empty {
+    border: 1px dashed var(--borde); border-radius: 5px;
+    padding: 8px 12px; margin: 4px 0 10px;
+    font-size: 7.8pt; color: var(--texto2); text-align: center;
+  }
+
+  /* Fila de orden (cabecera del comprobante) */
+  tr.fila-orden td {
+    background: #EAF0F7; font-size: 7.8pt; font-weight: 600;
+    border-top: 2px solid var(--azul-claro); color: var(--texto);
+  }
+  tr.fila-orden td.doc b { color: var(--azul-osc); font-size: 8.2pt; letter-spacing: .2px; }
+  tr.fila-orden td.dev-si { text-align: center; color: #166534; font-weight: 800; font-size: 8.2pt; }
+  tr.fila-orden td.dev-no { text-align: center; color: #B45309; font-weight: 800; font-size: 8.2pt; }
+  tr.fila-orden td.np-mini { font-size: 6.2pt; font-weight: 600; color: var(--texto2); }
+
+  /* Detalle de bienes / servicios */
+  tr.fila-det > td { padding: 0 !important; background: #fff; }
+  table.det-materiales { margin: 0; width: 100%; border-collapse: collapse; }
+  table.det-materiales thead th {
+    background: var(--azul-claro); color: #fff; font-weight: 700;
+    font-size: 6.4pt; text-transform: uppercase; letter-spacing: .2px;
+    padding: 3.5px 5px; border: .6px solid var(--azul-claro);
+  }
+  table.det-materiales td {
+    font-size: 7.3pt; padding: 3px 5px; border: .6px solid var(--borde); background: #fff;
+  }
+  table.det-materiales td.num { text-align: right; }
+  table.det-materiales td.ctr { text-align: center; }
+  table.det-materiales td.det-txt { font-weight: 600; }
+  table.det-materiales tbody tr:nth-child(even) td { background: #F6F9FC; }
+
+  /* Subtotal por tipo de documento */
+  tr.fila-sub td {
+    background: var(--azul-osc); color: #fff; font-weight: 800;
+    font-size: 8.5pt; padding: 5px 6px; letter-spacing: .3px;
+  }
+
+  /* Total general */
+  .sub-total-print {
+    display: flex; justify-content: space-between; align-items: center;
+    background: linear-gradient(90deg, var(--azul-osc), var(--azul));
+    color: #fff; border-radius: 6px; padding: 11px 18px; margin-top: 16px;
+    page-break-inside: avoid;
+  }
+  .sub-total-print .st-lbl { font-size: 10.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+  .sub-total-print .st-val { font-size: 14pt; font-weight: 800; letter-spacing: .5px; }
+  .nota-final { margin-top: 8px; font-size: 7.5pt; color: var(--texto2); }
+
+  /* Impresión: tamaño A4 en sentido vertical */
+  @media print {
+    @page { size: A4 portrait; margin: 9mm 8mm 10mm; }
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <h2>REPORTE GENERAL DE ÓRDENES (O/C Y O/S)</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('ordenes') }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+<div class="hoja">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Reporte General de Órdenes de Compra y Servicio</div>
+      <div class="subtitulo">TODOS LOS PERIODOS REGISTRADOS</div>
+    </div>
+  </div>
+  <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
+
+  <div class="resumen-print">
+    <div class="rb rb-total"><div class="rb-val">{{ "{:,}".format(resumen.total_ordenes) }}</div><div class="rb-lbl">Órdenes</div></div>
+    <div class="rb"><div class="rb-val">{{ "{:,}".format(resumen.total_oc) }}</div><div class="rb-lbl">O/C</div></div>
+    <div class="rb"><div class="rb-val">{{ "{:,}".format(resumen.total_os) }}</div><div class="rb-lbl">O/S</div></div>
+    <div class="rb rb-total"><div class="rb-val">S/ {{ "{:,.2f}".format(resumen.total_general) }}</div><div class="rb-lbl">Total General</div></div>
+    <div class="rb"><div class="rb-val">S/ {{ "{:,.2f}".format(resumen.total_devengado) }}</div><div class="rb-lbl">Devengado</div></div>
+    <div class="rb"><div class="rb-val">S/ {{ "{:,.2f}".format(resumen.total_pendiente) }}</div><div class="rb-lbl">Pendiente</div></div>
+  </div>
+
+  {% macro tabla_ordenes(ordenes, sublabel, subtotal) %}
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th style="width:24px">#</th>
+        <th style="width:58px">Fecha</th>
+        <th style="width:94px">Documento</th>
+        <th style="width:58px">SIAF</th>
+        <th>Proveedor</th>
+        <th style="width:112px">Clasificador</th>
+        <th style="width:76px">Componente</th>
+        <th style="width:54px">Pecosa</th>
+        <th style="width:58px">Devengado</th>
+        <th class="num" style="width:84px">Total S/</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in ordenes %}
+      <tr class="fila-orden">
+        <td class="ctr">{{ loop.index }}</td>
+        <td class="ctr">{{ o.g.fecha.strftime("%d/%m/%Y") if o.g.fecha else '-' }}</td>
+        <td><b>{{ o.g.tipo_doc }} N° {{ o.g.num_doc }}</b></td>
+        <td class="ctr">{{ o.g.siaf if o.g.siaf else '—' }}</td>
+        <td><b>{{ o.g.proveedor or '' }}</b></td>
+        <td>{{ o.clasificador }}</td>
+        <td>{{ o.g.componente }}</td>
+        <td class="ctr">{{ o.g.pecosa or '—' }}</td>
+        <td>
+          {% if o.g.devengado %}
+          <span class="dev-si">SÍ</span>{% if o.g.nota_pago %}<br><span class="np-mini">NP: {{ o.g.nota_pago }}</span>{% endif %}
+          {% else %}
+          <span class="dev-no">NO</span>
+          {% endif %}
+        </td>
+        <td class="num strong">S/ {{ "{:,.2f}".format(o.importe) }}</td>
+      </tr>
+      <tr class="fila-det">
+        <td colspan="10">
+          <table class="det-materiales">
+            <thead>
+              <tr>
+                <th style="width:24px">#</th>
+                <th>Detalle del Bien / Servicio</th>
+                <th style="width:52px">Und</th>
+                <th class="num" style="width:60px">Cant</th>
+                <th class="num" style="width:70px">P.U.</th>
+                <th class="num" style="width:80px">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in o.detalles %}
+              <tr>
+                <td class="ctr">{{ loop.index }}</td>
+                <td class="det-txt">{{ d.detalle }}</td>
+                <td class="ctr">{{ d.und }}</td>
+                <td class="num">{{ "{:,.2f}".format(d.cantidad) }}</td>
+                <td class="num">{{ "{:,.2f}".format(d.precio_unitario) }}</td>
+                <td class="num strong">S/ {{ "{:,.2f}".format(d.importe) }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="6" class="ctr">
+                  {{ 'Sin servicios registrados.' if o.g.tipo_doc == 'O/S' else 'Sin materiales registrados.' }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-sub">
+        <td colspan="9" class="right strong">{{ sublabel }}</td>
+        <td class="num strong">S/ {{ "{:,.2f}".format(subtotal) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  {% endmacro %}
+
+  {% for periodo in periodos %}
+  <div class="periodo-head">
+    <span class="ph-periodo">PERIODO: {{ periodo.nombre }}</span>
+    <span class="ph-spacer"></span>
+    <span class="ph-meta">{{ periodo.cant }} ÓRDENES · {{ periodo.cant_oc }} O/C · {{ periodo.cant_os }} O/S · SUBTOTAL S/ {{ "{:,.2f}".format(periodo.subtotal) }}</span>
+  </div>
+
+  <div class="tipo-head tipo-oc">
+    <span class="tipo-tag">O/C</span>
+    <span class="tipo-txt">Órdenes de Compra</span>
+    <span class="tipo-sub">{{ periodo.cant_oc }} ÓRDENES · S/ {{ "{:,.2f}".format(periodo.subtotal_oc) }}</span>
+  </div>
+  {% if periodo.oc_ordenes %}
+  {{ tabla_ordenes(periodo.oc_ordenes,
+                   "SUBTOTAL O/C · " ~ periodo.nombre ~ " · " ~ periodo.cant_oc ~ " ÓRDENES",
+                   periodo.subtotal_oc) }}
+  {% else %}
+  <div class="tipo-empty">No hay órdenes de compra (O/C) registradas en este periodo.</div>
+  {% endif %}
+
+  <div class="tipo-head tipo-os">
+    <span class="tipo-tag">O/S</span>
+    <span class="tipo-txt">Órdenes de Servicio</span>
+    <span class="tipo-sub">{{ periodo.cant_os }} ÓRDENES · S/ {{ "{:,.2f}".format(periodo.subtotal_os) }}</span>
+  </div>
+  {% if periodo.os_ordenes %}
+  {{ tabla_ordenes(periodo.os_ordenes,
+                   "SUBTOTAL O/S · " ~ periodo.nombre ~ " · " ~ periodo.cant_os ~ " ÓRDENES",
+                   periodo.subtotal_os) }}
+  {% else %}
+  <div class="tipo-empty">No hay órdenes de servicio (O/S) registradas en este periodo.</div>
+  {% endif %}
+
+  {% else %}
+  <p class="empty-print">
+    No hay órdenes registradas en el aplicativo.
+  </p>
+  {% endfor %}
+
+  {% if periodos %}
+  <div class="sub-total-print">
+    <span class="st-lbl">TOTAL GENERAL ({{ "{:,}".format(resumen.total_ordenes) }} ÓRDENES)</span>
+    <span class="st-val">S/ {{ "{:,.2f}".format(resumen.total_general) }}</span>
+  </div>
+  <div class="nota-final">
+    Comprende {{ "{:,}".format(resumen.total_oc) }} órdenes de compra (O/C) y {{ "{:,}".format(resumen.total_os) }} órdenes de servicio (O/S).
+    Monto devengado: S/ {{ "{:,.2f}".format(resumen.total_devengado) }} · Pendiente de devengar: S/ {{ "{:,.2f}".format(resumen.total_pendiente) }}.
+  </div>
+  {% endif %}
+</div>
+</body>
+</html>

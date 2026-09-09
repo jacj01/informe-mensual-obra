@@ -3506,6 +3506,70 @@ def registrar_rutas(app):
                                bloqueos_material=bloqueos_material,
                                COMPONENTES=COMPONENTES)
 
+    @app.route("/ordenes/imprimir")
+    def ordenes_imprimir():
+        """Vista imprimible: Reporte General de Órdenes de Compra y Servicio.
+
+        Muestra TODAS las órdenes registradas sin excepción (todos los
+        periodos), agrupadas por periodo, con el detalle de sus materiales,
+        subtotales por periodo y totales generales."""
+        p = get_proyecto()
+        cls_nombres = dict(clasificadores_proyecto())
+        cls_nombres.update(CLASIFICADORES)
+        lista = (Gasto.query
+                 .order_by(Gasto.anio, Gasto.mes, Gasto.orden, Gasto.id)
+                 .all())
+        periodos = []
+        total_general = 0.0
+        total_devengado = 0.0
+        total_oc = 0
+        total_os = 0
+        for g in lista:
+            subtotal = g.importe
+            total_general += subtotal
+            if g.devengado:
+                total_devengado += subtotal
+            if g.tipo_doc == "O/S":
+                total_os += 1
+            else:
+                total_oc += 1
+            if not periodos or periodos[-1]["clave"] != (g.anio, g.mes):
+                periodos.append({
+                    "clave": (g.anio, g.mes),
+                    "nombre": f"{MESES[g.mes - 1]} {g.anio}",
+                    "oc_ordenes": [], "os_ordenes": [],
+                    "cant": 0, "subtotal": 0.0,
+                    "cant_oc": 0, "cant_os": 0,
+                    "subtotal_oc": 0.0, "subtotal_os": 0.0,
+                })
+            item = {
+                "g": g,
+                "detalles": g.detalles,
+                "clasificador": cls_nombres.get(g.clasificador, g.clasificador),
+                "importe": round(g.importe, 2),
+            }
+            if g.tipo_doc == "O/S":
+                periodos[-1]["os_ordenes"].append(item)
+                periodos[-1]["cant_os"] += 1
+                periodos[-1]["subtotal_os"] += round(g.importe, 2)
+            else:
+                periodos[-1]["oc_ordenes"].append(item)
+                periodos[-1]["cant_oc"] += 1
+                periodos[-1]["subtotal_oc"] += round(g.importe, 2)
+            periodos[-1]["cant"] += 1
+            periodos[-1]["subtotal"] += round(g.importe, 2)
+        periodos.reverse()
+        resumen = {
+            "total_ordenes": len(lista),
+            "total_oc": total_oc,
+            "total_os": total_os,
+            "total_general": round(total_general, 2),
+            "total_devengado": round(total_devengado, 2),
+            "total_pendiente": round(total_general - total_devengado, 2),
+        }
+        return render_template("ordenes_imprimir.html", p=p, MESES=MESES,
+                               periodos=periodos, resumen=resumen)
+
     @app.route("/ordenes/nuevo", methods=["POST"])
     def orden_nuevo():
         return orden_form(None)
