@@ -6,6 +6,9 @@ para poder detenerlo con detener_servidor.bat.
 
 Abre el navegador por si mismo en cuanto el servidor responde, de modo que
 el lanzador (iniciar_sin_consola.vbs) no necesita esperas fijas ni sondeos.
+
+Tambien admite modo CLIENTE (ver config_red.py): el equipo no aloja servidor
+ni base de datos, solo abre el navegador apuntando al servidor del Administrador.
 """
 import logging
 import os
@@ -21,6 +24,8 @@ from urllib.request import urlopen
 BASE = Path(__file__).resolve().parent
 LOG = BASE / "servidor.log"
 PID = BASE / "servidor.pid"
+
+from red_util import es_cliente, servidor_url  # noqa: E402
 
 logging.basicConfig(
     filename=LOG,
@@ -43,7 +48,7 @@ def servidor_sano():
         return False
 
 
-def abrir_navegador():
+def abrir_navegador(url):
     # Abre el navegador sin ventana de consola cmd visible.
     # Estrategia (Windows): reusar la instancia del browser ya abierta enviandole
     # la URL como nueva pestaña (--new-tab). Si el browser ya corre, NO se lanza
@@ -57,22 +62,67 @@ def abrir_navegador():
                 cmd = _sp.run(["tasklist", "/FI", "IMAGENAME eq " + exe, "/FO", "CSV", "/NH"],
                               capture_output=True, text=True, timeout=5)
                 if exe in (cmd.stdout or ""):
-                    args = [exe, "--new-tab", URL] if exe != "firefox.exe" else [exe, URL]
+                    args = [exe, "--new-tab", url] if exe != "firefox.exe" else [exe, url]
                     _sp.Popen(args, creationflags=0x08000000)  # CREATE_NO_WINDOW
                     return
         except Exception:
             pass
         try:
-            res = windll.shell32.ShellExecuteW(None, "open", URL, None, None, 0)
+            res = windll.shell32.ShellExecuteW(None, "open", url, None, None, 0)
             if res > 32:
                 return
         except Exception:
             pass
     try:
         import webbrowser
-        webbrowser.open(URL, new=2)
+        webbrowser.open(url, new=2)
     except Exception:
         log.exception("No se pudo abrir el navegador")
+
+
+def servidor_remoto_sano(url):
+    """True si el servidor remoto (modo cliente) responde correctamente."""
+    try:
+        with urlopen(f"{url}/robots.txt", timeout=3) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def preguntar_reintentar(url):
+    """Muestra un aviso al usuario (modo cliente) y devuelve True si reintentar."""
+    if os.name != "nt":
+        return False
+    try:
+        mensaje = (
+            "No se pudo conectar con el servidor de Informe Mensual de Obra:\n\n"
+            f"    {url}\n\n"
+            "Asegurese de que el equipo Administrador este encendido y de que\n"
+            "ambos equipos esten en la misma red (LAN, Wi-Fi o Tailscale).\n\n"
+            "Haga clic en 'Si' para volver a intentarlo."
+        )
+        res = windll.user32.MessageBoxW(
+            0, mensaje, "Informe Mensual de Obra - Cliente",
+            0x24)  # MB_YESNO | MB_ICONQUESTION
+        return res == 6  # IDYES
+    except Exception:
+        return False
+
+
+def abrir_cliente():
+    """Modo CLIENTE: espera a que el servidor del Administrador responda y abre
+    el navegador. No inicia servidor local ni toca la base de datos."""
+    url = servidor_url()
+    log.info("Modo CLIENTE: conectando con %s", url)
+    while True:
+        for _ in range(60):  # hasta ~120 s por intento
+            if servidor_remoto_sano(url):
+                log.info("Servidor alcanzado; abriendo navegador en %s", url)
+                abrir_navegador(url)
+                return 0
+            time.sleep(2)
+        if not preguntar_reintentar(url):
+            return 3
 
 
 def detener_anterior():
@@ -111,23 +161,27 @@ def esperar_y_abrir():
     """Abre el navegador en cuanto el servidor responde (sin demora fija)."""
     for _ in range(120):
         if servidor_sano():
-            abrir_navegador()
+            abrir_navegador(URL)
             return
         time.sleep(0.1)
 
 
 def main():
+    # Modo CLIENTE: este equipo no aloja el servidor ni la BD.
+    if es_cliente():
+        sys.exit(abrir_cliente())
+
     # Ya hay un servidor sano: solo abre el navegador (inicio casi instantaneo).
     if servidor_sano():
         log.info("Servidor ya activo; abriendo navegador.")
-        abrir_navegador()
+        abrir_navegador(URL)
         return
 
     detener_anterior()
 
     if puerto_en_uso(host, port):
         if servidor_sano():
-            abrir_navegador()
+            abrir_navegador(URL)
             return
         log.error("El puerto %s ya esta en uso (algun servidor previo lo ocupa). "
                   "Cierre los navegadores y ejecute detener_servidor.bat.", port)

@@ -16,6 +16,9 @@ C:\Users\<usuario>\AppData\Local\Programs\InformeObra\  (o {autopf}\InformeObra)
 ├── informe_web/                # App Flask
 │   ├── app.py
 │   ├── servidor_silencioso.py
+│   ├── red_util.py             # Lee config_red.py (modo administrador/cliente)
+│   ├── config_red.py           # Generado por el instalador (NO versionado)
+│   ├── config_red.ejemplo.py   # Ejemplo para instalaciones manuales
 │   ├── version.py
 │   ├── databases.py / helpers.py / models.py
 │   ├── static/ / templates/
@@ -29,6 +32,39 @@ C:\Users\<usuario>\AppData\Local\Programs\InformeObra\  (o {autopf}\InformeObra)
 ├── unins000.exe                # Desinstalador de Inno Setup
 └── instalar_python.bat         # Generado por Inno Setup, se auto-elimina
 ```
+
+## Modos de red (Administrador / Cliente)
+
+Desde la v1.3.0 el instalador pregunta cómo se usará el equipo:
+
+- **Administrador** (por defecto): aloja la base de datos y el servidor
+  (`0.0.0.0:5000`). Los demás equipos entran por el navegador.
+- **Cliente**: no crea base de datos ni inicia servidor; solo abre el
+  navegador apuntando a la URL del Administrador (red local o Tailscale).
+
+Configuración: `informe_web/config_red.py` (escrito por el instalador).
+
+| Campo          | Administrador        | Cliente                                       |
+|----------------|----------------------|-----------------------------------------------|
+| `MODO`         | `"administrador"`    | `"cliente"`                                   |
+| `SERVIDOR_URL` | ignorado             | ej. `http://192.168.1.70:5000` o `http://100.x.x.x:5000` |
+
+- `red_util.py` lee ese archivo con valores seguros por defecto (si falta el
+  archivo o está mal, asume **administrador**).
+- `servidor_silencioso.py` arranca según el modo: en cliente NO importa `app`
+  (no toca la BD), sondea `/robots.txt` del servidor y abre el navegador; si
+  no responde, avisa y ofrece reintentar.
+- `iniciar_servidor.bat` / `iniciar_local.bat` detectan el modo; en cliente
+  simplemente abren la URL del servidor.
+- `iniciar_sin_consola.vbs` delega todo a `servidor_silencioso.py`.
+- El instalador genera `LEEME_RED.txt` en `{app}` con las instrucciones
+  (incluida la guía de Tailscale para redes distintas).
+
+> **Redes distintas (oficina / casa / obra)**: instalar Tailscale en todas las
+> máquinas con la misma cuenta; el Administrador queda con IP privada
+> `100.x.x.x` (interfaz Tailscale) y los clientes usan `http://100.x.x.x:5000`.
+> El tráfico viaja cifrado. Es el punto de partida para migrar el servidor a un
+> VPS después (solo cambia la `SERVIDOR_URL` de los clientes).
 
 ## Problemas conocidos y soluciones
 
@@ -64,8 +100,8 @@ C:\Users\<usuario>\AppData\Local\Programs\InformeObra\  (o {autopf}\InformeObra)
 
 ## Versión del instalador
 
-- **`installer.iss`** → `#define MyAppVersion "1.0.7"`
-- **`informe_web/version.py`** → `__version__ = "1.0.7"`
+- **`installer.iss`** → `#define MyAppVersion "1.3.0"`
+- **`informe_web/version.py`** → `__version__ = "1.3.0"`
 - Ambos deben coincidir. `version.py` se usa para cache busting CSS y para el auto-updater.
 
 ## Publicar nueva versión
@@ -81,15 +117,16 @@ C:\Users\<usuario>\AppData\Local\Programs\InformeObra\  (o {autopf}\InformeObra)
 ### `iniciar_sin_consola.vbs` (principal)
 - 3-tier detección de Python: embebido → PATH → legacy (`C:\Python314`)
 - Usa `WshShell.Run` con ventana oculta (0)
-- Si el servidor ya responde, solo abre el navegador
-- Si no, lanza `servidor_silencioso.py` en background
+- Delega TODO a `servidor_silencioso.py`, que decide el modo
+  (administrador/cliente) leyendo `config_red.py`
 
 ### `servidor_silencioso.py`
 - Escrito en Python puro (sin dependencias extras)
-- Escribe PID en `servidor.pid`
-- `detener_anterior()` mata instancias previas por PID
-- Abre el navegador automáticamente cuando el servidor responde
-- `waitress` sirve la app Flask en `0.0.0.0:5000`
+- Modo administrador: escribe PID en `servidor.pid`, `detener_anterior()` mata
+  instancias previas por PID, `waitress` sirve la app en `0.0.0.0:5000` y abre
+  el navegador cuando responde
+- Modo cliente: no escribe PID ni importa la app; sondea `/robots.txt` del
+  servidor y abre el navegador cuando responde (con aviso y reintento si no)
 
 ### `actualizar.ps1`
 - Descarga el zip del release más reciente desde GitHub

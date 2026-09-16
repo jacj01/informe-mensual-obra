@@ -40,3 +40,6 @@ installer_output/
 
 # Configuracion SMTP con credenciales (no subir)
 informe_web/config_correo.py
+
+# Configuracion de red generada por el instalador (especifica de cada equipo)
+informe_web/config_red.py

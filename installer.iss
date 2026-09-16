@@ -3,7 +3,7 @@
 ; El usuario final ejecuta el .exe y queda todo listo para usar.
 
 #define MyAppName "Informe Mensual de Obra"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C."
 #define MyAppURL "https://github.com/jacj01/informe-mensual-obra"
 #define MyAppExeName "iniciar_sin_consola.vbs"
@@ -62,9 +62,10 @@ Source: "informe_web\templates\*"; DestDir: "{app}\informe_web\templates"; Flags
 Source: "informe_web\static\*"; DestDir: "{app}\informe_web\static"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Abrir Informe de Obra"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Logo.ico"
-Name: "{group}\Detener Servidor"; Filename: "{app}\detener_servidor.bat"
-Name: "{group}\Pagina del Proyecto"; Filename: "http://127.0.0.1:5000"
+Name: "{group}\Abrir Informe de Obra"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Logo.ico"; Check: EsModoAdmin
+Name: "{group}\Conectar al Servidor"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Logo.ico"; Check: EsModoCliente
+Name: "{group}\Detener Servidor"; Filename: "{app}\detener_servidor.bat"; Check: EsModoAdmin
+Name: "{group}\Pagina del Proyecto"; Filename: "http://127.0.0.1:5000"; Check: EsModoAdmin
 Name: "{group}\Desinstalar"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Informe de Obra"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\Logo.ico"
 
@@ -83,11 +84,303 @@ Type: filesandordirs; Name: "{app}\python"
 Type: files; Name: "{app}\informe_web\servidor.pid"
 Type: files; Name: "{app}\informe_web\servidor.log"
 Type: files; Name: "{app}\instalar_python.bat"
+Type: files; Name: "{app}\informe_web\config_red.py"
+Type: files; Name: "{app}\LEEME_RED.txt"
 
 [Code]
 var
   BackupDir: String;
   NeedRestore: Boolean;
+  ModoCliente: Boolean;
+  IpLocal: String;
+  PaginaTipo: TWizardPage;
+  rAdm: TNewRadioButton;
+  rCli: TNewRadioButton;
+  eUrl: TNewComboBox;
+  lblUrl: TNewStaticText;
+  lblInfo: TNewStaticText;
+  btnBuscar: TNewButton;
+  lblResultado: TNewStaticText;
+
+function EsModoAdmin: Boolean;
+begin
+  Result := not ModoCliente;
+end;
+
+function EsModoCliente: Boolean;
+begin
+  Result := ModoCliente;
+end;
+
+procedure CambioModo(Sender: TObject);
+begin
+  if rCli.Checked then
+  begin
+    lblUrl.Enabled := True;
+    eUrl.Enabled := True;
+    btnBuscar.Enabled := True;
+    lblResultado.Enabled := True;
+    lblInfo.Caption := 'Pulse "Buscar servidor" para detectar automaticamente los equipos Administrador de esta subred y elegir una URL; o escribala a mano.';
+  end
+  else
+  begin
+    lblUrl.Enabled := False;
+    eUrl.Enabled := False;
+    btnBuscar.Enabled := False;
+    lblResultado.Enabled := False;
+    if IpLocal <> '' then
+      lblInfo.Caption := 'IP de red de este equipo: ' + IpLocal + #13#10 +
+        'Los equipos CLIENTES entraran a: http://' + IpLocal + ':5000'
+    else
+      lblInfo.Caption := 'El instalador detectara automaticamente el IP de red de este equipo.';
+  end;
+end;
+
+function NormalizarUrl(S: String): String;
+begin
+  Result := Trim(S);
+  if Pos('://', Result) = 0 then
+    Result := 'http://' + Result;
+  while (Length(Result) > 0) and (Result[Length(Result)] = '/') do
+    Delete(Result, Length(Result), 1);
+end;
+
+procedure GenerarScriptsRed;
+var
+  IpFile, ScanFile, IpTxt, ScanTxt: String;
+begin
+  // Scripts PowerShell usados por el wizard: deteccion del IP local y
+  // busqueda de servidores en la subred (puerto 5000). Se ejecutan con
+  // "powershell.exe -MTA -File" (WaitAll requiere MTA).
+  IpFile := ExpandConstant('{tmp}\ip_red.ps1');
+  ScanFile := ExpandConstant('{tmp}\scan_red.ps1');
+  IpTxt := ExpandConstant('{tmp}\ip_red.txt');
+  ScanTxt := ExpandConstant('{tmp}\scan_red.txt');
+
+  SaveStringToFile(IpFile,
+    '$file = ''' + IpTxt + '''' + #13#10 +
+    '$ip = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null } | Select-Object -First 1).IPv4Address.IPAddress' + #13#10 +
+    'if (-not $ip) { $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch ''^(127\.|169\.254\.)'' } | Select-Object -First 1).IPAddress }' + #13#10 +
+    'if (-not $ip) { $ip = ''127.0.0.1'' }' + #13#10 +
+    '$ip | Out-File -FilePath $file -Encoding ascii -NoNewline' + #13#10,
+    False);
+
+  SaveStringToFile(ScanFile,
+    '$file = ''' + ScanTxt + '''' + #13#10 +
+    '$puerto = 5000' + #13#10 +
+    '$ip = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null } | Select-Object -First 1).IPv4Address.IPAddress' + #13#10 +
+    'if (-not $ip) { $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch ''^(127\.|169\.254\.)'' } | Select-Object -First 1).IPAddress }' + #13#10 +
+    'if (-not $ip) { $ip = ''127.0.0.1'' }' + #13#10 +
+    '$octs = $ip -split ''\.'' | ForEach-Object { $_ }' + #13#10 +
+    '$base = ($octs[0..2] -join ''.'') + ''.''' + #13#10 +
+    '$ips = 1..254 | ForEach-Object { $base + $_ }' + #13#10 +
+    '$encontrados = @()' + #13#10 +
+    'for ($i = 0; $i -lt $ips.Count; $i += 60) {' + #13#10 +
+    '  $fin = [math]::Min($i + 59, $ips.Count - 1)' + #13#10 +
+    '  $chunk = $ips[$i..$fin]' + #13#10 +
+    '  $cand = @{}' + #13#10 +
+    '  $handles = @()' + #13#10 +
+    '  foreach ($addr in $chunk) {' + #13#10 +
+    '    $cl = New-Object System.Net.Sockets.TcpClient' + #13#10 +
+    '    $ar = $cl.BeginConnect($addr, $puerto, $null, $null)' + #13#10 +
+    '    $cand[$addr] = $cl' + #13#10 +
+    '    $handles += $ar.AsyncWaitHandle' + #13#10 +
+    '  }' + #13#10 +
+    '  [System.Threading.WaitHandle]::WaitAll($handles, 2500) | Out-Null' + #13#10 +
+    '  foreach ($addr in $cand.Keys) {' + #13#10 +
+    '    try {' + #13#10 +
+    '      if ($cand[$addr].Connected) { $encontrados += $addr }' + #13#10 +
+    '    } catch {}' + #13#10 +
+    '    try { $cand[$addr].Close() } catch {}' + #13#10 +
+    '  }' + #13#10 +
+    '}' + #13#10 +
+    '$urls = $encontrados | ForEach-Object { ''http://'' + $_ + '':'' + $puerto } | Sort-Object -Unique' + #13#10 +
+    'if ($urls.Count -eq 0) { $urls = @('''') }' + #13#10 +
+    '$urls -join ''|'' | Out-File -FilePath $file -Encoding ascii -NoNewline' + #13#10,
+    False);
+
+  Log('[RED] Scripts PowerShell generados en {tmp}.');
+end;
+
+function EjecutarPSFile(const ScriptFile: String): Boolean;
+var
+  R: Integer;
+begin
+  Result := Exec('powershell.exe',
+    '-NoProfile -MTA -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ScriptFile + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, R);
+  Log('[RED] PS ' + ScriptFile + ' -> code ' + IntToStr(R));
+end;
+
+function DetectarIpLocal: String;
+var
+  FilePath: String;
+  S: AnsiString;
+begin
+  Result := '';
+  FilePath := ExpandConstant('{tmp}\ip_red.txt');
+  DeleteFile(FilePath);
+  if EjecutarPSFile(ExpandConstant('{tmp}\ip_red.ps1')) and FileExists(FilePath) then
+  begin
+    if LoadStringFromFile(FilePath, S) then
+      Result := Trim(S);
+  end;
+  DeleteFile(FilePath);
+end;
+
+procedure BuscarServidor(Sender: TObject);
+var
+  OutFile: String;
+  S: AnsiString;
+  Items: TStringList;
+  i: Integer;
+  Txt: String;
+begin
+  btnBuscar.Enabled := False;
+  lblResultado.Caption := 'Buscando servidores en la subred... espere unos segundos.';
+  try
+    OutFile := ExpandConstant('{tmp}\scan_red.txt');
+    DeleteFile(OutFile);
+    if EjecutarPSFile(ExpandConstant('{tmp}\scan_red.ps1')) and FileExists(OutFile) then
+    begin
+      if LoadStringFromFile(OutFile, S) then
+      begin
+        Items := TStringList.Create;
+        try
+          Items.Delimiter := '|';
+          Items.DelimitedText := Trim(S);
+          eUrl.Items.Clear;
+          for i := 0 to Items.Count - 1 do
+          begin
+            Txt := Trim(Items[i]);
+            if Txt <> '' then eUrl.Items.Add(Txt);
+          end;
+          if eUrl.Items.Count > 0 then
+          begin
+            eUrl.ItemIndex := 0;
+            if eUrl.Items.Count > 1 then
+              lblResultado.Caption := 'Se encontraron varios servidores: elija el del equipo Administrador.'
+            else
+              lblResultado.Caption := 'Servidor encontrado. Puede corregir la URL si hace falta.';
+          end
+          else
+            lblResultado.Caption := 'No se encontro servidor en esta subred. Escriba la URL a mano o revise el firewall del Administrador.';
+        finally
+          Items.Free;
+        end;
+      end
+      else
+        lblResultado.Caption := 'No se pudo leer el resultado del escaneo. Escriba la URL a mano.';
+    end
+    else
+      lblResultado.Caption := 'No se pudo ejecutar la busqueda. Escriba la URL a mano.';
+    DeleteFile(OutFile);
+  finally
+    btnBuscar.Enabled := True;
+  end;
+end;
+
+procedure InitializeWizard;
+begin
+  // Pagina "Tipo de instalacion": Administrador (servidor con BD) o Cliente.
+  GenerarScriptsRed;
+
+  PaginaTipo := CreateCustomPage(wpSelectDir,
+    'Tipo de instalacion',
+    'Elija como se usara este equipo dentro de la red de la obra.');
+
+  rAdm := TNewRadioButton.Create(PaginaTipo);
+  rAdm.Parent := PaginaTipo.Surface;
+  rAdm.Caption := 'Administrador (servidor con base de datos)';
+  rAdm.Left := 0;
+  rAdm.Top := 0;
+  rAdm.Width := PaginaTipo.Surface.Width;
+  rAdm.Checked := True;
+  rAdm.OnClick := @CambioModo;
+
+  rCli := TNewRadioButton.Create(PaginaTipo);
+  rCli.Parent := PaginaTipo.Surface;
+  rCli.Caption := 'Cliente (equipo que se conecta al servidor)';
+  rCli.Left := 0;
+  rCli.Top := rAdm.Top + rAdm.Height + 8;
+  rCli.Width := PaginaTipo.Surface.Width;
+  rCli.OnClick := @CambioModo;
+
+  lblInfo := TNewStaticText.Create(PaginaTipo);
+  lblInfo.Parent := PaginaTipo.Surface;
+  lblInfo.Left := 0;
+  lblInfo.Top := rCli.Top + rCli.Height + 12;
+  lblInfo.Width := PaginaTipo.Surface.Width;
+  lblInfo.Height := 40;
+  lblInfo.AutoSize := False;
+  lblInfo.WordWrap := True;
+
+  lblUrl := TNewStaticText.Create(PaginaTipo);
+  lblUrl.Parent := PaginaTipo.Surface;
+  lblUrl.Caption := 'Direccion del servidor (ej.: http://192.168.1.70:5000 o el IP Tailscale 100.x.x.x):';
+  lblUrl.Left := 8;
+  lblUrl.Top := lblInfo.Top + lblInfo.Height + 8;
+  lblUrl.Width := PaginaTipo.Surface.Width - 16;
+  lblUrl.WordWrap := True;
+
+  eUrl := TNewComboBox.Create(PaginaTipo);
+  eUrl.Parent := PaginaTipo.Surface;
+  eUrl.Left := 8;
+  eUrl.Top := lblUrl.Top + lblUrl.Height + 6;
+  eUrl.Width := PaginaTipo.Surface.Width - 90;
+  eUrl.Style := csDropDown;
+
+  btnBuscar := TNewButton.Create(PaginaTipo);
+  btnBuscar.Parent := PaginaTipo.Surface;
+  btnBuscar.Caption := 'Buscar servidor';
+  btnBuscar.Left := eUrl.Left + eUrl.Width + 8;
+  btnBuscar.Top := eUrl.Top - 2;
+  btnBuscar.Width := 74;
+
+  lblResultado := TNewStaticText.Create(PaginaTipo);
+  lblResultado.Parent := PaginaTipo.Surface;
+  lblResultado.Left := 8;
+  lblResultado.Top := eUrl.Top + eUrl.Height + 8;
+  lblResultado.Width := PaginaTipo.Surface.Width - 16;
+  lblResultado.Height := 32;
+  lblResultado.AutoSize := False;
+  lblResultado.WordWrap := True;
+
+  btnBuscar.OnClick := @BuscarServidor;
+  CambioModo(nil);
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = PaginaTipo.ID then
+  begin
+    if IpLocal = '' then
+      IpLocal := DetectarIpLocal;
+    CambioModo(nil);
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Url: String;
+begin
+  Result := True;
+  if CurPageID = PaginaTipo.ID then
+  begin
+    ModoCliente := rCli.Checked;
+    if ModoCliente then
+    begin
+      Url := NormalizarUrl(eUrl.Text);
+      if Url = '' then
+      begin
+        MsgBox('Indique la direccion del servidor.', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+      eUrl.Text := Url;
+    end;
+  end;
+end;
 
 function IsFreshInstall: Boolean;
 begin
@@ -245,11 +538,10 @@ begin
     Log('[INSTALL] ERROR: No se pudo crear respaldo. La DB podría perderse.');
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
+procedure RestaurarDatos;
 var
   AppWeb: String;
 begin
-  if CurStep <> ssPostInstall then Exit;
   if not NeedRestore then
   begin
     Log('[RESTORE] Sin respaldo que restaurar.');
@@ -289,4 +581,93 @@ begin
   // 4. Limpiar directorio de respaldo
   PsExec('Remove-Item -Path ''' + BackupDir + ''' -Recurse -Force -ErrorAction SilentlyContinue');
   Log('[RESTORE] Limpieza completada.');
+end;
+
+// Escribe config_red.py segun el tipo de instalacion elegido en el wizard.
+// En modo cliente la URL del servidor queda en SERVIDOR_URL; en modo
+// administrador se ignora (el servidor escucha en 0.0.0.0:5000).
+procedure EscribirConfigRed;
+var
+  Txt, Url: String;
+begin
+  if ModoCliente then
+  begin
+    Url := NormalizarUrl(eUrl.Text);
+    Txt := 'MODO = "cliente"' + #13#10 +
+           'SERVIDOR_URL = "' + Url + '"' + #13#10;
+  end
+  else
+  begin
+    Txt := 'MODO = "administrador"' + #13#10 +
+           'SERVIDOR_URL = "http://127.0.0.1:5000"' + #13#10;
+  end;
+  SaveStringToFile(ExpandConstant('{app}\informe_web\config_red.py'), Txt, False);
+  if ModoCliente then
+    Log('[RED] config_red.py escrito en modo cliente.')
+  else
+    Log('[RED] config_red.py escrito en modo administrador.');
+end;
+
+procedure EscribirLeeme;
+var
+  Txt: String;
+begin
+  if ModoCliente then
+  begin
+    Txt :=
+      'LEEME - MODO CLIENTE (Informe Mensual de Obra)' + #13#10 + #13#10 +
+      'Este equipo NO guarda la base de datos: se conecta al equipo' + #13#10 +
+      'ADMINISTRADOR (el servidor). Para entrar, el Administrador debe estar' + #13#10 +
+      'encendido y ambos equipos deben verse entre si (misma red local o Tailscale).' + #13#10 + #13#10 +
+      '- Durante la instalacion se eligio la URL del servidor; el boton' + #13#10 +
+      '  "Buscar servidor" ayuda a detectarla automaticamente en la subred.' + #13#10 + #13#10 +
+      '- Doble clic en "Abrir Informe de Obra": espere unos segundos y se abrira' + #13#10 +
+      '  el navegador con el servidor.' + #13#10 + #13#10 +
+      '- Si no se conecta, revise: que el Administrador este encendido y con el' + #13#10 +
+      '  servidor activo, y que la direccion grabada en informe_web\config_red.py' + #13#10 +
+      '  (SERVIDOR_URL) sea la correcta.' + #13#10 + #13#10 +
+      '- Entre equipos en redes distintas (oficina / casa / obra) use Tailscale:' + #13#10 +
+      '    1) Instale Tailscale en este equipo y en el Administrador.' + #13#10 +
+      '    2) Inicie sesion con la misma cuenta en ambos.' + #13#10 +
+      '    3) En el Administrador, su IP privada es 100.x.x.x (interfaz Tailscale);' + #13#10 +
+      '       se ve en "iniciar_servidor.bat" o en la bandeja de Tailscale.' + #13#10 +
+      '    4) En este cliente escriba esa IP como URL: http://100.x.x.x:5000' + #13#10 + #13#10 +
+      '- Si instalo el modo equivocado, vuelva a ejecutar el instalador y elija' + #13#10 +
+      '  el otro modo (los datos del Administrador se conservan).' + #13#10;
+  end
+  else
+  begin
+    Txt :=
+      'LEEME - MODO ADMINISTRADOR (Informe Mensual de Obra)' + #13#10 + #13#10 +
+      'Este equipo es el SERVIDOR: contiene la base de datos y atiende a los' + #13#10 +
+      'equipos CLIENTES de la red.' + #13#10 + #13#10 +
+      '- El servidor debe estar encendido para que los clientes puedan entrar.' + #13#10;
+    if IpLocal <> '' then
+      Txt := Txt +
+        '- IP de red de este equipo: ' + IpLocal + #13#10 +
+        '  Los clientes entraran a: http://' + IpLocal + ':5000' + #13#10 + #13#10;
+    Txt := Txt +
+      '- Si cambio de red, vea las IP vigentes ejecutando "iniciar_servidor.bat".' + #13#10 + #13#10 +
+      '- Misma red local (Wi-Fi/LAN):' + #13#10 +
+      '    1) Ejecute una vez "abrir_puerto_firewall.bat" como Administrador.' + #13#10 +
+      '    2) Comparta la IP local (ej.: http://192.168.1.70:5000) con los clientes.' + #13#10 + #13#10 +
+      '- Equipos en redes distintas (oficina / casa / obra) use Tailscale:' + #13#10 +
+      '    1) Instale Tailscale en ESTE equipo y en los equipos cliente.' + #13#10 +
+      '    2) Inicie sesion con la misma cuenta en todos.' + #13#10 +
+      '    3) Este equipo queda con una IP privada 100.x.x.x (interfaz Tailscale).' + #13#10 +
+      '    4) Comparta http://100.x.x.x:5000 con los clientes. El trafico viaja' + #13#10 +
+      '       cifrado aunque los equipos esten en redes distintas.' + #13#10 + #13#10 +
+      '- Para instalar un equipo cliente, ejecute el instalador en la otra' + #13#10 +
+      '  maquina y elija el modo CLIENTE (allí podra usar "Buscar servidor").' + #13#10;
+  end;
+  SaveStringToFile(ExpandConstant('{app}\LEEME_RED.txt'), Txt, False);
+  Log('[RED] LEEME_RED.txt escrito.');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep <> ssPostInstall then Exit;
+  RestaurarDatos;
+  EscribirConfigRed;
+  EscribirLeeme;
 end;
