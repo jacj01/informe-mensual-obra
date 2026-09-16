@@ -23,6 +23,8 @@ informe_web/*.bak_*
 
 # Configuracion y archivos locales de herramientas
 .agents/
+.claude/
+agent/
 .opencode/
 opencode.json
 skills-lock.json
