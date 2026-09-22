@@ -215,6 +215,18 @@ if (Test-Path $pidfile) {
         $matado = $true
     }
 }
+# Fallback: si el servidor fue lanzado sin escribir servidor.pid (p. ej.
+# "pythonw -m waitress app:app"), detener el proceso que escucha en el puerto.
+if (-not $matado) {
+    $conn = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($conn -and $conn.OwningProcess) {
+        Write-Host "Deteniendo servidor por puerto 5000 (PID $($conn.OwningProcess)) ..."
+        Stop-Process -Id ([int]$conn.OwningProcess) -Force -ErrorAction SilentlyContinue
+        $matado = $true
+        $old = $conn.OwningProcess
+    }
+}
 if ($matado) {
     # esperar a que los handles del proceso se liberen
     $espera = 0
@@ -283,10 +295,13 @@ $dbsTotales = (Get-DbFiles $liveInstance).Count
 Write-Host "Base(s) de datos restauradas correctamente: $dbsTotales"
 
 
-# Reemplazar tambien los launchers y logo raiz del paquete
+# Reemplazar tambien los launchers y logo raiz del paquete (incluye el propio
+# actualizar.ps1 para que las mejoras del updater lleguen a las instalaciones)
 Copy-Item -Force (Join-Path $tmpDir "*.bat") -Destination $Raiz -ErrorAction SilentlyContinue
 Copy-Item -Force (Join-Path $tmpDir "iniciar_sin_consola.vbs") -Destination $Raiz -ErrorAction SilentlyContinue
 Copy-Item -Force (Join-Path $tmpDir "Logo.png") -Destination $Raiz -ErrorAction SilentlyContinue
+Copy-Item -Force (Join-Path $tmpDir "Logo.ico") -Destination $Raiz -ErrorAction SilentlyContinue
+Copy-Item -Force (Join-Path $tmpDir "actualizar.ps1") -Destination $Raiz -ErrorAction SilentlyContinue
 
 # 9) Verificar; rollback si falla
 Write-Host "Verificando sintaxis de la nueva version ..."
