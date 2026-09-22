@@ -33,7 +33,7 @@
       </div>
       <div class="field">
         <label for="f-uf-clave">Contraseña {{ '(opcional)' if es_edicion }}</label>
-        <input type="password" name="clave" id="f-uf-clave" {{ 'data-no-validar' if es_edicion else 'required' }} minlength="6" autocomplete="new-password">
+        <input type="password" name="clave" id="f-uf-clave" {{ 'data-no-validar' if es_edicion else 'required' }} minlength="8" autocomplete="new-password">
         {% if es_edicion %}
         <div class="field-hint">Dejar en blanco para mantener la contraseña actual.</div>
         {% endif %}

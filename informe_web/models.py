@@ -234,6 +234,9 @@ class Usuario(db.Model):
     susc_inicio = db.Column(db.Date)
     susc_fin = db.Column(db.Date)
     susc_activa = db.Column(db.Boolean)
+    # CN-002: obliga a cambiar la contrasena en el proximo ingreso (cuentas con
+    # clave por defecto o creadas como temporales).
+    debe_cambiar_clave = db.Column(db.Boolean, default=False)
 
     @property
     def permiso_lista(self):

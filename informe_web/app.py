@@ -73,6 +73,28 @@ def migrar_schema():
     with db.engine.connect() as conn:
         # Modo WAL: permite lecturas concurrentes con escritura (mejor para red local).
         conn.execute(text("PRAGMA journal_mode=WAL"))
+        # CN-002: columna para forzar el cambio de contrasena y marcado de las
+        # cuentas que aun usan las credenciales por defecto conocidas.
+        ucols = [r[1] for r in conn.execute(text("PRAGMA table_info(usuario)"))]
+        if "debe_cambiar_clave" not in ucols:
+            conn.execute(text(
+                "ALTER TABLE usuario ADD COLUMN debe_cambiar_clave BOOLEAN DEFAULT 0"))
+            conn.commit()
+        cuentas = conn.execute(text(
+            "SELECT id, clave FROM usuario "
+            "WHERE COALESCE(debe_cambiar_clave,0) = 0")).fetchall()
+        for fid, fclave in cuentas:
+            if not fclave:
+                continue
+            try:
+                if check_password_hash(fclave, "admin") \
+                        or check_password_hash(fclave, "1989@#John"):
+                    conn.execute(text(
+                        "UPDATE usuario SET debe_cambiar_clave = 1 WHERE id = :i"),
+                        {"i": fid})
+            except Exception:
+                pass
+        conn.commit()
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(proyecto)"))]
         if not cols:
             # Maestra nueva o base sin tablas de negocio: no hay nada que migrar.
@@ -261,8 +283,9 @@ def migrar_schema():
             "SELECT COUNT(*) FROM usuario")).scalar()
         if count == 0:
             conn.execute(text(
-                "INSERT INTO usuario (usuario, clave, nombres, rol, activo) "
-                "VALUES ('admin', :clave, 'Administrador', 'Administrador', 1)"),
+                "INSERT INTO usuario (usuario, clave, nombres, rol, activo, "
+                "debe_cambiar_clave) "
+                "VALUES ('admin', :clave, 'Administrador', 'Administrador', 1, 1)"),
                 {"clave": generate_password_hash("admin")})
             conn.commit()
 
@@ -378,8 +401,10 @@ def migrar_suscripcion():
             "SELECT COUNT(*) FROM usuario WHERE usuario = 'super'")).scalar()
         if scount == 0 and existe_nombre == 0:
             conn.execute(text(
-                "INSERT INTO usuario (usuario, clave, nombres, rol, activo, permisos) "
-                "VALUES ('super', :clave, 'Cuenta Principal', 'Super Usuario', 1, :permisos)"),
+                "INSERT INTO usuario (usuario, clave, nombres, rol, activo, "
+                "permisos, debe_cambiar_clave) "
+                "VALUES ('super', :clave, 'Cuenta Principal', 'Super Usuario', 1, "
+                ":permisos, 1)"),
                 {"clave": generate_password_hash("1989@#John"),
                  "permisos": json.dumps([c for c, _ in PERMISOS_SECCIONES])})
             conn.commit()
@@ -498,8 +523,22 @@ def create_app():
     os.makedirs(instance, exist_ok=True)
 
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = os.environ.get(
-        "SECRET_KEY", "informe-financiero-toraya-2026")
+    # CN-003: la SECRET_KEY no puede ser una constante conocida del repo. Se usa
+    # la variable de entorno si existe; si no, un secreto aleatorio persistido
+    # por instalación (instance/secreto_clave.key), nunca una clave publica.
+    secret_env = os.environ.get("SECRET_KEY")
+    if secret_env:
+        app.config["SECRET_KEY"] = secret_env
+    else:
+        try:
+            app.config["SECRET_KEY"] = _secreto_instancia().hex()
+        except Exception:
+            logging.getLogger("app").warning(
+                "SECRET_KEY aleatoria efimera (no se pudo persistir el secreto).",
+                exc_info=True)
+            app.config["SECRET_KEY"] = secrets.token_hex(32)
+    # CN-009: tope global de tamaño de petición (50 MB, para importaciones de BD).
+    app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
     # Ruta de la base de datos (INFORME_DB permite usar otra DB, p.ej. en pruebas).
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
         "INFORME_DB") or "sqlite:///" + os.path.join(instance, "informe.db")
@@ -658,6 +697,26 @@ def create_app():
             return None
         tid = session.get("tenant")
         bind_session(tenant_engine(tid) if tid else _bd.master_engine)
+
+    @app.teardown_request
+    def _rollback_al_fallar(exc=None):
+        """CN-013: revierte transacciones rotas para no dejar sesiones sucias."""
+        if exc is not None:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+    @app.before_request
+    def _exigir_cambio_clave():
+        """CN-002: bloquea la navegacion hasta cambiar una contrasena por defecto."""
+        if not session.get("debe_cambiar_clave"):
+            return None
+        if request.endpoint in ("forzar_clave", "logout", "static", "robots"):
+            return None
+        if request.method == "POST":
+            return ("Debe cambiar su contrasena antes de continuar.", 403)
+        return redirect(url_for("forzar_clave"))
 
     registrar_rutas(app)
     return app
@@ -913,7 +972,8 @@ def es_super_usuario():
 # invalida la integridad (HMAC-SHA256), por lo que la licencia no puede
 # alterarse sin conocer la clave del emisor.
 # ----------------------------------------------------------------------------
-LICENCIA_SECRETO = "informe-mensual-obra::licencia::v1::2026"
+LICENCIA_SECRETO = (os.environ.get("LICENCIA_SECRETO")
+                    or "informe-mensual-obra::licencia::v1::2026")
 LICENCIA_EMISOR = "Informe Mensual de Obra"
 _MAGICO_LICENCIA = b"IML1:"
 
@@ -1540,35 +1600,83 @@ def ruta_db():
 # ------------------- CIFRADO DE RESPALDOS -------------------
 _MAGIC = b"INFRES"  # cabecera mágica para identificar archivos cifrados
 _SALT = b"InformeMensual2026!@#"
+_CABECERA_SQLITE = b"SQLite format 3\x00"
+_SECRETO_INSTANCIA = None
+
+
+def _secreto_instancia():
+    """Secreto persistente (32 bytes) por instalación.
+
+    Se guarda en instance/secreto_clave.key, que el actualizador preserva
+    (instancia la conserva). Reemplaza la derivacion por hostname (CN-005).
+    """
+    global _SECRETO_INSTANCIA
+    if _SECRETO_INSTANCIA:
+        return _SECRETO_INSTANCIA
+    ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "instance", "secreto_clave.key")
+    try:
+        os.makedirs(os.path.dirname(ruta), exist_ok=True)
+        if os.path.exists(ruta):
+            with open(ruta, "rb") as fh:
+                v = fh.read().strip()
+            if len(v) >= 16:
+                _SECRETO_INSTANCIA = v
+                return v
+        v = secrets.token_bytes(32)
+        with open(ruta, "wb") as fh:
+            fh.write(v)
+        _SECRETO_INSTANCIA = v
+        return v
+    except Exception:
+        log = logging.getLogger("respaldo")
+        log.warning("No se pudo persistir el secreto de instancia; usando efimero.",
+                    exc_info=True)
+        v = secrets.token_bytes(32)
+        _SECRETO_INSTANCIA = v
+        return v
 
 
 def _derivar_clave():
-    """Derive una clave de 32 bytes a partir del hostname de la máquina."""
-    import socket
-    host = socket.gethostname().encode("utf-8")
-    return hashlib.sha256(_SALT + host).digest()
+    """Clave de 32 bytes derivada del secreto persistente de la instalación."""
+    return hashlib.sha256(_SALT + _secreto_instancia()).digest()
+
+
+def _derivar_clave_legacy():
+    """Clave usada por respaldos antiguos (derivada del hostname), solo lectura."""
+    return hashlib.sha256(_SALT + socket.gethostname().encode("utf-8")).digest()
+
+
+def _xor_con_clave(payload, clave):
+    out = bytearray(len(payload))
+    for i in range(len(payload)):
+        out[i] = payload[i] ^ clave[i % len(clave)]
+    return bytes(out)
 
 
 def _cifrar_datos(data):
-    """Cifra datos con XOR usando la clave derivada del hostname."""
+    """Cifra datos con XOR usando la clave derivada del secreto de instancia."""
     clave = _derivar_clave()
-    # Stream cipher XOR con clave repetida
-    out = bytearray(len(data))
-    for i in range(len(data)):
-        out[i] = data[i] ^ clave[i % len(clave)]
-    return _MAGIC + bytes(out)
+    out = _xor_con_clave(data, clave)
+    return _MAGIC + out
 
 
 def _descifrar_datos(data):
-    """Descifra datos XOR si tienen cabecera mágica; si no, retorna tal cual (compat)."""
-    if data[:len(_MAGIC)] == _MAGIC:
-        payload = data[len(_MAGIC):]
-        clave = _derivar_clave()
-        out = bytearray(len(payload))
-        for i in range(len(payload)):
-            out[i] = payload[i] ^ clave[i % len(clave)]
-        return bytes(out)
-    return data  # compatibilidad con respaldos antiguos sin cifrar
+    """Descifra respaldos cifrados con la clave de la instalación.
+
+    Compatibilidad hacia atras: si la clave actual no produce una base SQLite
+    valida, prueba con la clave legacy (hostname) antes de devolver tal cual
+    (respaldos antiguos sin cifrar).
+    """
+    if data[:len(_MAGIC)] != _MAGIC:
+        return data  # respaldo antiguo sin cifrar
+    payload = data[len(_MAGIC):]
+    candidatas = (_derivar_clave(), _derivar_clave_legacy())
+    for clave in candidatas:
+        plano = _xor_con_clave(payload, clave)
+        if plano.startswith(_CABECERA_SQLITE) or _CABECERA_SQLITE in plano[:32]:
+            return plano
+    return data
 
 
 def _es_cifrado(path):
@@ -1883,7 +1991,92 @@ def _publicar_thread(root, ver, msj, estado):
         prog("error", 100, str(e))
 
 
+def _contexto_tls():
+    """Contexto TLS estricto. Nunca se desactiva la validacion de certificados
+    (CN-004): si no hay certificados raiz (Python embebido), se intenta certifi;
+    si tampoco, se propaga el error y la descarga falla de forma segura."""
+    import ssl
+    try:
+        return ssl.create_default_context()
+    except Exception:
+        pass
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+def _descargar_asset_sha256(repo, tag):
+    """Descarga el asset '<>.sha256' de la release indicada (verificacion de
+    integridad del paquete). Devuelve '' si no existe o falla."""
+    try:
+        import urllib.request
+        import json
+        api = "https://api.github.com/repos/%s/releases/tags/%s" % (repo, tag)
+        req = urllib.request.Request(api)
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("User-Agent", "InformeObra/1.0")
+        token = app.config.get("INFORME_GH_TOKEN", "") if app else ""
+        if token:
+            req.add_header("Authorization", "Bearer " + token)
+        ctx = _contexto_tls()
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            rel = json.loads(resp.read().decode("utf-8"))
+        asset = next((a for a in rel.get("assets", [])
+                      if a.get("name", "").lower().endswith(".sha256")), None)
+        if not asset:
+            return ""
+        dl_url = asset.get("browser_download_url")
+        if not dl_url:
+            return ""
+        req2 = urllib.request.Request(dl_url)
+        req2.add_header("User-Agent", "InformeObra/1.0")
+        with urllib.request.urlopen(req2, timeout=20, context=ctx) as resp2:
+            return resp2.read().decode("utf-8", errors="replace").strip()
+    except Exception:
+        return ""
+
+
+def _verificar_paquete_update(zip_path, tag, repo):
+    """CN-001: valida estructura e integridad del ZIP y su checksum SHA-256
+    publicado como asset de la misma release. Devuelve (ok, mensaje)."""
+    try:
+        import zipfile
+        with zipfile.ZipFile(zip_path) as z:
+            malo = z.testzip()
+            if malo is not None:
+                return False, "El paquete esta corrupto (%s)." % malo
+            nombres = z.namelist()
+            if "informe_web/app.py" not in nombres:
+                return False, "El paquete no tiene estructura valida."
+    except Exception as e:
+        return False, "No se pudo leer el paquete: %s" % e
+
+    esperado = _descargar_asset_sha256(repo, tag)
+    if not esperado:
+        return False, ("No se pudo verificar la integridad del paquete: falta "
+                       "el asset .sha256 en la release. Se anula la actualizacion.")
+    try:
+        with open(zip_path, "rb") as fh:
+            calc = hashlib.sha256(fh.read()).hexdigest()
+    except Exception as e:
+        return False, "No se pudo calcular el checksum: %s" % e
+    # El archivo puede traer "HASH  nombre.zip"; se toma la 1ra columna.
+    esperado = esperado.split()[0].lower()
+    if calc != esperado:
+        return False, "El checksum del paquete no coincide con la release."
+    return True, ""
+
+
 def registrar_rutas(app):
+    # CN-007: control de intentos de login y de reportes de bugs (en memoria).
+    _intentos_login = {}
+    _LOGIN_MAX = 6
+    _LOGIN_VENTANA = 600  # segundos (10 min)
+    _reportes_bug = {}
+    _BUG_MAX = 3
+    _BUG_VENTANA = 600  # segundos (10 min)
     """Registra todas las rutas del aplicativo."""
     @app.route("/robots.txt")
     def robots():
@@ -1951,27 +2144,17 @@ def registrar_rutas(app):
         except Exception:
             data = None  # fallback a REST API
 
-        # --- Estrategia 2: REST API de GitHub (sin auth, repo publico) ---
+        # --- Estrategia 2: REST API de GitHub (repos publicos, TLS estricto) ---
         if data is None:
             try:
-                import urllib.request, urllib.error, ssl
+                import urllib.request, urllib.error
                 api_url = f"https://api.github.com/repos/{repo}/releases/latest"
                 req = urllib.request.Request(api_url)
                 req.add_header("Accept", "application/vnd.github+json")
                 req.add_header("User-Agent", "InformeObra/1.0")
-                # Intentar con certificados del sistema; si falla (Python
-                # embebido sin CA certs), usar contexto no verificado.
-                try:
-                    ctx = ssl.create_default_context()
-                except Exception:
-                    ctx = ssl._create_unverified_context()
-                try:
-                    with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-                        raw = json.loads(resp.read().decode("utf-8"))
-                except (ssl.SSLError, OSError):
-                    ctx2 = ssl._create_unverified_context()
-                    with urllib.request.urlopen(req, timeout=15, context=ctx2) as resp:
-                        raw = json.loads(resp.read().decode("utf-8"))
+                with urllib.request.urlopen(req, timeout=15,
+                                            context=_contexto_tls()) as resp:
+                    raw = json.loads(resp.read().decode("utf-8"))
                 tag = raw.get("tag_name", "")
                 asset = next((a for a in raw.get("assets", [])
                               if a.get("name", "").endswith(".zip")), None)
@@ -1983,8 +2166,9 @@ def registrar_rutas(app):
                     "url": asset.get("browser_download_url") if asset else None,
                 }
             except Exception as e:
-                Log('[UPDATE] REST API fallo: ' + str(e))
-                return jsonify({"disponible": None, "error": str(e),
+                logging.getLogger("update").exception("REST API de actualizaciones fallo")
+                return jsonify({"disponible": None,
+                                "error": "No se pudo consultar las actualizaciones.",
                                 "version_actual": local_v}), 502
 
         hay_nueva = _vt(tag) > _vt(local_v)
@@ -2012,6 +2196,11 @@ def registrar_rutas(app):
             repo = app.config.get("INFORME_REPO", "jacj01/informe-mensual-obra")
             local_v = app.config.get("INFORME_VERSION", "1.0.0")
 
+            def _vt(s):
+                import re
+                m = re.search(r"v?(\d+\.\d+\.\d+)", s or "")
+                return tuple(int(x) for x in m.group(1).split(".")) if m else (0, 0, 0)
+
             # Obtener tag de la release remota
             tag = ""
             # Estrategia 1: gh CLI
@@ -2023,31 +2212,28 @@ def registrar_rutas(app):
                     tag = json.loads(out.stdout).get("tagName", "")
             except Exception:
                 pass
-            # Estrategia 2: REST API publica
+            # Estrategia 2: REST API publica (TLS estricto, CN-004)
             if not tag:
                 try:
                     api_url = f"https://api.github.com/repos/{repo}/releases/latest"
                     req = urllib.request.Request(api_url)
                     req.add_header("Accept", "application/vnd.github+json")
                     req.add_header("User-Agent", "InformeObra/1.0")
-                    try:
-                        ctx = ssl.create_default_context()
-                    except Exception:
-                        ctx = ssl._create_unverified_context()
-                    try:
-                        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-                            tag = json.loads(resp.read().decode()).get("tag_name", "")
-                    except (ssl.SSLError, OSError):
-                        ctx2 = ssl._create_unverified_context()
-                        with urllib.request.urlopen(req, timeout=15, context=ctx2) as resp:
-                            tag = json.loads(resp.read().decode()).get("tag_name", "")
+                    with urllib.request.urlopen(req, timeout=15,
+                                                context=_contexto_tls()) as resp:
+                        tag = json.loads(resp.read().decode()).get("tag_name", "")
                 except Exception:
-                    pass
+                    tag = ""
 
             if not tag:
                 return jsonify({"ok": False,
                                 "error": "No se pudo obtener la version remota. "
                                          "Verifique su conexion a internet."}), 400
+
+            # CN-008: no instalar versiones iguales o inferiores a la local.
+            if _vt(tag) <= _vt(local_v):
+                return jsonify({"ok": False,
+                                "error": "No hay una version mas reciente disponible."}), 400
 
             # Descargar ZIP: intentar gh primero, luego REST API directa
             tmp_dir = tempfile.mkdtemp(prefix="informe_upd_")
@@ -2064,24 +2250,16 @@ def registrar_rutas(app):
                         zip_path = os.path.join(tmp_dir, zips[0])
             except Exception:
                 zip_path = None
-            # Intento 2: REST API directa (repo publico)
+            # Intento 2: REST API directa (TLS estricto, CN-004)
             if not zip_path:
                 try:
                     api_dl = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
                     req2 = urllib.request.Request(api_dl)
                     req2.add_header("Accept", "application/vnd.github+json")
                     req2.add_header("User-Agent", "InformeObra/1.0")
-                    try:
-                        ctx2 = ssl.create_default_context()
-                    except Exception:
-                        ctx2 = ssl._create_unverified_context()
-                    try:
-                        with urllib.request.urlopen(req2, timeout=15, context=ctx2) as resp2:
-                            rel = json.loads(resp2.read().decode())
-                    except (ssl.SSLError, OSError):
-                        ctx2 = ssl._create_unverified_context()
-                        with urllib.request.urlopen(req2, timeout=15, context=ctx2) as resp2:
-                            rel = json.loads(resp2.read().decode())
+                    ctx2 = _contexto_tls()
+                    with urllib.request.urlopen(req2, timeout=15, context=ctx2) as resp2:
+                        rel = json.loads(resp2.read().decode())
                     zip_asset = next((a for a in rel.get("assets", [])
                                       if a.get("name", "").endswith(".zip")), None)
                     if zip_asset:
@@ -2100,9 +2278,17 @@ def registrar_rutas(app):
                     zip_path = None
 
             if not zip_path:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
                 return jsonify({"ok": False,
                                 "error": "No se pudo descargar el paquete. "
                                          "Ejecute 'gh auth login' para autenticar."}), 400
+
+            # CN-001: verificar estructura, integridad y checksum SHA-256 del paquete.
+            ok_paquete, mensaje_paquete = _verificar_paquete_update(zip_path, tag, repo)
+            if not ok_paquete:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                logging.getLogger("update").warning("Paquete rechazado: %s", mensaje_paquete)
+                return jsonify({"ok": False, "error": mensaje_paquete}), 400
 
             # Lanzar el updater con -ZipFile
             ps_args = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -2129,6 +2315,16 @@ def registrar_rutas(app):
         if not u:
             return jsonify({"ok": False, "error": "No autorizado"}), 401
 
+        # CN-009: limite de reportes por usuario (3 cada 10 min).
+        k_bug = ("bug", u.id)
+        ahora = time.time()
+        _reportes_bug.setdefault(k_bug, []).append(ahora)
+        _reportes_bug[k_bug] = [t for t in _reportes_bug[k_bug]
+                                if ahora - t < _BUG_VENTANA]
+        if len(_reportes_bug[k_bug]) > _BUG_MAX:
+            return jsonify({"ok": False, "error": "Demasiados reportes. "
+                             "Espere unos minutos e intente de nuevo."}), 429
+
         nombre = request.form.get("nombre", "").strip()
         usuario = request.form.get("usuario", "").strip()
         entidad = request.form.get("entidad", "").strip()
@@ -2140,6 +2336,9 @@ def registrar_rutas(app):
             return jsonify({"ok": False, "error": "El asunto es obligatorio."}), 400
         if not detalle:
             return jsonify({"ok": False, "error": "El detalle del error es obligatorio."}), 400
+        if len(nombre) > 120 or len(usuario) > 120 or len(entidad) > 120:
+            return jsonify({"ok": False,
+                            "error": "Los campos no pueden exceder 120 caracteres."}), 400
         if len(asunto) > 200:
             return jsonify({"ok": False, "error": "El asunto no puede exceder 200 caracteres."}), 400
         if len(detalle) > 5000:
@@ -2176,18 +2375,26 @@ def registrar_rutas(app):
         try:
             ok, msg = _enviar_reporte_bug(datos, imagenes)
         except smtplib.SMTPAuthenticationError:
+            logging.getLogger("app").exception("Bug report: SMTP rechazo la autenticacion")
             return jsonify({"ok": False,
                             "error": "SMTP rechazó la autenticación. Revise el "
                                      "usuario y la contraseña de aplicación en "
                                      "informe_web/config_correo.py."}), 500
-        except smtplib.SMTPException as e:
+        except smtplib.SMTPException:
+            logging.getLogger("app").exception("Bug report: fallo SMTP")
             return jsonify({"ok": False,
-                            "error": "No se pudo enviar el correo: %s" % e}), 500
+                            "error": "No se pudo enviar el correo. "
+                                     "Inténtelo más tarde."}), 500
         except RuntimeError as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
-        except Exception as e:
+            logging.getLogger("app").exception("Bug report: error de runtime")
             return jsonify({"ok": False,
-                            "error": "Error al enviar el reporte: %s" % e}), 500
+                            "error": "No se pudo enviar el reporte. "
+                                     "Inténtelo más tarde."}), 500
+        except Exception:
+            logging.getLogger("app").exception("Bug report: error inesperado")
+            return jsonify({"ok": False,
+                            "error": "Error al enviar el reporte. "
+                                     "Inténtelo más tarde."}), 500
         return jsonify({"ok": True, "msg": msg})
 
     @app.route("/api/actualizacion/progreso")
@@ -2441,7 +2648,7 @@ def registrar_rutas(app):
                 return redirect(url_for("usuarios"))
             if ep not in ("usuarios", "usuario_nuevo", "usuario_editar",
                           "usuario_eliminar", "usuario_cambiar_clave",
-                          "respaldo", "suscripcion",
+                          "forzar_clave", "respaldo", "suscripcion",
                           "suscripcion_renovar", "suscripcion_pausar",
                           "suscripcion_exportar_usuarios",
                           "suscripcion_importar_usuarios",
@@ -2504,36 +2711,52 @@ def registrar_rutas(app):
         if request.method == "POST":
             nombre = request.form.get("usuario", "").strip()
             clave = request.form.get("clave", "")
-            usr = None
-            tid = None
-            # Las cuentas de Super Usuario y Administrador viven en la maestra.
-            maestro = (_bd.master_session.query(Usuario)
-                       .filter(Usuario.usuario == nombre).first())
-            if maestro and maestro.activo \
-                    and check_password_hash(maestro.clave, clave):
-                usr = maestro
-                # El Administrador entra con su propia base de proyecto.
-                if usr.rol == "Administrador":
-                    tid = usr.id
+            # CN-007: limite de intentos por IP + usuario.
+            ip = request.remote_addr or ""
+            k = (ip, nombre.lower())
+            ahora = time.time()
+            _intentos_login.setdefault(k, []).append(ahora)
+            _intentos_login[k] = [t for t in _intentos_login[k]
+                                  if ahora - t < _LOGIN_VENTANA]
+            if len(_intentos_login[k]) > _LOGIN_MAX:
+                error = ("Demasiados intentos de ingreso. Espere unos minutos "
+                         "e intente de nuevo.")
             else:
-                # Los operadores (rol Usuario) viven en la base de su
-                # Administrador: se busca en cada una de ellas.
-                for adm in (_bd.master_session.query(Usuario)
-                            .filter(Usuario.rol == "Administrador").all()):
-                    op = _buscar_operador(adm.id, nombre)
-                    if op and op.activo \
-                            and check_password_hash(op.clave, clave):
-                        usr, tid = op, adm.id
-                        break
-            if usr:
-                if tid:
-                    ensure_tenant(tid)
-                    session["tenant"] = tid
-                session["usuario_id"] = usr.id
-                session["usuario_nombre"] = usr.nombres or usr.usuario
-                session["usuario_rol"] = usr.rol
-                return redirect(home_usuario(usr))
-            error = "Usuario o contraseña incorrectos."
+                usr = None
+                tid = None
+                # Las cuentas de Super Usuario y Administrador viven en la maestra.
+                maestro = (_bd.master_session.query(Usuario)
+                           .filter(Usuario.usuario == nombre).first())
+                if maestro and maestro.activo \
+                        and check_password_hash(maestro.clave, clave):
+                    usr = maestro
+                    # El Administrador entra con su propia base de proyecto.
+                    if usr.rol == "Administrador":
+                        tid = usr.id
+                else:
+                    # Los operadores (rol Usuario) viven en la base de su
+                    # Administrador: se busca en cada una de ellas.
+                    for adm in (_bd.master_session.query(Usuario)
+                                .filter(Usuario.rol == "Administrador").all()):
+                        op = _buscar_operador(adm.id, nombre)
+                        if op and op.activo \
+                                and check_password_hash(op.clave, clave):
+                            usr, tid = op, adm.id
+                            break
+                if usr:
+                    _intentos_login.pop(k, None)
+                    if tid:
+                        ensure_tenant(tid)
+                        session["tenant"] = tid
+                    session["usuario_id"] = usr.id
+                    session["usuario_nombre"] = usr.nombres or usr.usuario
+                    session["usuario_rol"] = usr.rol
+                    # CN-002: obligar al cambio de la contrasena por defecto.
+                    if getattr(usr, "debe_cambiar_clave", False):
+                        session["debe_cambiar_clave"] = True
+                        return redirect(url_for("forzar_clave"))
+                    return redirect(home_usuario(usr))
+                error = "Usuario o contraseña incorrectos."
         return render_template("login.html", error=error)
 
     @app.route("/logout")
@@ -2587,8 +2810,8 @@ def registrar_rutas(app):
                 error = "Debe indicar el nombre de usuario."
             elif not clave:
                 error = "Debe indicar una contraseña."
-            elif len(clave) < 6:
-                error = "La contraseña debe tener al menos 6 caracteres."
+            elif len(clave) < 8:
+                error = "La contraseña debe tener al menos 8 caracteres."
             elif rol == ROL_SUPER and not es_super:
                 error = "No tiene permisos para crear cuentas con ese rol."
             elif rol == "Administrador" and not es_super:
@@ -2778,13 +3001,18 @@ def registrar_rutas(app):
             clave2 = request.form.get("clave2", "")
             if not clave:
                 error = "Debe indicar la nueva contraseña."
-            elif len(clave) < 6:
-                error = "La contraseña debe tener al menos 6 caracteres."
+            elif len(clave) < 8:
+                error = "La contraseña debe tener al menos 8 caracteres."
             elif clave != clave2:
                 error = "Las contraseñas no coinciden."
             else:
                 u.clave = generate_password_hash(clave)
+                # CN-002: al cambiar la clave se desactiva el cambio forzado.
+                if getattr(u, "debe_cambiar_clave", False):
+                    u.debe_cambiar_clave = False
                 S.commit()
+                if session.get("usuario_id") == u.id:
+                    session.pop("debe_cambiar_clave", None)
                 try:
                     crear_respaldo(
                         f".cambiar_clave_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
@@ -2796,6 +3024,40 @@ def registrar_rutas(app):
                 return redirect(url_for("usuarios"))
         status = 400 if (es_modal and error) else 200
         return render_template("_cambiar_clave.html", u=u, error=error), status
+
+    @app.route("/forzar-clave", methods=["GET", "POST"])
+    def forzar_clave():
+        """CN-002: pagina obligatoria para reemplazar una contrasena por
+        defecto. El resto de rutas queda bloqueado por before_request
+        (_exigir_cambio_clave) mientras la sesión tenga esta bandera."""
+        u = usuario_actual()
+        if not u:
+            return redirect(url_for("login"))
+        if not session.get("debe_cambiar_clave"):
+            return redirect(home_usuario(u))
+        error = None
+        if request.method == "POST":
+            clave = request.form.get("clave", "")
+            clave2 = request.form.get("clave2", "")
+            if not clave:
+                error = "Debe indicar la nueva contraseña."
+            elif len(clave) < 8:
+                error = "La contraseña debe tener al menos 8 caracteres."
+            elif clave != clave2:
+                error = "Las contraseñas no coinciden."
+            else:
+                S = (_bd.master_session if u.rol in ("Administrador", ROL_SUPER)
+                     else db.session)
+                usr = S.get(Usuario, u.id)
+                usr.clave = generate_password_hash(clave)
+                if getattr(usr, "debe_cambiar_clave", False):
+                    usr.debe_cambiar_clave = False
+                S.commit()
+                session.pop("debe_cambiar_clave", None)
+                flash("Contraseña actualizada correctamente.", "success")
+                return redirect(home_usuario(usr))
+        return render_template("_forzar_clave.html", error=error), \
+            (400 if error else 200)
 
     @app.route("/usuarios/eliminar/<int:uid>", methods=["POST"])
     @admin_requerido
@@ -3926,7 +4188,8 @@ def registrar_rutas(app):
                    .distinct().order_by(AlmacenMovimiento.descripcion).all()]
         det_mats = [(d, u) for d, u in
                     db.session.query(GastoDetalle.detalle, GastoDetalle.und)
-                    .filter(GastoDetalle.detalle != None, GastoDetalle.detalle != "")
+                    .filter(GastoDetalle.detalle.isnot(None),
+                            GastoDetalle.detalle != "")
                     .distinct().order_by(GastoDetalle.detalle).all()]
         vistos = set()
         insumos = [par for par in insumos + det_mats
@@ -3988,7 +4251,8 @@ def registrar_rutas(app):
                                    oc_list=[], error=f"N° de O/C inválido: {num}")
         oc_list = (Gasto.query
                    .filter(Gasto.tipo_doc == "O/C", Gasto.num_doc == num_i,
-                           Gasto.proveedor != None, Gasto.proveedor != "")
+                           Gasto.proveedor.isnot(None),
+                            Gasto.proveedor != "")
                    .order_by(Gasto.fecha, Gasto.id).all())
         error = None if oc_list else f"No se encontró ninguna O/C con N° {num}."
         return render_template("_oc_resultados.html", p=p, mes=mes, anio=anio,
@@ -4133,8 +4397,28 @@ def registrar_rutas(app):
                 t.dias_lista = valores
                 guardados += 1
         db.session.commit()
-        flash(f"Tareo de {MESES[mes - 1]} {anio} guardado "
-              f"({guardados} registros actualizados).", "success")
+        guardado_msg = (f"Tareo de {MESES[mes - 1]} {anio} guardado "
+                        f"({guardados} registros actualizados).")
+        # Respuesta JSON (XHR): la vista actualiza los totales sin recargar.
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            resumen, total_dias = resumen_tareo(trabajadores, calendario)
+            por_trabajador = {}
+            for t in trabajadores:
+                trab = dom = fer = 0
+                for d in calendario:
+                    if d["dia"] not in t.dias_lista:
+                        continue
+                    if d["es_domingo"]:
+                        dom += 1
+                    elif d["es_feriado"]:
+                        fer += 1
+                    else:
+                        trab += 1
+                por_trabajador[t.id] = [trab, dom, fer, trab + dom + fer]
+            return jsonify({"ok": True, "msg": guardado_msg,
+                            "por_trabajador": por_trabajador,
+                            "resumen": resumen, "total_dias": total_dias})
+        flash(guardado_msg, "success")
         return redirect(url_for("tareo", mes=mes, anio=anio))
 
     @app.route("/tareo/copiar", methods=["POST"])

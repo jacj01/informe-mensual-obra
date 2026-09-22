@@ -171,19 +171,11 @@ if (gh-ok) {
     Escribir-Progreso "descargando" 10 "Descargando $tag via web..."
     $token = $env:INFORME_GH_TOKEN
     if (-not $token) {
-        # Intentar extraer token de gh auth login
+        # Token via gh auth (oficial; no se puede extraer por regex del codigo)
         try {
             $ghAuth = & gh auth token 2>$null
             if ($LASTEXITCODE -eq 0 -and $ghAuth) { $token = $ghAuth.Trim() }
         } catch {}
-    }
-    if (-not $token) {
-        # Intentar leer token del config de la app
-        $cfgPy = Join-Path $Raiz "informe_web\app.py"
-        if (Test-Path $cfgPy) {
-            $cfgContent = Get-Content $cfgPy -Raw
-            if ($cfgContent -match 'INFORME_GH_TOKEN.*?"([^"]+)"') { $token = $Matches[1] }
-        }
     }
     $headers = @{ "Accept" = "application/vnd.github+json" }
     if ($token) { $headers["Authorization"] = "Bearer $token" }

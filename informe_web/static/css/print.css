@@ -122,7 +122,7 @@ table.tabla td.ctr { text-align: center; }
   @page { size: A4 landscape; margin: 9mm 8mm 10mm; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   table.tabla thead { display: table-header-group; }
-  tr { page-break-inside: avoid; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
   .fila-rubro, .fila-sub, .fila-total, .row-total { page-break-inside: avoid; }
   .encabezado, .info-grid, .responsables, .firmas { page-break-inside: avoid; }
 }

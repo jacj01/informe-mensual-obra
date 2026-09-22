@@ -6,6 +6,10 @@ __pycache__/
 informe_web/instance/
 informe_web/Respaldo BD/
 
+# Licencias cifradas de usuarios (datos generated en runtime por la app)
+usuarios_cifrados.lic
+usuarios_cifrados_*.lic
+
 # Logs, PID y temporales
 informe_web/servidor.log
 informe_web/servidor.pid

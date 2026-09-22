@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <link rel="icon" href="{{ url_for('static', filename='img/Logo.png', v=4) }}">
+  <title>Cambiar contraseña | Informe Mensual de Obra</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version_actual }}.9">
+</head>
+<body class="login-body">
+  <div class="login-form-side" style="margin:0 auto; justify-content:center;">
+    <div class="login-wrap">
+      <form method="post" class="login-card">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="login-header">
+          <div class="login-title">Cambio de contraseña</div>
+          <div class="login-sub">Por seguridad, debe reemplazar la contraseña por defecto antes de continuar.</div>
+        </div>
+        {% if error %}
+          <div class="alert alert-error login-error">{{ error }}</div>
+        {% endif %}
+        <div class="field">
+          <label for="fz-clave"><i class="bi bi-key"></i> Nueva contraseña</label>
+          <input type="password" id="fz-clave" name="clave" required minlength="8"
+                 autocomplete="new-password" placeholder="Mínimo 8 caracteres" autofocus>
+          <i class="bi bi-lock field-icon"></i>
+        </div>
+        <div class="field">
+          <label for="fz-clave2"><i class="bi bi-shield-lock"></i> Repetir contraseña</label>
+          <input type="password" id="fz-clave2" name="clave2" required minlength="8"
+                 autocomplete="new-password" placeholder="Repita la contraseña">
+          <i class="bi bi-lock field-icon"></i>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg login-btn">
+          <i class="bi bi-check2-circle"></i> Guardar contraseña
+        </button>
+      </form>
+      <div class="login-foot">Informe Mensual de Obra · Administración Directa</div>
+    </div>
+  </div>
+</body>
+</html>

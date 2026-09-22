@@ -244,10 +244,18 @@
     card.querySelectorAll('.cb-dia').forEach(function (cb) {
       if (cb.checked) fd.append(cb.name, cb.value);
     });
-    fetch('{{ url_for('tareo_guardar') }}', { method: 'POST', body: fd })
+    fetch('{{ url_for('tareo_guardar') }}', {
+      method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
       .then(function (r) {
-        if (r.redirected) { window.redirigirManteniendoScroll(r.url); return; }
-        window.recargarManteniendoScroll();
+        if (r.redirected) { window.recargarManteniendoScroll(); return null; }
+        if (!r.ok) { window.recargarManteniendoScroll(); return null; }
+        return r.json().catch(function () { window.recargarManteniendoScroll(); return null; });
+      })
+      .then(function (data) {
+        if (!data) return;
+        if (data.msg) mostrarToast('success', data.msg);
+        recalcularTabla(card);
       })
       .catch(function () { window.recargarManteniendoScroll(); });
   }

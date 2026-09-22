@@ -54,7 +54,7 @@ Source: "Recursos.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; ni __pycache__). Tampoco se incluyen servidor.log ni servidor.pid (runtime).
 ; ojo: NO usar recursesubdirs aqui, porque en Inno 6.7.3 el parametro Excludes
 ; no se aplica con recursesubdirs (se comprimiria la BD de desarrollo en instance\).
-Source: "informe_web\*.py"; DestDir: "{app}\informe_web"; Flags: ignoreversion
+Source: "informe_web\*.py"; DestDir: "{app}\informe_web"; Flags: ignoreversion; Excludes: "config_correo.py,config_red.py,requirements.txt"
 Source: "informe_web\requirements.txt"; DestDir: "{app}\informe_web"; Flags: ignoreversion
 Source: "informe_web\INFORMACION_APLICATIVO.txt"; DestDir: "{app}\informe_web"; Flags: ignoreversion
 ; Plantillas y estaticos (no contienen BD/logs/pycache)

@@ -36,6 +36,9 @@ TABLAS_NEGOCIO = []
 master_engine = None
 master_session = None
 _tenants = {}
+# Tenants cuyo esquema ya fue creado/alineado en este proceso: evita repetir
+# create_all + migraciones en cada login fallido o cada peticion (CN-007).
+_TENANT_LISTOS = set()
 
 
 def master_url():
@@ -277,8 +280,15 @@ def _renombrar_componente_supervision(eng):
 
 
 def ensure_tenant(admin_id):
-    """Crea (si no existe) la base del Administrador con sus tablas."""
+    """Crea (si no existe) la base del Administrador con sus tablas.
+
+    Las operaciones pesadas (create_all y migraciones de esquema) se ejecutan
+    una sola vez por proceso; los accesos posteriores reutilizan el motor en
+    caché y solo verifican si la base sigue existiendo.
+    """
     eng = tenant_engine(admin_id)
+    if admin_id in _TENANT_LISTOS:
+        return eng
     db.metadata.create_all(bind=eng, tables=tablas_tenant())
     _migrar_esquema_usuario(eng)
     _migrar_esquema_trabajador(eng)
@@ -286,7 +296,13 @@ def ensure_tenant(admin_id):
     _reparar_clasificadores(eng)
     _migrar_esquema_resto(eng)
     _renombrar_componente_supervision(eng)
+    _TENANT_LISTOS.add(admin_id)
     return eng
+
+
+def forget_tenant(admin_id):
+    """Marca un tenant como pendiente de re-migración (tras restaurar/recrear)."""
+    _TENANT_LISTOS.discard(admin_id)
 
 
 def tenant_session(admin_id):
@@ -297,6 +313,7 @@ def tenant_session(admin_id):
 def dispose_tenant(admin_id):
     """Libera el motor de la base de un Administrador (p.ej. tras restaurar)."""
     eng = _tenants.pop(admin_id, None)
+    _TENANT_LISTOS.discard(admin_id)
     if eng is not None:
         eng.dispose()
 

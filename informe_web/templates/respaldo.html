@@ -74,13 +74,7 @@
           <i class="bi bi-folder2-open"></i> <span id="file-name-label">Elegir archivo</span>
         </label>
         <span class="file-upload-name" id="file-name" style="margin-left:10px;font-size:13px;color:var(--texto2);font-style:italic">Ningún archivo seleccionado</span>
-        <script>
-          document.getElementById('archivo_db').addEventListener('change', function() {
-            var n = this.files[0] ? this.files[0].name : 'Ningún archivo seleccionado';
-            document.getElementById('file-name').textContent = n;
-          });
-        </script>
-        <div class="field-hint">Solo archivos de base de datos SQLite (.db). Se copiará a la carpeta de respaldos y se restaurará automáticamente.</div>
+        <div class="field-hint">Solo archivos de base de datos SQLite (.db o .sqlite). Se copiará a la carpeta de respaldos y se restaurará automáticamente.</div>
       </div>
     </div>
     <div class="note" style="margin-bottom:16px">
