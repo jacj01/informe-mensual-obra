@@ -14,12 +14,11 @@
 
   table.tabla th, table.tabla td { padding: 2px 3px; font-size: 6.6pt; }
   table.tabla thead th { font-size: 6pt; padding: 4px 2px; }
-  .th-vert { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
   td.monto { text-align: right; font-variant-numeric: tabular-nums; }
   td.nombre { text-align: left; padding-left: 5px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
   .fila-resumen td { background: #F8FAFC; font-weight: 700; border-top: 1.4px solid var(--borde); font-size: 6.8pt; }
   .fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 7pt; }
-  .firma-celda, .huella-celda { height: 26px; }
+  .firma-celda, .huella-celda { height: 78px; }
   .nota-pie { font-size: 6.4pt; color: var(--texto2); margin-top: 5px; line-height: 1.45; }
   .firmas { margin-top: 60px; }
   .firma .nombres { min-height: 13px; font-size: 8pt; }
@@ -46,22 +45,26 @@
   <td class="ctr">{{ f.dom }}</td>
   <td class="ctr">{{ f.fer }}</td>
   <td class="ctr">{{ f.total_dias }}</td>
+  {% if con_beneficios %}
   <td class="monto">{{ '%.2f'|format(f.jornal_basico) }}</td>
   <td class="monto">{{ '%.2f'|format(f.dsd) }}</td>
   <td class="monto">{{ '%.2f'|format(f.feriados) }}</td>
   <td class="monto">{{ '%.2f'|format(f.buc) }}</td>
   <td class="monto">{{ '%.2f'|format(f.movilidad) }}</td>
-  {% if con_beneficios %}
   <td class="monto">{{ '%.2f'|format(f.vacaciones) }}</td>
   <td class="monto">{{ '%.2f'|format(f.cts) }}</td>
   <td class="monto">{{ '%.2f'|format(f.gratificacion) }}</td>
   <td class="monto">{{ '%.2f'|format(f.bonif) }}</td>
+  {% else %}
+  <td class="monto">{{ '%.2f'|format(f.sueldo_planilla) }}</td>
   {% endif %}
-  <td class="monto"><b>{{ '%.2f'|format(f.ingresos) }}</b></td>
   {% if con_beneficios %}
+  <td class="monto"><b>{{ '%.2f'|format(f.ingresos) }}</b></td>
   <td class="monto">{{ '%.2f'|format(f.pension) }}</td>
   <td class="monto">{{ '%.2f'|format(f.conaf) }}</td>
   <td class="monto"><b>{{ '%.2f'|format(f.neto) }}</b></td>
+  {% else %}
+  <td class="monto"><b>{{ '%.2f'|format(f.ingresos) }}</b></td>
   {% endif %}
   <td class="firma-celda"></td>
   <td class="huella-celda"></td>
@@ -106,7 +109,11 @@
     <colgroup>
       <col style="width:5mm"><col style="width:36mm"><col style="width:12mm"><col style="width:13mm">
       <col style="width:5mm"><col style="width:5mm"><col style="width:5mm"><col style="width:6mm">
+      {% if con_beneficios %}
       <col style="width:11mm"><col style="width:11mm"><col style="width:11mm"><col style="width:11mm"><col style="width:11mm">
+      {% else %}
+      <col style="width:18mm">
+      {% endif %}
       {% if con_beneficios %}
       <col style="width:10mm"><col style="width:10mm"><col style="width:12mm"><col style="width:11mm">
       {% endif %}
@@ -123,7 +130,7 @@
         <th rowspan="2">DNI</th>
         <th rowspan="2">Cargo</th>
         <th colspan="4" class="th-mes">DIAS TRABAJADOS</th>
-        <th colspan="5" class="th-mes">REMUNERACIÓN DEL MES</th>
+        {% if con_beneficios %}<th colspan="5" class="th-mes">REMUNERACIÓN DEL MES</th>{% else %}<th colspan="1" class="th-mes">REMUNERACIÓN DEL MES</th>{% endif %}
         {% if con_beneficios %}<th colspan="4" class="th-mes">BENEFICIOS DE LEY</th>{% endif %}
         <th rowspan="2">Total<br>Ingresos</th>
         {% if con_beneficios %}
@@ -131,16 +138,20 @@
         <th rowspan="2">CONAF<br>OVICER</th>
         <th rowspan="2">Neto<br>a Pagar</th>
         {% endif %}
-        <th rowspan="2" class="th-vert">Firma del Trabajador</th>
-        <th rowspan="2" class="th-vert">Huella Digital</th>
+        <th rowspan="2">Firma del<br>Trabajador</th>
+        <th rowspan="2">Huella<br>Digital</th>
       </tr>
       <tr>
         <th>Lab</th><th>Dom</th><th>Fer</th><th>Total</th>
+        {% if con_beneficios %}
         <th>Jornal<br>Básico</th>
         <th>Desc.<br>Semanal</th>
         <th>Feriados</th>
         <th>BUC</th>
         <th>Movilidad</th>
+        {% else %}
+        <th>Sueldo<br>Mensual</th>
+        {% endif %}
         {% if con_beneficios %}
         <th>Vacaciones</th>
         <th>CTS</th>
@@ -153,12 +164,12 @@
       {% for f in filas_obreros %}{{ fila_obrero(f, loop.index) }}{% endfor %}
       <tr class="fila-total">
         <td colspan="8">TOTAL PERSONAL OBRERO</td>
-        <td class="monto"></td><td class="monto"></td><td class="monto"></td><td class="monto"></td><td class="monto"></td>
+        {% if con_beneficios %}<td class="monto"></td><td class="monto"></td><td class="monto"></td><td class="monto"></td><td class="monto"></td>{% else %}<td class="monto"></td>{% endif %}
         {% if con_beneficios %}<td class="monto"></td><td class="monto"></td><td class="monto"></td><td class="monto"></td>{% endif %}
         <td class="monto">{{ '%.2f'|format(tot_obreros.ingresos) }}</td>
         {% if con_beneficios %}
-        <td class="monto">{{ '%.2f'|format(tot_obreros.descuentos) }}</td>
-        <td class="monto"></td>
+        <td class="monto">{{ '%.2f'|format(tot_obreros.pension) }}</td>
+        <td class="monto">{{ '%.2f'|format(tot_obreros.conaf) }}</td>
         <td class="monto">{{ '%.2f'|format(tot_obreros.neto) }}</td>
         {% endif %}
         <td></td><td></td>
@@ -191,8 +202,8 @@
         <th rowspan="2">ONP/<br>AFP</th>
         <th rowspan="2">Neto<br>a Pagar</th>
         {% endif %}
-        <th rowspan="2" class="th-vert">Firma del Trabajador</th>
-        <th rowspan="2" class="th-vert">Huella Digital</th>
+        <th rowspan="2">Firma del<br>Trabajador</th>
+        <th rowspan="2">Huella<br>Digital</th>
       </tr>
       <tr>
         <th>Lab</th><th>Dom</th><th>Fer</th>
@@ -239,12 +250,21 @@
   {% endif %}
 
   {% if seccion == 'obrero' %}
+  {% if con_beneficios %}
   <div class="nota-pie">
     <b>Tabla salarial vigente:</b> {{ tabla.norma }}. Jornales por categoría:
     Operario S/ {{ '%.2f'|format(tabla.jornales['OPERARIO']) }} · Oficial S/ {{ '%.2f'|format(tabla.jornales['OFICIAL']) }} ·
     Peón S/ {{ '%.2f'|format(tabla.jornales['PEON']) }} · BUC Operario 32%, Oficial/Peón 30% · Movilidad S/ {{ '%.2f'|format(tabla.movilidad) }}/día.
     {{ tabla.nota }}
   </div>
+  {% else %}
+  <div class="nota-pie">
+    <b>Sueldo base:</b> el monto se calcula del <b>Sueldo mensual (S/)</b> registrado en cada trabajador,
+    prorrateado por los días marcados en el tareo (sueldo ÷ 30 × días trabajados). Sin BUC, movilidad,
+    jornales ni descansos; sin beneficios legales ni descuentos. Complete el Sueldo mensual en
+    «Nuevo/Editar trabajador» para que la planilla muestre el monto correcto.
+  </div>
+  {% endif %}
   {% else %}
   <div class="nota-pie">
     <b>Régimen laboral:</b> D.L. N° 728 (Ley de Productividad y Competitividad Laboral). Beneficios: CTS equivalente a 1/12 del sueldo mensual por mes, gratificación equivalente a 1/6 del sueldo por mes y vacaciones equivalentes a 1/12. Descuento previsional ONP/AFP del 13% sobre el sueldo mensual.

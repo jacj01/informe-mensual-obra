@@ -1952,14 +1952,20 @@ def _publicar_thread(root, ver, msj, estado):
 
     try:
         prog("publicando", 10, "Iniciando publicación de v%s..." % ver)
-        # 1) bump version.py
+        # 1) bump version.py (si la version ya es la actual, se republica sin reescribir)
         vpath = os.path.join(root, "informe_web", "version.py")
         txt = open(vpath, encoding="utf-8").read()
-        txt2 = re.sub(r'__version__\s*=\s*"[^"]*"', '__version__  = "%s"' % ver, txt)
-        if txt2 == txt:
+        m = re.search(r'__version__\s*=\s*"[^"]*"', txt)
+        if not m:
             raise RuntimeError("no se encontró __version__ en version.py")
-        prog("publicando", 25, "Actualizando versión a v%s..." % ver)
-        open(vpath, "w", encoding="utf-8").write(txt2)
+        if m.group(0) == '__version__  = "%s"' % ver:
+            prog("publicando", 25, "La versión v%s ya es la actual; republicando..." % ver)
+        else:
+            txt2 = re.sub(r'__version__\s*=\s*"[^"]*"', '__version__  = "%s"' % ver, txt)
+            if txt2 == txt:
+                raise RuntimeError("no se encontró __version__ en version.py")
+            prog("publicando", 25, "Actualizando versión a v%s..." % ver)
+            open(vpath, "w", encoding="utf-8").write(txt2)
         # 2) commit + push
         msg = ("Release v%s" % ver) if not msj else \
             ("Release v%s (%s)" % (ver, msj.replace("\n", " ")[:140]))
@@ -4646,7 +4652,8 @@ def registrar_rutas(app):
                              for t in obreros]
             tot_obreros = {
                 "ingresos": round(sum(f["ingresos"] for f in filas_obreros), 2),
-                "descuentos": round(sum(f["descuentos"] for f in filas_obreros), 2),
+                "pension": round(sum(f["pension"] for f in filas_obreros), 2),
+                "conaf": round(sum(f["conaf"] for f in filas_obreros), 2),
                 "neto": round(sum(f["neto"] for f in filas_obreros), 2),
             }
         else:

@@ -3,33 +3,130 @@
   <input type="hidden" name="modal" value="1">
   <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   <div class="card">
-    <div class="card-head">
-      <h3><i class="bi bi-key"></i> Cambiar contraseña</h3>
+    <div class="clave-head">
+      <span class="clave-icono"><i class="bi bi-shield-lock"></i></span>
+      <div class="clave-sub">
+        <h3 class="clave-titulo">Cambiar contraseña</h3>
+        <p class="clave-sub">Establecerá una nueva contraseña para
+          <b>{{ 'Cuenta Principal' if u.rol == 'Super Usuario' else u.usuario }}</b>.
+          La anterior dejará de ser válida de inmediato.</p>
+      </div>
     </div>
     {% if error %}
-      <div class="alert alert-error">{{ error }}</div>
+      <div class="alert alert-error" role="alert">{{ error }}</div>
     {% endif %}
-    <p class="field-hint">
-      Va a establecer una nueva contraseña para
-      <b>{{ 'Cuenta Principal' if u.rol == 'Super Usuario' else u.usuario }}</b>.
-      La contraseña anterior dejará de servir.
-    </p>
+    <div class="clave-aviso">
+      <i class="bi bi-shield-check"></i>
+      <span>Use una contraseña nueva que nadie más conozca. No la repita
+        con la actual ni la comparta por correo o chat.</span>
+    </div>
     <div class="form-grid">
       <div class="field full">
         <label for="f-ck-clave">Nueva contraseña</label>
-        <input type="password" name="clave" id="f-ck-clave" required minlength="8"
-               autocomplete="new-password" autofocus>
-        <div class="field-hint">Mínimo 8 caracteres.</div>
+        <span class="campo-clave">
+          <input type="password" name="clave" id="f-ck-clave" required minlength="8"
+                 autocomplete="new-password" autofocus
+                 placeholder="Escriba la nueva contraseña">
+          <button type="button" class="clave-toggle" aria-label="Mostrar contraseña" aria-pressed="false">
+            <i class="bi bi-eye"></i>
+          </button>
+        </span>
+        <div class="clave-metro" id="ck-metro" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
+        </div>
+        <div class="clave-etiqueta">
+          <span id="ck-nivel">Seguridad</span>
+          <span>Mínimo 8 caracteres</span>
+        </div>
       </div>
       <div class="field full">
         <label for="f-ck-clave2">Confirmar contraseña</label>
-        <input type="password" name="clave2" id="f-ck-clave2" required minlength="8"
-               autocomplete="new-password">
+        <span class="campo-clave">
+          <input type="password" name="clave2" id="f-ck-clave2" required minlength="8"
+                 autocomplete="new-password"
+                 placeholder="Repita la nueva contraseña">
+          <button type="button" class="clave-toggle" aria-label="Mostrar contraseña" aria-pressed="false">
+            <i class="bi bi-eye"></i>
+          </button>
+        </span>
+        <div class="clave-check" id="ck-ok-igual">
+          <i class="bi bi-check-circle"></i> Coincide con la confirmación
+        </div>
       </div>
+    </div>
+    <div class="clave-checks">
+      <span class="clave-check" id="ck-ok-largo">
+        <i class="bi bi-check-circle"></i> Al menos 8 caracteres
+      </span>
     </div>
   </div>
   <div class="form-actions">
-    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Cambiar contraseña</button>
+    <button type="submit" class="btn btn-primary btn-lg">
+      <i class="bi bi-shield-lock"></i> Cambiar contraseña
+    </button>
     <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
   </div>
 </form>
+
+<script>
+(function () {
+  var a = document.getElementById('f-ck-clave');
+  if (!a) return;
+  var b = document.getElementById('f-ck-clave2');
+
+  function bindToggle(btn, inp) {
+    btn.addEventListener('click', function () {
+      var visible = inp.type === 'text';
+      inp.type = visible ? 'password' : 'text';
+      btn.querySelector('i').className = visible ? 'bi bi-eye' : 'bi bi-eye-slash';
+      btn.setAttribute('aria-pressed', visible ? 'false' : 'true');
+      btn.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+    });
+  }
+  bindToggle(a.parentNode.querySelector('.clave-toggle'), a);
+  bindToggle(b.parentNode.querySelector('.clave-toggle'), b);
+
+  var barras = document.getElementById('ck-metro').children;
+  var nivel = document.getElementById('ck-nivel');
+  var okLargo = document.getElementById('ck-ok-largo');
+  var okIgual = document.getElementById('ck-ok-igual');
+  var NIVELES = ['Muy débil', 'Débil', 'Regular', 'Buena', 'Fuerte'];
+  var COLORES = [
+    ['#E2E8F0', '#E2E8F0', '#E2E8F0', '#E2E8F0'],
+    ['#ef4444', '#E2E8F0', '#E2E8F0', '#E2E8F0'],
+    ['#d97706', '#d97706', '#E2E8F0', '#E2E8F0'],
+    ['#22c55e', '#22c55e', '#22c55e', '#E2E8F0'],
+    ['#15803D', '#15803D', '#15803D', '#15803D']
+  ];
+  var COLOR_NIVEL = ['#475569', '#dc2626', '#b45309', '#15803D', '#15803D'];
+
+  function fuerza(v) {
+    var p = 0;
+    if (v.length >= 8) p += 2;
+    if (/[A-Z\u00d1]/.test(v)) p++;
+    if (/[a-z\u00f1]/.test(v)) p++;
+    if (/\d/.test(v)) p++;
+    if (/[^A-Za-z0-9]/.test(v) || v.length >= 13) p++;
+    return Math.min(p, 4);
+  }
+
+  function pintar() {
+    var n = fuerza(a.value);
+    for (var i = 0; i < 4; i++) barras[i].style.background = COLORES[n][i];
+    if (a.value.length === 0) {
+      nivel.textContent = 'Seguridad';
+      nivel.style.color = '#475569';
+    } else {
+      nivel.textContent = NIVELES[n];
+      nivel.style.color = COLOR_NIVEL[n];
+    }
+    var largo = a.value.length >= 8;
+    var igual = a.value.length > 0 && a.value === b.value;
+    okLargo.classList.toggle('ok', largo);
+    okIgual.classList.toggle('ok', igual);
+  }
+  a.addEventListener('input', pintar);
+  b.addEventListener('input', pintar);
+  pintar();
+})();
+</script>

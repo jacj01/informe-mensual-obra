@@ -200,7 +200,7 @@ class Trabajador(db.Model):
     fecha_inicio = db.Column(db.Date)
     dias = db.Column(db.String(100), default="")  # dias trabajados del mes (CSV 1..31)
     aporte = db.Column(db.String(10), default="AFP")  # AFP | ONP
-    sueldo_mensual = db.Column(db.Float, default=0.0)  # sueldo del tecnico/administrativo (D.L. 728)
+    sueldo_mensual = db.Column(db.Float, default=0.0)  # sueldo mensual: base de la planilla "sin beneficios" (sueldo/30 x dias) y de beneficios D.L. 728
     devengado = db.Column(db.Boolean, default=False)  # si el total del panel se incluye en FE-06 Personal
     mes = db.Column(db.Integer, default=6)
     anio = db.Column(db.Integer, default=2026)

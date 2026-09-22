@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=4) }}">
 <style>
   /* FE-05: fixed layout con anchos calculados — TODAS las tablas alineadas */
+  .firmas { margin-top: 130px; min-height: 110px; }
   table.tabla { margin-top: 3px; table-layout: fixed !important; width: 100% !important; border-collapse: collapse; }
   table.tabla th, table.tabla td {
     padding: 2.5px 3px; line-height: 1.35;
@@ -160,7 +161,30 @@
         <td class="num"><b>{{ "{:,.2f}".format(total.total) }}</b></td>
       </tr>
     </tbody>
-  </table>
+</table>
+
+  <!-- ===================== FIRMAS ===================== -->
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.residente or '' }}</div>
+      <div class="cargo">Residente de Obra</div>
+      <div class="reg">{% if p.cip_residente %}CIP: {{ p.cip_residente }}{% endif %}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.supervisor or '' }}</div>
+      <div class="cargo">Supervisor de Obra</div>
+      <div class="reg">{% if p.cip_supervisor %}CIP: {{ p.cip_supervisor }}{% endif %}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.administrador_obra or p.asistente or '' }}</div>
+      <div class="cargo">V°B° Administración / Entidad</div>
+      <div class="reg"></div>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>

@@ -68,9 +68,14 @@
         </select>
       </div>
       <div class="field">
-        <label for="f-tw-sueldo">Sueldo mensual (S/) <i class="bi bi-question-circle" title="Solo para personal técnico/administrativo (D.L. 728)"></i></label>
+        <label for="f-tw-sueldo">Sueldo mensual (S/) <i class="bi bi-question-circle" title="Base de la planilla 'Sin Beneficios ni Descuentos de Ley': sueldo ÷ 30 × días marcados en el tareo"></i></label>
         <input type="text" class="monto" name="sueldo_mensual" id="f-tw-sueldo" value="{{ '%.2f'|format(t.sueldo_mensual) if t.sueldo_mensual else '' }}"
                min="0" inputmode="decimal" placeholder="0.00" autocomplete="off">
+        {% if t.tipo == 'OBRERO' %}
+        <div class="field-hint">Se usa para la planilla sin beneficios ni descuentos (sueldo ÷ 30 × días). Si deja 0.00, aparece S/ 0.00 en esa planilla.</div>
+        {% else %}
+        <div class="field-hint">Base de la planilla sin beneficios ni descuentos (sueldo ÷ 30 × días). La planilla con beneficios usa este sueldo para CTS, gratificación y vacaciones.</div>
+        {% endif %}
       </div>
       <div class="field full">
         <div class="note" style="margin:0">

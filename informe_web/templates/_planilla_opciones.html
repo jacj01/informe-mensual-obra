@@ -11,7 +11,7 @@
       <a class="planilla-opcion" href="{{ url_for('planilla_imprimir', mes=mes, anio=anio, seccion=seccion, opcion='sin') }}" target="_blank" rel="noopener">
         <div class="opcion-icono"><i class="bi bi-cash"></i></div>
         <div class="opcion-titulo">Sin Beneficios ni Descuentos de Ley</div>
-        <div class="opcion-desc">Genera la planilla con el monto bruto a ganar por cada trabajador: jornales, descanso dominical, feriados, BUC y movilidad. Sin beneficios legales ni descuentos.</div>
+        <div class="opcion-desc">Genera la planilla con el monto bruto a ganar por cada trabajador, calculado del <b>Sueldo mensual (S/)</b> registrado en «Nuevo/Editar trabajador», prorrateado por los días marcados en el tareo (sueldo ÷ 30 × días). Sin BUC, movilidad, jornales ni descansos. Sin beneficios legales ni descuentos.</div>
         <span class="btn btn-primary"><i class="bi bi-printer"></i> Generar e imprimir</span>
       </a>
       <a class="planilla-opcion" href="{{ url_for('planilla_imprimir', mes=mes, anio=anio, seccion=seccion, opcion='con') }}" target="_blank" rel="noopener">
@@ -25,10 +25,12 @@
   <div class="note">
     <i class="bi bi-info-circle"></i>
     <div>
-      La planilla se calcula con la tabla salarial oficial vigente de
-      <b>Construcción Civil</b> (CAPECO-FTCCP) para el año {{ anio }} y los
-      días marcados en el tareo de {{ MESES[mes-1] }} {{ anio }}. La tabla se
-      actualiza automáticamente cada año ({{ TABLA_CIVIL_POR_ANIO|length }} tabla(s) disponible(s)).
+      La opción <b>Con Beneficios y Descuentos de Ley</b> se calcula con la tabla
+      salarial oficial vigente de <b>Construcción Civil</b> (CAPECO-FTCCP) para el
+      año {{ anio }} y los días marcados en el tareo de
+      {{ MESES[mes-1] }} {{ anio }} ({{ TABLA_CIVIL_POR_ANIO|length }} tabla(s) disponible(s)).
+      La opción <b>Sin Beneficios</b> usa el Sueldo mensual (S/) registrado en cada
+      trabajador, prorrateado por los días marcados (sueldo ÷ 30 × días).
     </div>
   </div>
   <div class="form-actions">

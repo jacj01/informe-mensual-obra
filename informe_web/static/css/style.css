@@ -1449,3 +1449,55 @@ select::-ms-expand { display: none !important; }
 .upd-progress-msg { font-size: 12px; color: #6b7280; margin-top: 4px; }
 /* Confirm icon info variant */
 .confirm-icon.info { background: #DBEAFE; color: #1E40AF; }
+
+/* ================= CAMBIO DE CONTRASEÑA ================= */
+.clave-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+.clave-icono {
+  flex: 0 0 auto; width: 46px; height: 46px; border-radius: 14px;
+  display: grid; place-items: center; color: #fff; font-size: 20px;
+  background: linear-gradient(135deg, var(--azul), #1a5a8a);
+  box-shadow: 0 6px 14px rgba(31, 78, 121, .35), inset 0 1px 0 rgba(255, 255, 255, .25);
+  position: relative;
+}
+.clave-icono::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 17px;
+  border: 1.5px solid rgba(201, 162, 39, .5); pointer-events: none;
+}
+.clave-titulo { font-size: 17px; font-weight: 800; color: var(--azul-osc); letter-spacing: -.3px; line-height: 1.2; }
+.clave-sub { font-size: 12.5px; color: var(--texto2); margin-top: 3px; line-height: 1.5; }
+.clave-sub b { color: var(--azul); }
+.clave-aviso {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 14px; border-radius: 10px; margin-bottom: 16px;
+  background: linear-gradient(135deg, #EFF6FF, #F0F9FF);
+  border: 1px solid #BFDBFE; color: #1E40AF;
+  font-size: 12.5px; line-height: 1.55;
+}
+.clave-aviso i { font-size: 16px; color: var(--azul); margin-top: 1px; }
+.campo-clave { position: relative; display: block; }
+.campo-clave input { padding-right: 44px; }
+.clave-toggle {
+  position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; color: var(--texto2);
+  font-size: 17px; padding: 4px; line-height: 1; border-radius: 6px;
+  transition: color .2s, transform .2s; z-index: 2;
+}
+.clave-toggle:hover { color: var(--azul); }
+.clave-toggle:active { transform: translateY(-50%) scale(.92); }
+.clave-toggle:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.clave-metro { display: flex; gap: 5px; margin-top: 9px; }
+.clave-metro i {
+  flex: 1; height: 4px; border-radius: 2px; background: var(--borde-suave);
+  transition: background .25s ease;
+}
+.clave-etiqueta {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 11px; font-weight: 600; color: var(--texto2); margin-top: 6px;
+}
+.clave-etiqueta [id$="-nivel"] { transition: color .2s ease; }
+.clave-checks { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.clave-check { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--texto2); transition: color .2s; }
+.clave-check i { font-size: 13px; color: #94A3B8; transition: color .2s; }
+.clave-check.ok { color: var(--verde); }
+.clave-check.ok i { color: var(--verde); }
+.login-card .clave-check { margin-top: 8px; }

@@ -110,10 +110,17 @@ def calcular_obrero(t, calendario, anio, mes, con_beneficios):
         ingresos = (jornal_basico + dsd + feriados + buc + movilidad
                     + vacaciones + cts + gratificacion + bonif)
         descuentos = pension + conaf
+        sueldo_planilla = 0.0
     else:
+        # Sin beneficios ni descuentos: el monto se calcula del "Sueldo
+        # mensual (S/)" registrado en el trabajador, prorrateado por los
+        # dias marcados en el tareo (sueldo ÷ 30 x dias).
         vacaciones = cts = gratificacion = bonif = 0
-        ingresos = jornal_basico + dsd + feriados + buc + movilidad
+        sueldo = float(t.sueldo_mensual or 0)
+        ingresos = sueldo * total_dias_rem / 30
         descuentos = 0
+        sueldo_planilla = sueldo
+        jornal_basico = dsd = feriados = buc = movilidad = 0
 
     return {
         "t": t,
@@ -121,6 +128,7 @@ def calcular_obrero(t, calendario, anio, mes, con_beneficios):
         "trab": trab, "dom": dom, "fer": fer,
         "total_dias": total_dias_rem,
         "jornal": jornal,
+        "sueldo_planilla": red2(sueldo_planilla),
         "jornal_basico": red2(jornal_basico),
         "dsd": red2(dsd),
         "feriados": red2(feriados),
