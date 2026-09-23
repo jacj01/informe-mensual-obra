@@ -22,6 +22,8 @@ from pathlib import Path
 from urllib.request import urlopen
 
 BASE = Path(__file__).resolve().parent
+if str(BASE) not in sys.path:
+    sys.path.insert(0, str(BASE))
 LOG = BASE / "servidor.log"
 PID = BASE / "servidor.pid"
 
