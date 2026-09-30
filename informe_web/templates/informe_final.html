@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Informe Financiero Final de Obra{% endblock %}
+{% block og_title %}Informe Financiero Final de Obra{% endblock %}
+{% block meta_description %}Informe financiero final de obra por administración directa: memoria descriptiva, marco normativo, ejecución financiera, conclusiones y recomendaciones.{% endblock %}
+{% block heading %}Informe Financiero Final de Obra{% endblock %}
+{% block subheading %}Redacte el informe final con los cuadros calculados automáticamente{% endblock %}
+
+{% block content %}
+{% set tot = resumen.totales %}
+
+<div class="card">
+  <div class="card-head between">
+    <h3><i class="bi bi-file-earmark-text"></i> Resumen de la ejecución financiera</h3>
+    <a class="btn btn-primary" href="{{ url_for('informe_final_imprimir') }}" target="_blank">
+      <i class="bi bi-printer"></i> Imprimir Informe Final</a>
+  </div>
+  <div class="total-bar">
+    <div>PRESUPUESTO SEGÚN EXPEDIENTE TÉCNICO</div>
+    <div class="total-val">S/ {{ "{:,.2f}".format(tot.et) }}</div>
+  </div>
+  <div class="table-scroll" style="margin-top:10px">
+    <table class="table table-compact">
+      <thead>
+        <tr>
+          <th>Componente</th>
+          <th class="num">Exp. Técnico (S/)</th>
+          <th class="num">Ejecutado acumulado (S/)</th>
+          <th class="num">%</th>
+          <th class="num">Saldo (S/)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cr in resumen.por_componente %}
+        <tr>
+          <td>{{ cr.componente }}</td>
+          <td class="num">{{ "{:,.2f}".format(cr.et) }}</td>
+          <td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td>
+          <td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td>
+          <td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="totales">
+          <td><strong>TOTAL</strong></td>
+          <td class="num strong">{{ "{:,.2f}".format(tot.et) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td>
+          <td class="num strong">{{ "{:.2f}".format(tot.porc) }}%</td>
+          <td class="num strong">{{ "{:,.2f}".format(tot.saldo) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<form method="post">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-journal-text"></i> Datos del informe</h3></div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="inf-n">N.° del informe</label>
+        <input type="text" id="inf-n" name="n_informe" value="{{ I.n_informe or '' }}" placeholder="Ej. 003-2026-GM/GLMDT">
+      </div>
+      <div class="field">
+        <label for="inf-fecha">Fecha del informe</label>
+        <input type="date" id="inf-fecha" name="fecha" value="{{ I.fecha.strftime('%Y-%m-%d') if I.fecha else '' }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3><i class="bi bi-pencil-square"></i> Contenido del informe financiero final</h3></div>
+    <div class="form-grid">
+      <div class="field full">
+        <label for="inf-memoria">I. Memoria descriptiva</label>
+        <textarea id="inf-memoria" name="memoria" rows="6" placeholder="Objeto de la obra, alcance, entidad ejecutora, fuente de financiamiento, período y monto del expediente técnico.">{{ I.memoria or '' }}</textarea>
+      </div>
+      <div class="field full">
+        <label for="inf-marco">II. Marco normativo</label>
+        <textarea id="inf-marco" name="marco_normativo" rows="5" placeholder="Normas aplicables a la ejecución y liquidación de la obra (D.L. 1252, Directiva de inversiones, Directiva N.° 017-2023-CG/GMPL, etc.).">{{ I.marco_normativo or '' }}</textarea>
+      </div>
+      <div class="field full">
+        <label for="inf-desarrollo">III. Ejecución financiera</label>
+        <textarea id="inf-desarrollo" name="desarrollo" rows="6" placeholder="Descripción de los gastos ejecutados por componente, adicionales y deductivos, y su relación con el presupuesto aprobado.">{{ I.desarrollo or '' }}</textarea>
+      </div>
+      <div class="field full">
+        <label for="inf-conclusiones">IV. Conclusiones</label>
+        <textarea id="inf-conclusiones" name="conclusiones" rows="5" placeholder="Conclusiones de la ejecución presupuestal y financiera de la obra.">{{ I.conclusiones or '' }}</textarea>
+      </div>
+      <div class="field full">
+        <label for="inf-recomendaciones">V. Recomendaciones</label>
+        <textarea id="inf-recomendaciones" name="recomendaciones" rows="4" placeholder="Recomendaciones para la liquidación, el cierre y la transferencia de la obra.">{{ I.recomendaciones or '' }}</textarea>
+      </div>
+      <div class="field full">
+        <label for="inf-anexos">VI. Anexos</label>
+        <textarea id="inf-anexos" name="anexos" rows="4" placeholder="Documentos que se adjuntan: acta de recepción, conformidades de pago, manifiestos, valorizaciones, etc.">{{ I.anexos or '' }}</textarea>
+      </div>
+    </div>
+    <div class="note">
+      <i class="bi bi-info-circle"></i>
+      Los importes del cuadro comparativo y el monto total en letras se agregan automáticamente al
+      imprimir el informe. Escriba aquí la narrativa; el cuadro se genera desde los datos registrados.
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar informe final</button>
+    <a class="btn btn-outline" href="{{ url_for('informe_final_imprimir') }}" target="_blank"><i class="bi bi-printer"></i> Ver/imprimir informe</a>
+  </div>
+</form>
+
+{% include '_formatos_consolidados_pantalla.html' %}
+{% endblock %}

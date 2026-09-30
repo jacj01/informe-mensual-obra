@@ -11,7 +11,7 @@
 <style>
   /* FE-05: fixed layout con anchos calculados — TODAS las tablas alineadas */
   .firmas { margin-top: 130px; min-height: 110px; }
-  table.tabla { margin-top: 3px; table-layout: fixed !important; width: 100% !important; border-collapse: collapse; }
+  table.tabla { margin-top: 3px; table-layout: auto; border-collapse: collapse; }
   table.tabla th, table.tabla td {
     padding: 2.5px 3px; line-height: 1.35;
     border: .6px solid var(--borde); font-size: 7.6pt;
@@ -186,6 +186,7 @@
   </div>
 
 </div>
+<script src="{{ url_for('static', filename='js/imprimir_autofit.js') }}"></script>
 </body>
 </html>
 

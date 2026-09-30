@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from flask import g
 from models import (Proyecto, Presupuesto, Gasto, GastoDetalle,
                     AlmacenMovimiento, ActividadEjecutada, Trabajador,
-                    Suscripcion, db)
+                    Suscripcion, Liquidacion, InformeFinal, db)
 import databases as _bd
 
 MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
@@ -627,6 +627,185 @@ def monto_letras(monto):
     enteros = int(monto)
     cent = int(round((monto - enteros) * 100))
     return f"{numero_a_letras(enteros)} con {cent:02d}/100 soles"
+
+
+def get_liquidacion():
+    """Fila única de liquidación (la crea en cero si aún no existe)."""
+    L = getattr(g, "_liquidacion", None)
+    if L is not None:
+        return L
+    L = Liquidacion.query.first()
+    if L is None:
+        L = Liquidacion()
+        p = get_proyecto()
+        L.fecha_termino = p.fecha_fin if p and p.fecha_fin else None
+        db.session.add(L)
+        db.session.commit()
+    g._liquidacion = L
+    return L
+
+
+def get_informe_final():
+    """Fila única del informe final (la crea en cero si aún no existe)."""
+    I = getattr(g, "_informe_final", None)
+    if I is not None:
+        return I
+    I = InformeFinal.query.first()
+    if I is None:
+        I = InformeFinal()
+        db.session.add(I)
+        db.session.commit()
+    g._informe_final = I
+    return I
+
+
+def liquidacion_resumen():
+    """Cuadros de la liquidación financiera: comparativo por componente y por
+    clasificador (Exp. Técnico, ejecutado acumulado, % y saldo) más totales.
+
+    Usa la misma agregación del formato FE-06 (años anteriores de la
+    configuración presupuestal + ejecución real del año en curso).
+    """
+    rows = fe06_rows()
+    resumen = fe06_resumen(rows)
+    por_componente = []
+    for comp in COMPONENTES_FE06:
+        r = resumen[comp]
+        por_componente.append({
+            "componente": comp,
+            "et": r["et"],
+            "acum_total": r["acum_total"],
+            "porc_et": round(r["acum_total"] / r["et"] * 100, 2) if r["et"] else 0,
+            "saldo_et": r["saldo_et"],
+        })
+    por_clasificador = [{
+        "componente": r["componente"],
+        "detalle": r["detalle"],
+        "et": r["et"],
+        "acum_total": r["acum_total"],
+        "porc_et": r["porc_et"],
+        "saldo_et": r["saldo_et"],
+    } for r in rows]
+    et_total = round(sum(r["et"] for r in por_componente), 2)
+    ejec_total = round(sum(r["acum_total"] for r in por_componente), 2)
+    saldo_total = round(et_total - ejec_total, 2)
+    return {
+        "por_componente": por_componente,
+        "por_clasificador": por_clasificador,
+        "totales": {
+            "et": et_total,
+            "ejecutado": ejec_total,
+            "saldo": saldo_total,
+            "porc": round(ejec_total / et_total * 100, 2) if et_total else 0,
+        },
+    }
+
+
+def liquidacion_pendientes():
+    """Gastos del año en curso aún no devengados (compromisos por pagar)."""
+    p = get_proyecto()
+    return (Gasto.query.filter(Gasto.anio == p.anio, Gasto.devengado == False)
+            .order_by(Gasto.orden, Gasto.id).all())
+
+
+def formato_consolidado():
+    """Formatos financieros CONSOLIDADOS de toda la ejecución del proyecto.
+
+    Reúne todos los meses registrados en el aplicativo para integrarlos en la
+    Liquidación Financiera y en el Informe Financiero Final:
+      - 'manifiesto': Manifiesto de Gasto acumulado (detalle completo por mes),
+      - 'fe05': FE-05 Ejecución Mensual (matriz por componente/clasificador y mes),
+      - 'fe06': FE-06 Presupuesto vs Ejecutado (cuadro comparativo completo).
+    """
+    p = get_proyecto()
+    anio = p.anio
+    meses = meses_con_ejecucion(anio)
+    if meses:
+        periodo = (f"ACUMULADO {MESES[meses[0] - 1]} - "
+                   f"{MESES[meses[-1] - 1]} - {anio}")
+    else:
+        periodo = f"ACUMULADO - {anio}"
+
+    # ---------- Manifiesto de Gasto acumulado (todos los meses) ----------
+    orden_comp = ["Costo Directo", "Gastos Generales", "Gastos de Supervisión",
+                  "Elaboración de Expediente Técnico", "Liquidación de Obra"]
+    gastos = (Gasto.query.filter(Gasto.anio == anio, Gasto.devengado == True)
+              .order_by(Gasto.mes, Gasto.orden, Gasto.id).all())
+    cls_proy = clasificadores_proyecto()
+
+    grupos = {}
+    por_mes = {}
+    for g in gastos:
+        key = (g.componente or "", g.clasificador or "")
+        gr = grupos.setdefault(key, {"componente": g.componente or "",
+                                     "clasificador": g.clasificador or "",
+                                     "filas": [], "subtotal": 0.0})
+        mesn = g.mes or 0
+        por_mes[mesn] = round(por_mes.get(mesn, 0) + g.importe, 2)
+        # Misma orden (mes + SIAF + tipo + numero + proveedor) = una sola linea.
+        clave_orden = (mesn, g.siaf or "", g.tipo_doc or "",
+                       g.num_doc or "", g.proveedor or "")
+        first = gr.get("_ultima_orden") != clave_orden
+        gr["_ultima_orden"] = clave_orden
+        for idx_d, d in enumerate(g.detalles):
+            gr["filas"].append({
+                "mes": MESES[mesn - 1] if 1 <= mesn <= 12 else "",
+                "fecha": g.fecha.strftime("%d/%m/%Y") if g.fecha else "",
+                "siaf": g.siaf or "", "tipo_doc": g.tipo_doc or "",
+                "num_doc": g.num_doc or "", "proveedor": g.proveedor or "",
+                "detalle": d.detalle, "und": d.und or "",
+                "cantidad": d.cantidad, "pu": d.precio_unitario,
+                "importe": d.importe, "prov_first": first and idx_d == 0,
+            })
+            gr["subtotal"] += d.importe
+
+    def orden_seccion(item):
+        comp, clas = item
+        ci = orden_comp.index(comp) if comp in orden_comp else len(orden_comp)
+        return (ci, clas)
+
+    secciones_m = []
+    for key in sorted(grupos, key=orden_seccion):
+        gr = grupos[key]
+        gr.pop("_ultima_orden", None)
+        gr["subtotal"] = round(gr["subtotal"], 2)
+        nombre_cl = cls_proy.get(gr["clasificador"]) or gr["clasificador"]
+        gr["label"] = f"{gr['componente'].upper()} - {nombre_cl}"
+        prov_cont = 0
+        for fila in gr["filas"]:
+            if fila["prov_first"]:
+                prov_cont += 1
+            fila["prov_num"] = prov_cont
+        secciones_m.append(gr)
+
+    total_m = round(sum(s["subtotal"] for s in secciones_m), 2)
+
+    # ---------- FE-05 / FE-06 (matrices y comparativo, todas las fuentes) ----------
+    rows = fe06_rows()
+    resumen = fe06_resumen(rows)
+    fe06_totales_mensual = [round(sum(r["mensual"][i] for r in resumen.values()), 2)
+                            for i in range(12)]
+    sintesis = fe06_sintesis(p.mes_actual, anio)
+    meses_vis = meses_visibles(anio, p.mes_actual)
+
+    return {
+        "anio": anio,
+        "periodo": periodo,
+        "meses": meses,
+        "manifiesto": {"secciones": secciones_m, "por_mes": por_mes,
+                       "total": total_m},
+        "fe05": {
+            "meses": meses_vis,
+            "filas": [{"componente": r["componente"], "detalle": r["detalle"],
+                       "clasificador": r["clasificador"], "mensual": r["mensual"],
+                       "total_anio": r["total_anio"]} for r in rows],
+            "totales_mensual": fe06_totales_mensual,
+            "total_anio": round(sum(r["total_anio"] for r in rows), 2),
+        },
+        "fe06": {"rows": rows, "resumen": resumen,
+                 "sintesis": sintesis, "totales_mensual": fe06_totales_mensual,
+                 "incluir_anios": incluir_anios()},
+    }
 
 
 def actividades_mes(mes, anio=None):

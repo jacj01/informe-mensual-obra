@@ -95,7 +95,7 @@
       {% if d.dia >= inicio_dia and d.dia in t.dias_lista %}
       {% if d.es_domingo %}{% set ns.dom = ns.dom + 1 %}<td class="dia-val es-domingo">D</td>
       {% elif d.es_feriado %}{% set ns.fer = ns.fer + 1 %}<td class="dia-val es-feriado">F</td>
-      {% else %}{% set ns.trab = ns.trab + 1 %}<td class="dia-val">1</td>{% endif %}
+      {% else %}{% set ns.trab = ns.trab + 1 %}<td class="dia-val">X</td>{% endif %}
       {% else %}
       <td class="ctr"></td>
       {% endif %}

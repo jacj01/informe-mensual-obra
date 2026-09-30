@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Informe financiero final de obra por administración directa: memoria descriptiva, marco normativo, ejecución financiera, conclusiones y recomendaciones. Hoja A4 imprimible.">
+<title>Informe Financiero Final de Obra</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=8) }}">
+<style>
+  @page { size: A4 portrait; margin: 10mm 12mm 12mm; }
+  .hoja { width: 210mm; min-height: 297mm; padding: 10mm 12mm; }
+  .proyecto { display: flex; align-items: stretch; border: .6px solid var(--borde); border-radius: var(--radio-sm); overflow: hidden; margin: 2px 0 6px; }
+  .proyecto .p-label { flex: 0 0 14%; background: var(--bg); color: var(--azul-osc); font-weight: 700; font-size: 7.2pt; text-transform: uppercase; border-right: .6px solid var(--borde); padding: 4px 8px; display: flex; align-items: center; }
+  .proyecto .p-nombre { flex: 1; min-width: 0; padding: 5px 10px; font-size: 9pt; font-weight: 700; color: var(--azul-osc); line-height: 1.35; overflow-wrap: anywhere; }
+  .sec-titulo { font-size: 9pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase; letter-spacing: .4px; margin: 12px 0 4px; border-bottom: 1.5px solid var(--azul-claro); padding-bottom: 2px; }
+  .sec-parrafo { font-size: 8.6pt; line-height: 1.65; color: var(--texto); text-align: justify; white-space: pre-wrap; margin: 0; }
+  table.tabla th, table.tabla td { padding: 4px 5px; font-size: 7.8pt; }
+  .resumen-fin { margin-top: 10px; }
+  .resumen-linea { display: flex; justify-content: space-between; align-items: baseline; padding: 2.5px 0; font-size: 8.6pt; }
+  .resumen-linea b { color: var(--azul-osc); }
+  .resumen-linea.total { border-top: 1.4px solid var(--azul-claro); margin-top: 5px; padding-top: 5px; }
+  .resumen-linea.total span { font-size: 10.5pt; font-weight: 800; color: var(--azul-osc); }
+  .firmas { margin-top: 90px; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h2>Informe Financiero Final de Obra</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('informe_final') }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+
+<div class="hoja">
+
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Informe Financiero Final de Obra</div>
+      <div class="subtitulo">ADMINISTRACION DIRECTA</div>
+    </div>
+    <div class="enc-der">
+      <div class="num-doc">N.°&nbsp;{{ I.n_informe or '______' }}</div>
+      <div style="margin-top:5px">{{ I.fecha.strftime('%d/%m/%Y') if I.fecha else '' }}</div>
+    </div>
+  </div>
+
+  <div class="proyecto">
+    <span class="p-label">Proyecto</span>
+    <span class="p-nombre">{{ p.nombre or '' }}</span>
+  </div>
+
+  <div class="sec-titulo">I. Memoria Descriptiva</div>
+  {% if I.memoria %}<p class="sec-parrafo">{{ I.memoria }}</p>
+  {% else %}<p class="sec-parrafo">(Descripción de la obra, alcance, entidad ejecutora, fuente de financiamiento y presupuesto.)</p>{% endif %}
+
+  <div class="sec-titulo">II. Marco Normativo</div>
+  {% if I.marco_normativo %}<p class="sec-parrafo">{{ I.marco_normativo }}</p>
+  {% else %}<p class="sec-parrafo">(Normas aplicables a la ejecución y liquidación de la obra.)</p>{% endif %}
+
+  <div class="sec-titulo">III. Ejecución Financiera</div>
+  {% if I.desarrollo %}<p class="sec-parrafo">{{ I.desarrollo }}</p>{% endif %}
+  <table class="tabla" style="margin-top:6px">
+    <thead>
+      <tr>
+        <th>Componente</th>
+        <th class="num">Exp. Técnico (S/)</th>
+        <th class="num">Ejecutado acumulado (S/)</th>
+        <th class="num">%</th>
+        <th class="num">Saldo (S/)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cr in resumen.por_componente %}
+      <tr>
+        <td>{{ cr.componente }}</td>
+        <td class="num">{{ "{:,.2f}".format(cr.et) }}</td>
+        <td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td>
+        <td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total">
+        <td>TOTAL</td>
+        <td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td>
+        <td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td>
+        <td class="num">{{ "{:.2f}".format(resumen.totales.porc) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(resumen.totales.saldo) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="resumen-fin">
+    <div class="resumen-linea"><b>Presupuesto según expediente técnico</b><span>S/ {{ "{:,.2f}".format(resumen.totales.et) }}</span></div>
+    <div class="resumen-linea total"><b>TOTAL EJECUTADO ACUMULADO</b><span>S/ {{ "{:,.2f}".format(resumen.totales.ejecutado) }} ({{ "{:.2f}".format(resumen.totales.porc) }}%)</span></div>
+    <div class="resumen-linea"><b>Saldo del presupuesto</b><span>S/ {{ "{:,.2f}".format(resumen.totales.saldo) }}</span></div>
+    <div style="font-size:8.2pt;font-style:italic;color:var(--texto);margin-top:3px">
+      Monto total ejecutado: {{ monto_letras(resumen.totales.ejecutado) }}.
+    </div>
+  </div>
+
+  <div class="sec-titulo">IV. Conclusiones</div>
+  {% if I.conclusiones %}<p class="sec-parrafo">{{ I.conclusiones }}</p>
+  {% else %}<p class="sec-parrafo">(Conclusiones de la ejecución presupuestal y financiera de la obra.)</p>{% endif %}
+
+  <div class="sec-titulo">V. Recomendaciones</div>
+  {% if I.recomendaciones %}<p class="sec-parrafo">{{ I.recomendaciones }}</p>
+  {% else %}<p class="sec-parrafo">(Recomendaciones para la liquidación, el cierre y la transferencia de la obra.)</p>{% endif %}
+
+  <div class="sec-titulo">VI. Anexos</div>
+  {% if I.anexos %}<p class="sec-parrafo">{{ I.anexos }}</p>
+  {% else %}<p class="sec-parrafo">(Documentos adjuntos: acta de recepción, conformidades, manifiestos de gasto, valorizaciones, etc.)</p>{% endif %}
+
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.residente or '' }}</div>
+      <div class="cargo">Residente de Obra</div>
+      <div class="reg">{{ 'CIP ' ~ p.cip_residente if p.cip_residente else '' }}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.supervisor or '' }}</div>
+      <div class="cargo">Supervisor de Obra</div>
+      <div class="reg">{{ 'CIP ' ~ p.cip_supervisor if p.cip_supervisor else '' }}</div>
+    </div>
+  </div>
+
+</div>
+
+{% include '_formatos_consolidados_impresion.html' %}
+
+<script src="{{ url_for('static', filename='js/imprimir_autofit.js') }}"></script>
+
+</body>
+</html>

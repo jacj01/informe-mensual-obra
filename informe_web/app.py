@@ -53,7 +53,9 @@ from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      mes_inicio_manifiesto, clasificadores_proyecto,
                      calendario_mes, resumen_tareo, panel_cuadro1, panel_datos,
                      actividades_mes,
-                     presupuesto_filas, PRESUPUESTO_DETALLE, detalle_clasificador)
+                     presupuesto_filas, PRESUPUESTO_DETALLE, detalle_clasificador,
+                     get_liquidacion, get_informe_final, liquidacion_resumen,
+                     liquidacion_pendientes, formato_consolidado, monto_letras)
 from planilla import (tabla_civil, calcular_obrero, calcular_tecnico,
                       TABLA_CIVIL_POR_ANIO)
 from seed import seed
@@ -932,6 +934,8 @@ PERMISOS_SECCIONES = [
     ("formatos", "Formatos Financiero"),
     ("almacen", "Almacén de Obra"),
     ("tareo", "Tareo y Planilla"),
+    ("liquidacion", "Liquidación Financiera de Obra"),
+    ("informe_final", "Informe Financiero Final de Obra"),
     ("configuracion", "Configuración Presupuestal"),
     ("respaldo", "Respaldo de Datos"),
 ]
@@ -1521,6 +1525,10 @@ def permiso_requerido(ep):
         return "tareo"
     if ep in ("planilla_opciones", "planilla_imprimir"):
         return "tareo"
+    if ep in ("liquidacion", "liquidacion_imprimir"):
+        return "liquidacion"
+    if ep in ("informe_final", "informe_final_imprimir"):
+        return "informe_final"
     if ep == "cabecera":
         return "cabecera"
     if ep == "formatos":
@@ -2529,6 +2537,10 @@ def registrar_rutas(app):
                     "trabajador_nuevo",
                     "trabajador_editar", "trabajador_eliminar"):
             active = "tareo"
+        elif ep in ("liquidacion", "liquidacion_imprimir"):
+            active = "liquidacion"
+        elif ep in ("informe_final", "informe_final_imprimir"):
+            active = "informe_final"
         elif ep == "configuracion":
             active = "configuracion"
         elif ep in ("usuarios", "usuario_nuevo", "usuario_editar", "usuario_eliminar"):
@@ -2578,6 +2590,9 @@ def registrar_rutas(app):
         if n == int(n):
             return f"{int(n):,}"
         return f"{n:,.2f}"
+
+    # Exponer utilidades en plantillas (liquidación e informe final).
+    app.jinja_env.globals["monto_letras"] = monto_letras
 
     def lista_clasificadores(p):
         """Opciones (codigo, nombre) para el select de clasificador."""
@@ -3736,6 +3751,13 @@ def registrar_rutas(app):
         anio = p.anio
         lista = gastos_mes(mes, anio)
         total = round(sum(g.importe for g in lista), 2)
+        orden_asc = lambda g: (g.fecha is None, g.fecha or date.min)
+        compras = sorted((g for g in lista if g.tipo_doc == "O/C"), key=orden_asc)
+        servicios = sorted((g for g in lista if g.tipo_doc == "O/S"), key=orden_asc)
+        otros_gastos = sorted((g for g in lista if g.tipo_doc not in ("O/C", "O/S")), key=orden_asc)
+        total_compras = round(sum(g.importe for g in compras), 2)
+        total_servicios = round(sum(g.importe for g in servicios), 2)
+        total_otros = round(sum(g.importe for g in otros_gastos), 2)
         cls_nombres = dict(clasificadores_proyecto())
         cls_nombres.update(CLASIFICADORES)
         bloqueos_orden = {}
@@ -3767,6 +3789,9 @@ def registrar_rutas(app):
                         bloqueos_material[d.id] = ("Este material tiene ingresos en almacén. "
                                                    "Elimine primero los movimientos de entrada del almacén.")
         return render_template("ordenes.html", p=p, lista=lista, total=total,
+                               compras=compras, servicios=servicios, otros_gastos=otros_gastos,
+                               total_compras=total_compras, total_servicios=total_servicios,
+                               total_otros=total_otros,
                                mes=mes, anio=anio, MESES=MESES,
                                clasificadores=clasificadores_oc(p),
                                cls_nombres=cls_nombres,
@@ -6879,6 +6904,98 @@ def registrar_rutas(app):
                                entrega=entrega, recibe=recibe,
                                cargo_entrega=cargo_entrega, cargo_recibe=cargo_recibe,
                                n_acta=n_acta, estados=estados)
+
+    def _fecha_iso(valor):
+        """Convierte 'AAAA-MM-DD' en date; None si está vacío o es inválido."""
+        valor = (valor or "").strip()
+        if not valor:
+            return None
+        try:
+            return datetime.strptime(valor, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return None
+
+    # ----------------- LIQUIDACIÓN FINANCIERA DE OBRA -----------------
+    @app.route("/liquidacion", methods=["GET", "POST"])
+    def liquidacion():
+        """Liquidación financiera de obra: expediente, acta de recepción,
+        comisión y adendas. Los montos se calculan de los datos registrados
+        (presupuesto, gastos devengados y años anteriores)."""
+        p = get_proyecto()
+        L = get_liquidacion()
+        if request.method == "POST":
+            try:
+                L.n_expediente = (request.form.get("n_expediente", "") or "").strip().upper()
+                L.fecha = _fecha_iso(request.form.get("fecha"))
+                L.estado = (request.form.get("estado", "") or "EN TRÁMITE").strip().upper()[:60]
+                L.fecha_termino = _fecha_iso(request.form.get("fecha_termino"))
+                L.n_acta_recepcion = (request.form.get("n_acta_recepcion", "") or "").strip().upper()
+                L.fecha_acta_recepcion = _fecha_iso(request.form.get("fecha_acta_recepcion"))
+                L.comision_presidente = (request.form.get("comision_presidente", "") or "").strip().upper()
+                L.comision_integrantes = request.form.get("comision_integrantes", "") or ""
+                L.adicionales = float(request.form.get("adicionales", 0) or 0)
+                L.deducciones = float(request.form.get("deducciones", 0) or 0)
+                L.saldo_por_pagar = float(request.form.get("saldo_por_pagar", 0) or 0)
+                L.notas = request.form.get("notas", "") or ""
+            except (ValueError, TypeError):
+                flash("Revise los montos ingresados: use solo números.", "error")
+                return redirect(url_for("liquidacion"))
+            db.session.commit()
+            flash("Liquidación financiera guardada correctamente.", "success")
+            return redirect(url_for("liquidacion"))
+        resumen = liquidacion_resumen()
+        costo_final = round((resumen["totales"]["et"] or 0)
+                            + (L.adicionales or 0) - (L.deducciones or 0), 2)
+        return render_template("liquidacion.html", p=p, L=L, MESES=MESES,
+                               resumen=resumen, pendientes=liquidacion_pendientes(),
+                               costo_final=costo_final, CLASIFICADORES=CLASIFICADORES,
+                               consolidado=formato_consolidado())
+
+    @app.route("/liquidacion/imprimir")
+    def liquidacion_imprimir():
+        """Hoja imprimible institucional de la Liquidación Financiera de Obra."""
+        p = get_proyecto()
+        L = get_liquidacion()
+        resumen = liquidacion_resumen()
+        costo_final = round((resumen["totales"]["et"] or 0)
+                            + (L.adicionales or 0) - (L.deducciones or 0), 2)
+        return render_template("liquidacion_imprimir.html", p=p, L=L, MESES=MESES,
+                               resumen=resumen, pendientes=liquidacion_pendientes(),
+                               costo_final=costo_final, CLASIFICADORES=CLASIFICADORES,
+                               consolidado=formato_consolidado())
+
+    # ----------------- INFORME FINANCIERO FINAL DE OBRA -----------------
+    @app.route("/informe_final", methods=["GET", "POST"])
+    def informe_final():
+        """Informe financiero final de obra: narrativa editable (memoria,
+        marco normativo, desarrollo, conclusiones, recomendaciones y anexos)
+        con los cuadros comparativos calculados automáticamente."""
+        p = get_proyecto()
+        I = get_informe_final()
+        if request.method == "POST":
+            I.n_informe = (request.form.get("n_informe", "") or "").strip().upper()
+            I.fecha = _fecha_iso(request.form.get("fecha"))
+            I.memoria = request.form.get("memoria", "") or ""
+            I.marco_normativo = request.form.get("marco_normativo", "") or ""
+            I.desarrollo = request.form.get("desarrollo", "") or ""
+            I.conclusiones = request.form.get("conclusiones", "") or ""
+            I.recomendaciones = request.form.get("recomendaciones", "") or ""
+            I.anexos = request.form.get("anexos", "") or ""
+            db.session.commit()
+            flash("Informe financiero final guardado correctamente.", "success")
+            return redirect(url_for("informe_final"))
+        resumen = liquidacion_resumen()
+        return render_template("informe_final.html", p=p, I=I, MESES=MESES,
+                               resumen=resumen, consolidado=formato_consolidado())
+
+    @app.route("/informe_final/imprimir")
+    def informe_final_imprimir():
+        """Hoja imprimible institucional del Informe Financiero Final de Obra."""
+        p = get_proyecto()
+        I = get_informe_final()
+        resumen = liquidacion_resumen()
+        return render_template("informe_final_imprimir.html", p=p, I=I, MESES=MESES,
+                               resumen=resumen, consolidado=formato_consolidado())
 
     @app.route("/api/resumen")
     def api_resumen():

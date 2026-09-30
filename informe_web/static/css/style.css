@@ -144,7 +144,9 @@ p, li {
 .brand-title { font-weight: 800; font-size: 15px; letter-spacing: .2px; }
 .brand-sub { font-size: 11px; color: rgba(255,255,255,.6); }
 
-.nav { flex: 1; padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; }
+.nav { flex: 1; min-height: 0; padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+.nav::-webkit-scrollbar { width: 6px; }
+.nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 6px; }
 .nav-link {
   display: flex; align-items: center; gap: 12px;
   padding: 11px 14px; border-radius: 10px;
@@ -165,7 +167,15 @@ p, li {
   background: var(--azul-osc); border-radius: 0 3px 3px 0;
 }
 
-.sidebar-foot { padding: 16px; border-top: 1px solid rgba(255,255,255,.12); }
+/* Sub-secciones del menú lateral (p. ej. Liquidación e Informe Final) */
+.nav-link.nav-sub {
+  margin-left: 16px; padding: 8px 14px; font-size: 12.5px;
+  gap: 10px; border-left: 2px solid rgba(255,255,255,.2);
+}
+.nav-link.nav-sub i { font-size: 15px; width: 18px; }
+.nav-link.nav-sub.active { border-left-color: var(--azul-osc); }
+
+.sidebar-foot { padding: 16px; border-top: 1px solid rgba(255,255,255,.12); flex-shrink: 0; }
 .export-box { background: rgba(255,255,255,.08); border-radius: 12px; padding: 12px; }
 .export-title { font-size: 11px; color: rgba(255,255,255,.7); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .5px; }
 .btn-export {

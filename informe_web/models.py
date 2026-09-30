@@ -321,3 +321,43 @@ class LicenciaEmitida(db.Model):
     usada_por = db.Column(db.String(80), default="")
     maquina = db.Column(db.String(80), default="")
     fecha_uso = db.Column(db.DateTime)
+
+
+class Liquidacion(db.Model):
+    """Datos de la liquidación financiera de obra (una fila por proyecto).
+
+    Almacena solo la información propia de la liquidación que no existe en
+    otros módulos (expediente, acta de recepción, comisión, adendas). Los
+    montos se calculan desde el presupuesto y la ejecución registrados.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    n_expediente = db.Column(db.String(200), default="")
+    fecha = db.Column(db.Date)
+    estado = db.Column(db.String(60), default="EN TRÁMITE")
+    fecha_termino = db.Column(db.Date)
+    n_acta_recepcion = db.Column(db.String(100), default="")
+    fecha_acta_recepcion = db.Column(db.Date)
+    comision_presidente = db.Column(db.String(300), default="")
+    comision_integrantes = db.Column(db.Text, default="")
+    adicionales = db.Column(db.Float, default=0)   # mayores gastos / adicionales liquidados
+    deducciones = db.Column(db.Float, default=0)   # deductivos / menores
+    saldo_por_pagar = db.Column(db.Float, default=0)  # obligaciones pendientes de pago
+    notas = db.Column(db.Text, default="")
+
+
+class InformeFinal(db.Model):
+    """Contenido narrativo del Informe Financiero Final de Obra (una fila).
+
+    Los cuadros comparativos se calculan automáticamente desde el presupuesto
+    y la ejecución; aquí se edita la narrativa (memoria, marco normativo,
+    desarrollo, conclusiones, recomendaciones y anexos) del informe final.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    n_informe = db.Column(db.String(200), default="")
+    fecha = db.Column(db.Date)
+    memoria = db.Column(db.Text, default="")
+    marco_normativo = db.Column(db.Text, default="")
+    desarrollo = db.Column(db.Text, default="")
+    conclusiones = db.Column(db.Text, default="")
+    recomendaciones = db.Column(db.Text, default="")
+    anexos = db.Column(db.Text, default="")

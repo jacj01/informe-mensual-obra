@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Liquidación financiera de obra por administración directa: expediente, acta de recepción, comisión de liquidación y cuadro comparativo presupuesto vs. ejecutado. Hoja A4 horizontal imprimible.">
+<title>Liquidación Financiera de Obra</title>
+<link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=8) }}">
+<style>
+  @page { size: A4 landscape; margin: 9mm 8mm 10mm; }
+  .proyecto { display: flex; align-items: stretch; border: .6px solid var(--borde); border-radius: var(--radio-sm); overflow: hidden; margin: 2px 0 6px; }
+  .proyecto .p-label { flex: 0 0 14%; background: var(--bg); color: var(--azul-osc); font-weight: 700; font-size: 7.2pt; text-transform: uppercase; border-right: .6px solid var(--borde); padding: 4px 8px; display: flex; align-items: center; }
+  .proyecto .p-nombre { flex: 1; min-width: 0; padding: 5px 10px; font-size: 9pt; font-weight: 700; color: var(--azul-osc); line-height: 1.35; overflow-wrap: anywhere; }
+  table.tabla th, table.tabla td { padding: 4px 5px; font-size: 7.6pt; }
+  .tabla-titulo { font-size: 8.4pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase; letter-spacing: .4px; margin: 9px 0 4px; text-align: center; }
+  .bloque-resumen { border: 1.4px solid var(--azul-claro); border-radius: 6px; margin-top: 9px; padding: 6px 10px; }
+  .resumen-linea { display: flex; justify-content: space-between; align-items: baseline; padding: 2.5px 0; font-size: 8.6pt; }
+  .resumen-linea b { color: var(--azul-osc); }
+  .resumen-linea.total { border-top: 1.4px solid var(--azul-claro); margin-top: 5px; padding-top: 5px; }
+  .resumen-linea.total span { font-size: 10pt; font-weight: 800; color: var(--azul-osc); }
+  .letras { font-size: 8.2pt; font-style: italic; color: var(--texto); margin-top: 3px; }
+  .obs { margin-top: 8px; }
+  .obs b { font-size: 8pt; text-transform: uppercase; color: var(--azul-osc); }
+  .obs p { margin: 3px 0 0; font-size: 8.2pt; line-height: 1.5; text-align: justify; }
+  .firmas { gap: 0 5%; margin-top: 70px; padding: 0; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h2>Liquidación Financiera de Obra</h2>
+  <div class="spacer"></div>
+  <button type="button" onclick="window.print()">Imprimir</button>
+  <a class="volver" href="{{ url_for('liquidacion') }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
+</div>
+
+<div class="hoja">
+
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Liquidación Financiera de Obra</div>
+      <div class="subtitulo">ADMINISTRACION DIRECTA</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">PERÍODO {{ p.anio }}</div>
+      <div class="num-doc" style="margin-top:6px">EXPEDIENTE N.°&nbsp;{{ L.n_expediente or '______' }}</div>
+    </div>
+  </div>
+
+  <div class="proyecto">
+    <span class="p-label">Proyecto</span>
+    <span class="p-nombre">{{ p.nombre or '' }}</span>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-item"><span class="info-label">Fecha de liquidación</span><span class="info-val">{{ L.fecha.strftime('%d/%m/%Y') if L.fecha else '____________' }}</span></div>
+    <div class="info-item"><span class="info-label">Estado</span><span class="info-val">{{ L.estado or 'EN TRÁMITE' }}</span></div>
+    <div class="info-item"><span class="info-label">Fecha término de obra</span><span class="info-val">{{ L.fecha_termino.strftime('%d/%m/%Y') if L.fecha_termino else '____________' }}</span></div>
+    <div class="info-item"><span class="info-label">Código único</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">N.° acta de recepción</span><span class="info-val">{{ L.n_acta_recepcion or '______' }}</span></div>
+    <div class="info-item"><span class="info-label">Fecha del acta</span><span class="info-val">{{ L.fecha_acta_recepcion.strftime('%d/%m/%Y') if L.fecha_acta_recepcion else '____________' }}</span></div>
+    <div class="info-item info-ancho"><span class="info-label">Presidente de la comisión</span><span class="info-val">{{ L.comision_presidente or '' }}</span></div>
+    <div class="info-item info-ancho"><span class="info-label">Integrantes</span><span class="info-val">{{ (L.comision_integrantes or '').replace('\n', '  ·  ') }}</span></div>
+  </div>
+
+  <div class="tabla-titulo">CUADRO COMPARATIVO DE LA LIQUIDACIÓN FINANCIERA (POR COMPONENTE)</div>
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th>Componente</th>
+        <th class="num">Exp. Técnico (S/)</th>
+        <th class="num">Ejecutado acumulado (S/)</th>
+        <th class="num">%</th>
+        <th class="num">Saldo (S/)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cr in resumen.por_componente %}
+      <tr>
+        <td>{{ cr.componente }}</td>
+        <td class="num">{{ "{:,.2f}".format(cr.et) }}</td>
+        <td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td>
+        <td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total">
+        <td>TOTAL</td>
+        <td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td>
+        <td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td>
+        <td class="num">{{ "{:.2f}".format(resumen.totales.porc) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(resumen.totales.saldo) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="tabla-titulo">EJECUCIÓN POR CLASIFICADOR (PARTIDAS)</div>
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th>Componente</th><th>Partida</th>
+        <th class="num">Exp. Técnico (S/)</th>
+        <th class="num">Ejecutado (S/)</th>
+        <th class="num">Saldo (S/)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cr in resumen.por_clasificador %}
+      <tr>
+        <td>{{ cr.componente }}</td>
+        <td>{{ cr.detalle }}</td>
+        <td class="num">{{ "{:,.2f}".format(cr.et) }}</td>
+        <td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td>
+        <td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="bloque-resumen">
+    <div class="resumen-linea"><b>Presupuesto según expediente técnico</b><span>S/ {{ "{:,.2f}".format(resumen.totales.et) }}</span></div>
+    <div class="resumen-linea"><b>Adicionales / mayores gastos</b><span>S/ {{ "{:,.2f}".format(L.adicionales or 0) }}</span></div>
+    <div class="resumen-linea"><b>Deducciones / deductivos</b><span>S/ {{ "{:,.2f}".format(L.deducciones or 0) }}</span></div>
+    <div class="resumen-linea total"><b>COSTO FINAL LIQUIDADO</b><span>S/ {{ "{:,.2f}".format(costo_final) }}</span></div>
+    <div class="letras">Son: {{ monto_letras(costo_final) }}.</div>
+    <div class="resumen-linea" style="margin-top:6px"><b>Saldo del presupuesto</b><span>S/ {{ "{:,.2f}".format(resumen.totales.saldo) }}</span></div>
+    <div class="letras">Son: {{ monto_letras(resumen.totales.saldo) }}.</div>
+    {% set monto_pend = pendientes|sum(attribute='importe') %}
+    {% if monto_pend %}
+    <div class="resumen-linea"><b>Obligaciones pendientes de devengar</b><span>S/ {{ "{:,.2f}".format(monto_pend) }}</span></div>
+    {% endif %}
+    {% if L.saldo_por_pagar %}
+    <div class="resumen-linea"><b>Obligaciones pendientes de pago</b><span>S/ {{ "{:,.2f}".format(L.saldo_por_pagar) }}</span></div>
+    {% endif %}
+  </div>
+
+  {% if pendientes %}
+  <div class="tabla-titulo">COMPROMISOS PENDIENTES DE DEVENGAR</div>
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th>Fecha</th><th>N.°</th><th>Tipo</th><th>Proveedor</th>
+        <th>Componente</th><th>Clasificador</th><th class="num">Importe (S/)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in pendientes %}
+      <tr>
+        <td>{{ g.fecha.strftime('%d/%m/%Y') if g.fecha else '' }}</td>
+        <td>{{ '{:04d}'.format(g.num_doc or 0) }}</td>
+        <td>{{ g.tipo_doc or '' }}</td>
+        <td>{{ g.proveedor or '' }}</td>
+        <td>{{ g.componente or '' }}</td>
+        <td>{{ CLASIFICADORES.get(g.clasificador or '', g.clasificador or '') }}</td>
+        <td class="num">{{ "{:,.2f}".format(g.importe) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total">
+        <td colspan="6" class="right">TOTAL PENDIENTE</td>
+        <td class="num">{{ "{:,.2f}".format(monto_pend) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  {% endif %}
+
+  {% if L.notas %}
+  <div class="obs">
+    <b>Observaciones</b>
+    <p>{{ L.notas }}</p>
+  </div>
+  {% endif %}
+
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ L.comision_presidente or '' }}</div>
+      <div class="cargo">Presidente de la Comisión de Liquidación</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.residente or '' }}</div>
+      <div class="cargo">Residente de Obra</div>
+      <div class="reg">{{ 'CIP ' ~ p.cip_residente if p.cip_residente else '' }}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ p.supervisor or '' }}</div>
+      <div class="cargo">Supervisor de Obra</div>
+      <div class="reg">{{ 'CIP ' ~ p.cip_supervisor if p.cip_supervisor else '' }}</div>
+    </div>
+  </div>
+
+  <div style="margin-top:10px;font-size:7.5pt;color:var(--texto2);text-align:center">
+    Documento generado por el aplicativo de Informe Financiero Mensual de Obra. Los montos se
+    obtienen de la Configuración Presupuestal y del Manifiesto de Gasto del proyecto.
+  </div>
+
+</div>
+
+{% include '_formatos_consolidados_impresion.html' %}
+
+<script src="{{ url_for('static', filename='js/imprimir_autofit.js') }}"></script>
+
+</body>
+</html>

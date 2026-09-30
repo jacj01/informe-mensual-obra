@@ -430,6 +430,16 @@
         <i class="bi bi-clipboard-data"></i> <span>Tareo y Planilla</span>
       </a>
       {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'liquidacion' in permisos_usuario %}
+      <a class="nav-link nav-sub {{ 'active' if active == 'liquidacion' }}" href="{{ url_for('liquidacion') }}">
+        <i class="bi bi-cash-stack"></i> <span>Liquidación Financiera de Obra</span>
+      </a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'informe_final' in permisos_usuario %}
+      <a class="nav-link nav-sub {{ 'active' if active == 'informe_final' }}" href="{{ url_for('informe_final') }}">
+        <i class="bi bi-file-earmark-text"></i> <span>Informe Financiero Final de Obra</span>
+      </a>
+      {% endif %}
       {% if not usuario or usuario.rol == 'Administrador' or 'configuracion' in permisos_usuario %}
       <a class="nav-link {{ 'active' if active == 'configuracion' }}" href="{{ url_for('configuracion') }}">
         <i class="bi bi-sliders"></i> <span>Configuración Presupuestal</span>

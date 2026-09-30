@@ -1,0 +1,283 @@
+{% if consolidado %}
+<style>
+  @page formato-anexo { size: A4 landscape; margin: 8mm 7mm 10mm; }
+  .hoja.hoja-anexo {
+    page: formato-anexo;
+    width: 297mm;
+    min-height: 210mm;
+    padding: 8mm 7mm 10mm;
+    page-break-before: always;
+    break-before: page;
+  }
+  .anexo-titulo { font-size: 13pt; font-weight: 800; color: var(--azul); text-transform: uppercase; letter-spacing: 1px; text-align: center; border-bottom: 2px solid var(--azul-claro); padding-bottom: 4px; margin-bottom: 2px; }
+  .anexo-periodo { text-align: center; font-size: 8.5pt; font-weight: 700; color: var(--azul-claro); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 8px; }
+  .anexo-note { font-size: 7pt; color: var(--texto2); font-style: italic; margin: 6px 0 0; }
+  table.tabla.sm th, table.tabla.sm td { padding: 2px 3px; font-size: 6.8pt; }
+</style>
+{% set c = consolidado %}
+
+<!-- ==================== ANEXO 1: MANIFIESTO DE GASTO (ACUMULADO) ==================== -->
+<div class="hoja hoja-anexo">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo" style="font-size:12pt">Manifiesto de Gasto Consolidado</div>
+      <div class="subtitulo">Ejecución Acumulada — Todos los Meses del Aplicativo</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">{{ c.periodo }}</div>
+    </div>
+  </div>
+
+  <div class="proyecto">
+    <span class="p-label">Proyecto</span>
+    <span class="p-nombre">{{ p.obra or p.nombre or '' }}</span>
+  </div>
+
+  <table class="tabla sm">
+    <thead>
+      <tr>
+        <th style="width:30px">Mes</th><th style="width:14px">N.°</th><th style="width:26px">SIAF</th>
+        <th style="width:40px">Fecha</th><th style="width:20px">Tipo</th><th style="width:30px">N.° Doc.</th>
+        <th>Proveedor</th><th>Detalle</th><th style="width:16px">Und</th>
+        <th class="num" style="width:34px">Cant.</th><th class="num" style="width:42px">P. Unit. (S/)</th>
+        <th class="num" style="width:48px">Importe (S/)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in c.manifiesto.secciones %}
+      <tr class="fila-rubro">
+        <td colspan="12">{{ s.label }}</td>
+      </tr>
+      {% for f in s.filas %}
+      <tr>
+        {% if f.prov_first %}
+        <td class="ctr">{{ f.mes }}</td>
+        <td class="ctr">{{ f.prov_num }}</td>
+        <td>{{ f.siaf }}</td>
+        <td class="ctr">{{ f.fecha }}</td>
+        <td class="ctr">{{ f.tipo_doc }}</td>
+        <td class="ctr">{{ '{:04d}'.format(f.num_doc|int) if f.num_doc else '' }}</td>
+        <td>{{ f.proveedor }}</td>
+        {% else %}
+        <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+        {% endif %}
+        <td>{{ f.detalle }}</td>
+        <td class="ctr">{{ f.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.cantidad) if f.cantidad is not none else '' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.pu) if f.pu is not none else '' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.importe) }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fila-sub">
+        <td colspan="11" style="text-align:right">Subtotal {{ s.label }}</td>
+        <td class="num">{{ "{:,.2f}".format(s.subtotal) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="tabla sm" style="margin-top:10px">
+    <thead>
+      <tr>
+        <th style="width:36%">Resumen mensual del Manifiesto</th>
+        {% for m in c.meses %}<th class="num">{{ MESES[m-1] }}</th>{% endfor %}
+        <th class="num">TOTAL</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="fila-total">
+        <td>TOTAL GASTADO</td>
+        {% for m in c.meses %}<td class="num">{{ "{:,.2f}".format(c.manifiesto.por_mes.get(m, 0)) }}</td>{% endfor %}
+        <td class="num">{{ "{:,.2f}".format(c.manifiesto.total) }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="anexo-note">
+    Manifiesto de Gasto consolidado de toda la ejecución: reúne todo el detalle devengado
+    registrado en el aplicativo ({{ c.meses|length }} mes{% if c.meses|length != 1 %}es{% endif %})
+    en una sola planilla de gastos finales.
+  </div>
+</div>
+
+<!-- ==================== ANEXO 2: FE-05 EJECUCIÓN MENSUAL (CONSOLIDADO) ==================== -->
+<div class="hoja hoja-anexo">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo" style="font-size:12pt">FE-05 — Ejecución Mensual Consolidada</div>
+      <div class="subtitulo">Ejecución por Componente y Mes — Todos los Meses del Aplicativo</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">{{ c.periodo }}</div>
+    </div>
+  </div>
+
+  <div class="proyecto">
+    <span class="p-label">Proyecto</span>
+    <span class="p-nombre">{{ p.obra or p.nombre or '' }}</span>
+  </div>
+
+  <table class="tabla sm">
+    <thead>
+      <tr>
+        <th style="width:58px">Componente</th><th>Clasificación</th>
+        {% for m in c.fe05.meses %}<th class="num" style="width:34px">{{ MESES[m-1][:3] }}</th>{% endfor %}
+        <th class="num" style="width:48px">TOTAL</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for comp in ['Costo Directo', 'Gastos Generales', 'Gastos de Supervisión', 'Elaboración de Expediente Técnico', 'Liquidación de Obra'] %}
+      {% set filas_comp = [] %}
+      {% for r in c.fe05.filas %}
+        {% if r.componente == comp %}{% set _ = filas_comp.append(r) %}{% endif %}
+      {% endfor %}
+      {% if filas_comp %}
+      <tr class="fila-rubro">
+        <td colspan="{{ c.fe05.meses|length + 2 }}">{{ comp|upper }}</td>
+      </tr>
+      {% for r in filas_comp %}
+      <tr>
+        <td></td>
+        <td>{{ r.detalle }}</td>
+        {% for m in c.fe05.meses %}<td class="num">{{ "{:,.2f}".format(r.mensual[m-1]) }}</td>{% endfor %}
+        <td class="num">{{ "{:,.2f}".format(r.total_anio) }}</td>
+      </tr>
+      {% endfor %}
+      {% endif %}
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total">
+        <td colspan="2">TOTAL EJECUTADO {{ c.anio }}</td>
+        {% for m in c.fe05.meses %}<td class="num">{{ "{:,.2f}".format(c.fe05.totales_mensual[m-1]) }}</td>{% endfor %}
+        <td class="num">{{ "{:,.2f}".format(c.fe05.total_anio) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="anexo-note">
+    FE-05 ejecución mensual consolidada: muestra el detalle ejecutado de cada clasificador en
+    todos los meses del proyecto y su total acumulado al cierre.
+  </div>
+</div>
+
+<!-- ==================== ANEXO 3: FE-06 PRESUPUESTO VS EJECUTADO (CONSOLIDADO) ==================== -->
+<div class="hoja hoja-anexo">
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo" style="font-size:12pt">FE-06 — Presupuesto vs Ejecutado</div>
+      <div class="subtitulo">Comparativo Consolidado — Presupuesto Analítico, PIM y Ejecución Final</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">{{ c.periodo }}</div>
+    </div>
+  </div>
+
+  <div class="proyecto">
+    <span class="p-label">Proyecto</span>
+    <span class="p-nombre">{{ p.obra or p.nombre or '' }}</span>
+  </div>
+
+  <div style="overflow-x:auto">
+  <table class="tabla sm">
+    <thead>
+      <tr>
+        <th style="min-width:60px">Especif. de gasto</th><th style="min-width:110px">Detalle</th>
+        <th class="num" style="min-width:52px">Exp. Técnico</th>
+        {% if p.incluir_anios_anteriores %}<th class="num" style="min-width:44px">2023</th><th class="num" style="min-width:44px">2024</th><th class="num" style="min-width:44px">2025</th>{% endif %}
+        <th class="num" style="min-width:56px">PIM {{ c.anio }}</th>
+        {% for m in c.fe05.meses %}<th class="num" style="min-width:34px">{{ MESES[m-1][:3] }}</th>{% endfor %}
+        <th class="num" style="min-width:50px">Ejec. {{ c.anio }}</th><th class="num" style="min-width:28px">%</th>
+        <th class="num" style="min-width:52px">Saldo {{ c.anio }}</th>
+        {% if p.incluir_anios_anteriores %}<th class="num" style="min-width:50px">Acum. total</th><th class="num" style="min-width:50px">Saldo proyecto</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for comp in ['Costo Directo', 'Gastos Generales', 'Gastos de Supervisión', 'Elaboración de Expediente Técnico', 'Liquidación de Obra'] %}
+      {% set r = c.fe06.resumen[comp] %}
+      <tr class="fila-sub">
+        <td colspan="2">{{ comp|upper }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.et) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(r.e2023) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.e2024) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.e2025) }}</td>
+        {% endif %}
+        <td class="num">{{ "{:,.2f}".format(r.pim) }}</td>
+        {% for m in c.fe05.meses %}<td class="num">{{ "{:,.2f}".format(r.mensual[m-1]) }}</td>{% endfor %}
+        <td class="num">{{ "{:,.2f}".format(r.total_anio) }}</td>
+        <td class="num">{{ "%.1f"|format(r.total_anio/r.pim*100 if r.pim else 0) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(r.saldo_pim) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.saldo_et) }}</td>
+        {% endif %}
+      </tr>
+      {% for sub in c.fe06.rows if sub.componente == comp %}
+      <tr>
+        <td>{{ sub.clasificador }}</td>
+        <td>{{ sub.detalle }}</td>
+        <td class="num">{{ "{:,.2f}".format(sub.et) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(sub.e2023) }}</td>
+        <td class="num">{{ "{:,.2f}".format(sub.e2024) }}</td>
+        <td class="num">{{ "{:,.2f}".format(sub.e2025) }}</td>
+        {% endif %}
+        <td class="num">{{ "{:,.2f}".format(sub.pim) }}</td>
+        {% for m in c.fe05.meses %}<td class="num">{{ "{:,.2f}".format(sub.mensual[m-1]) }}</td>{% endfor %}
+        <td class="num">{{ "{:,.2f}".format(sub.total_anio) }}</td>
+        <td class="num">{{ "%.1f"|format(sub.porc_pim) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(sub.saldo_pim) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(sub.acum_total) }}</td>
+        <td class="num">{{ "{:,.2f}".format(sub.saldo_et) }}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total">
+        <td colspan="2">TOTAL RUBRO 18</td>
+        <td class="num">{{ "{:,.2f}".format(c.fe06.resumen.values()|sum(attribute='et')) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(c.fe06.resumen.values()|sum(attribute='e2023')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(c.fe06.resumen.values()|sum(attribute='e2024')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(c.fe06.resumen.values()|sum(attribute='e2025')) }}</td>
+        {% endif %}
+        <td class="num">{{ "{:,.2f}".format(c.fe06.resumen.values()|sum(attribute='pim')) }}</td>
+        {% for m in c.fe05.meses %}<td class="num">{{ "{:,.2f}".format(c.fe06.totales_mensual[m-1]) }}</td>{% endfor %}
+        <td class="num">{{ "{:,.2f}".format(c.fe06.resumen.values()|sum(attribute='total_anio')) }}</td>
+        <td class="num">{{ "%.2f"|format(c.fe06.resumen.values()|sum(attribute='total_anio')/c.fe06.resumen.values()|sum(attribute='pim')*100 if c.fe06.resumen.values()|sum(attribute='pim') else 0) }}%</td>
+        <td class="num">{{ "{:,.2f}".format(c.fe06.resumen.values()|sum(attribute='saldo_pim')) }}</td>
+        {% if p.incluir_anios_anteriores %}
+        <td class="num">{{ "{:,.2f}".format(c.fe06.resumen.values()|sum(attribute='acum_total')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(c.fe06.resumen.values()|sum(attribute='saldo_et')) }}</td>
+        {% endif %}
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+
+  <div class="anexo-note">
+    FE-06 consolidado: presupuesto analítico aprobado, PIM y ejecución de todos los meses,
+    con saldos y el acumulado total del proyecto (incluye ejecución de años anteriores si está
+    habilitado en la configuración presupuestal).
+  </div>
+</div>
+{% endif %}
