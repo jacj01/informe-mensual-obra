@@ -4,7 +4,7 @@
   <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   <div class="card">
     <div class="card-head">
-      <h3><i class="bi bi-person-gear"></i> {{ 'Editar usuario' if es_edicion else 'Nuevo usuario' }}</h3>
+      <h2><i class="bi bi-person-gear"></i> {{ 'Editar usuario' if es_edicion else 'Nuevo usuario' }}</h2>
     </div>
     {% if error %}
       <div class="alert alert-error">{{ error }}</div>
@@ -48,7 +48,7 @@
   </div>
   <div class="card">
     <div class="card-head">
-      <h3><i class="bi bi-key"></i> Accesos autorizados</h3>
+      <h2><i class="bi bi-key"></i> Accesos autorizados</h2>
     </div>
     <p class="field-hint" id="perm-hint">
       Marque las opciones a las que este usuario podrá ingresar o modificar.
@@ -68,7 +68,7 @@
   {% if es_super and not es_edicion %}
   <div class="card" id="licenciaOpciones" style="display:none">
     <div class="card-head">
-      <h3><i class="bi bi-shield-check"></i> Licencia del Administrador</h3>
+      <h2><i class="bi bi-shield-check"></i> Licencia del Administrador</h2>
     </div>
     <p class="field-hint">Elija cómo inicia la licencia del nuevo Administrador.</p>
     <label class="check-line">
@@ -86,7 +86,7 @@
   {% if es_super and hay_datos %}
   <div class="card" id="nuevoProyecto" style="display:none">
     <div class="card-head">
-      <h3><i class="bi bi-file-earmark-plus"></i> Reiniciar el proyecto del Administrador</h3>
+      <h2><i class="bi bi-file-earmark-plus"></i> Reiniciar el proyecto del Administrador</h2>
     </div>
     <div class="alert alert-error">
       <i class="bi bi-exclamation-triangle-fill"></i>

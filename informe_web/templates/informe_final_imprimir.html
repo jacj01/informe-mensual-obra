@@ -1,40 +1,77 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="Informe financiero final de obra por administración directa: memoria descriptiva, marco normativo, ejecución financiera, conclusiones y recomendaciones. Hoja A4 imprimible.">
-<title>Informe Financiero Final de Obra</title>
+<meta name="description" content="Anexo N° 02 - Esquema: Informe Final de la Obra (Directiva N° 017-2023-CG/GMPL).">
+<title>Anexo N° 02 - Informe Final de la Obra</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=8) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
 <style>
-  @page { size: A4 portrait; margin: 10mm 12mm 12mm; }
-  .hoja { width: 210mm; min-height: 297mm; padding: 10mm 12mm; }
+  /* Página vertical (narrativa) y horizontal (cuadros anchos). Márgenes oficiales 1.91/1.78 cm. */
+  @page { size: A4 portrait; margin: 19.1mm 17.8mm; }
+  @page horiz { size: A4 landscape; margin: 19.1mm 17.8mm; }
+  .hoja.anexo02 { box-sizing: border-box; width: 210mm; min-height: 297mm; padding: 19.1mm 17.8mm; }
+  .hoja.horiz { page: horiz; box-sizing: border-box; width: 297mm; min-height: 210mm; padding: 19.1mm 17.8mm; }
   .proyecto { display: flex; align-items: stretch; border: .6px solid var(--borde); border-radius: var(--radio-sm); overflow: hidden; margin: 2px 0 6px; }
-  .proyecto .p-label { flex: 0 0 14%; background: var(--bg); color: var(--azul-osc); font-weight: 700; font-size: 7.2pt; text-transform: uppercase; border-right: .6px solid var(--borde); padding: 4px 8px; display: flex; align-items: center; }
-  .proyecto .p-nombre { flex: 1; min-width: 0; padding: 5px 10px; font-size: 9pt; font-weight: 700; color: var(--azul-osc); line-height: 1.35; overflow-wrap: anywhere; }
-  .sec-titulo { font-size: 9pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase; letter-spacing: .4px; margin: 12px 0 4px; border-bottom: 1.5px solid var(--azul-claro); padding-bottom: 2px; }
-  .sec-parrafo { font-size: 8.6pt; line-height: 1.65; color: var(--texto); text-align: justify; white-space: pre-wrap; margin: 0; }
-  table.tabla th, table.tabla td { padding: 4px 5px; font-size: 7.8pt; }
-  .resumen-fin { margin-top: 10px; }
-  .resumen-linea { display: flex; justify-content: space-between; align-items: baseline; padding: 2.5px 0; font-size: 8.6pt; }
-  .resumen-linea b { color: var(--azul-osc); }
-  .resumen-linea.total { border-top: 1.4px solid var(--azul-claro); margin-top: 5px; padding-top: 5px; }
-  .resumen-linea.total span { font-size: 10.5pt; font-weight: 800; color: var(--azul-osc); }
-  .firmas { margin-top: 90px; }
+  .proyecto .p-label { flex: 0 0 15%; background: var(--bg); color: var(--azul-osc); font-weight: 700; font-size: 7.0pt; text-transform: uppercase; border-right: .6px solid var(--borde); padding: 3px 6px; display: flex; align-items: center; }
+  .proyecto .p-nombre { flex: 1; min-width: 0; padding: 5px 8px; font-size: 8.6pt; font-weight: 700; color: var(--azul-osc); line-height: 1.35; overflow-wrap: anywhere; }
+  .anexo-cabecera { text-align: right; font-size: 9pt; font-weight: 800; color: var(--azul-osc); margin-bottom: 3px; }
+  .titulo-principal { font-size: 10.5pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase; text-align: center; letter-spacing: .3px; border-bottom: 1.8px solid var(--azul-claro); padding-bottom: 2px; margin-bottom: 1px; }
+  .subtitulo-principal { text-align: center; font-size: 8.2pt; font-weight: 700; color: var(--azul-claro); text-transform: uppercase; margin-bottom: 7px; }
+  .sec-titulo { font-size: 8.4pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase; letter-spacing: .2px; margin: 8px 0 2px; border-bottom: 1.4px solid var(--azul-claro); padding-bottom: 1px; }
+  .sec-subtitulo { font-size: 7.8pt; font-weight: 700; color: var(--azul-osc); margin: 6px 0 2px; }
+  .sec-parrafo { font-size: 7.9pt; line-height: 1.55; color: var(--texto); text-align: justify; white-space: pre-wrap; margin: 0 0 3px; }
+  ul.lista { margin: 1px 0 3px 10px; }
+  ul.lista li { font-size: 7.5pt; line-height: 1.5; color: var(--texto); margin-bottom: 1px; text-align: justify; }
+  table.tabla { width: 100%; border-collapse: collapse; margin: 3px 0 5px; }
+  table.tabla th, table.tabla td { border: .6px solid var(--borde); padding: 1px 2px; font-size: 7.1pt; }
+  table.tabla thead th { background: var(--bg); color: var(--azul-osc); font-weight: 700; text-transform: uppercase; }
+  table.tabla td.ctr, table.tabla th.ctr { text-align: center; }
+  .num { text-align: right; white-space: nowrap; }
+  .firmas { display: flex; justify-content: space-around; margin-top: 60px; }
+  .firma { flex: 1; text-align: center; }
+  .firma .linea { border-top: 1.1px solid #111; margin: 0 8% 3px; }
+  .firma .nombres { font-size: 7.9pt; font-weight: 700; min-height: 10px; }
+  .firma .cargo { font-size: 7.2pt; color: var(--texto2); }
+  .firma .reg { font-size: 7.0pt; color: var(--texto2); }
+  .nota { font-size: 7.1pt; font-style: italic; color: var(--texto2); text-align: justify; margin-top: 4px; }
+  .badge-cert { font-size: 6.8pt; color: var(--texto2); }
+  .salto-pagina { page-break-before: always; break-before: page; }
+  @media print {
+    @page { size: A4 portrait; margin: 19.1mm 17.8mm; }
+    @page horiz { size: A4 landscape; margin: 19.1mm 17.8mm; }
+    .hoja.anexo02, .hoja.horiz { width: auto; min-height: auto; height: auto; margin: 0; box-shadow: none; padding: 0; }
+    table.tabla { margin: 1px 0 3px; }
+    table.tabla th, table.tabla td { font-size: 6.3pt; padding: 0.5px 2px; }
+    .sec-titulo { font-size: 7.7pt; margin: 6px 0 1px; }
+    .sec-subtitulo { font-size: 7.2pt; margin: 4px 0 1px; }
+    .sec-parrafo, ul.lista li { font-size: 7.1pt; line-height: 1.38; }
+    .nota { margin-top: 2px; }
+    .firmas { margin-top: 46px; }
+  }
+
+{% include 'reportes/_rep_css.html' %}
+
+  /* Compendio de reportes consolidados (Anexo N° 02): banda de título y de mes. */
+  .rep-mes-sep { display: flex; align-items: center; gap: 8px; background: var(--azul-osc); color: #fff; font-size: 8.4pt; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; padding: 5px 10px; border-radius: var(--radio-sm); margin-bottom: 8px; }
+  .rep-mes-sep .rep-mes-n { margin-left: auto; font-size: 7.4pt; font-weight: 700; color: #D9E2EC; text-transform: none; letter-spacing: .3px; }
+  .rep-mes-div { display: flex; align-items: center; background: var(--azul-claro); color: #fff; font-size: 8.2pt; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; padding: 4px 8px; border-radius: var(--radio-sm); margin: 8px 0 5px; }
+  .rep-mes-div:first-child { margin-top: 2px; }
 </style>
 </head>
 <body>
 
 <div class="toolbar">
-  <h2>Informe Financiero Final de Obra</h2>
+  <h2>Anexo N° 02 - Informe Final de la Obra</h2>
   <div class="spacer"></div>
   <button type="button" onclick="window.print()">Imprimir</button>
   <a class="volver" href="{{ url_for('informe_final') }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
 </div>
 
-<div class="hoja">
+<!-- ==================== HOJA 1 (vertical): narrativa y cuadros 1-6 ==================== -->
+<div class="hoja anexo02">
 
   <div class="encabezado">
     <div class="logo-box">
@@ -43,100 +80,379 @@
     <div class="enc-cen">
       <div class="entidad">{{ p.entidad or '' }}</div>
       <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
-      <div class="titulo">Informe Financiero Final de Obra</div>
-      <div class="subtitulo">ADMINISTRACION DIRECTA</div>
+      <div class="titulo">Informe Final de la Obra</div>
+      <div class="subtitulo">ADMINISTRACIÓN DIRECTA</div>
     </div>
     <div class="enc-der">
-      <div class="num-doc">N.°&nbsp;{{ I.n_informe or '______' }}</div>
-      <div style="margin-top:5px">{{ I.fecha.strftime('%d/%m/%Y') if I.fecha else '' }}</div>
+      <div class="periodo">PERÍODO {{ p.anio }}</div>
+      {% if I.n_informe %}<div class="num-doc" style="margin-top:6px">INFORME N.°&nbsp;{{ I.n_informe }}</div>{% endif %}
     </div>
   </div>
 
+  <div class="anexo-cabecera">ANEXO N° 2</div>
+  <div class="titulo-principal">Esquema: Informe Final de la Obra</div>
+  <div class="subtitulo-principal">Directiva N° 017-2023-CG/GMPL</div>
+
   <div class="proyecto">
-    <span class="p-label">Proyecto</span>
+    <span class="p-label">Proyecto / Obra</span>
     <span class="p-nombre">{{ p.nombre or '' }}</span>
   </div>
 
-  <div class="sec-titulo">I. Memoria Descriptiva</div>
-  {% if I.memoria %}<p class="sec-parrafo">{{ I.memoria }}</p>
-  {% else %}<p class="sec-parrafo">(Descripción de la obra, alcance, entidad ejecutora, fuente de financiamiento y presupuesto.)</p>{% endif %}
+  <div class="sec-titulo">Memoria Descriptiva</div>
+  {% if I.memoria %}<p class="sec-parrafo">{{ I.memoria }}</p>{% else %}<p class="sec-parrafo">(Describir la obra: antecedentes, ubicación, metas, componentes y condiciones en que se ejecutó.)</p>{% endif %}
+  {% if I.marco_normativo %}<div class="sec-subtitulo">Base legal</div><p class="sec-parrafo">{{ I.marco_normativo }}</p>{% endif %}
 
-  <div class="sec-titulo">II. Marco Normativo</div>
-  {% if I.marco_normativo %}<p class="sec-parrafo">{{ I.marco_normativo }}</p>
-  {% else %}<p class="sec-parrafo">(Normas aplicables a la ejecución y liquidación de la obra.)</p>{% endif %}
+  <div class="sec-titulo">Especificaciones Técnicas de Partidas Realmente Ejecutadas</div>
+  {% if I.desarrollo %}<p class="sec-parrafo">{{ I.desarrollo }}</p>{% else %}<p class="sec-parrafo">(Detallar las especificaciones técnicas de las partidas realmente ejecutadas: mayores metrados, deductivos y obras nuevas.)</p>{% endif %}
 
-  <div class="sec-titulo">III. Ejecución Financiera</div>
-  {% if I.desarrollo %}<p class="sec-parrafo">{{ I.desarrollo }}</p>{% endif %}
-  <table class="tabla" style="margin-top:6px">
+  <div class="sec-titulo">Cuadros Técnicos de la Ejecución Real de la Obra</div>
+
+  <div class="sec-subtitulo">1. Metrados programados y ejecutados según expediente técnico aprobado y expedientes adicionales</div>
+  <table class="tabla">
     <thead>
-      <tr>
-        <th>Componente</th>
-        <th class="num">Exp. Técnico (S/)</th>
-        <th class="num">Ejecutado acumulado (S/)</th>
-        <th class="num">%</th>
-        <th class="num">Saldo (S/)</th>
-      </tr>
+      <tr><th>Componente</th><th class="num">Programado (S/)</th><th class="num">Ejecutado (S/)</th><th class="num">Diferencia (S/)</th><th class="num">% Avance</th></tr>
     </thead>
     <tbody>
       {% for cr in resumen.por_componente %}
+      <tr><td>{{ cr.componente }}</td><td class="num">{{ "{:,.2f}".format(cr.et) }}</td><td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td><td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total"><td>TOTAL</td><td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td><td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td><td class="num">{{ "{:,.2f}".format(resumen.totales.saldo) }}</td><td class="num">{{ "{:.2f}".format(resumen.totales.porc) }}%</td></tr>
+    </tfoot>
+  </table>
+  <p class="nota">Se adjuntan las planillas de metrados sustentados (metrados realmente ejecutados, mayores metrados, deductivos y obras nuevas).</p>
+
+  <div class="sec-subtitulo">2. Valorización final de las partidas ejecutadas de la obra</div>
+  <table class="tabla">
+    <thead>
+      <tr><th>Componente</th><th>Específica de gasto</th><th class="num">Exp. Técnico (S/)</th><th class="num">Ejecutado (S/)</th><th class="num">%</th><th class="num">Saldo (S/)</th></tr>
+    </thead>
+    <tbody>
+      {% for cr in resumen.por_clasificador %}
+      <tr><td>{{ cr.componente }}</td><td>{{ cr.detalle }}</td><td class="num">{{ "{:,.2f}".format(cr.et) }}</td><td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td><td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td><td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fila-total"><td colspan="2">TOTAL VALORIZADO</td><td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td><td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td><td class="num">{{ "{:.2f}".format(resumen.totales.porc) }}%</td><td class="num">{{ "{:,.2f}".format(resumen.totales.saldo) }}</td></tr>
+    </tfoot>
+  </table>
+
+  <div class="sec-subtitulo">3. Valorización final de la obra por años</div>
+  <table class="tabla">
+    <thead>
+      <tr><th>Componente</th><th class="num">Exp. Técnico</th><th class="num">{{ p.anio - 3 }}</th><th class="num">{{ p.anio - 2 }}</th><th class="num">{{ p.anio - 1 }}</th><th class="num">Ejec. {{ p.anio }}</th><th class="num">Acum. total</th></tr>
+    </thead>
+    <tbody>
+      {% for comp in ['Costo Directo', 'Gastos Generales', 'Gastos de Supervisión', 'Elaboración de Expediente Técnico', 'Liquidación de Obra'] %}
+      {% set r = consolidado.fe06.resumen[comp] %}
       <tr>
-        <td>{{ cr.componente }}</td>
-        <td class="num">{{ "{:,.2f}".format(cr.et) }}</td>
-        <td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td>
-        <td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td>
-        <td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td>
+        <td>{{ comp }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.et) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.e2023) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.e2024) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.e2025) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.total_anio) }}</td>
+        <td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td>
       </tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr class="fila-total">
         <td>TOTAL</td>
-        <td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td>
-        <td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td>
-        <td class="num">{{ "{:.2f}".format(resumen.totales.porc) }}%</td>
-        <td class="num">{{ "{:,.2f}".format(resumen.totales.saldo) }}</td>
+        <td class="num">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='et')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2023')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2024')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2025')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='total_anio')) }}</td>
+        <td class="num">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='acum_total')) }}</td>
       </tr>
     </tfoot>
   </table>
-  <div class="resumen-fin">
-    <div class="resumen-linea"><b>Presupuesto según expediente técnico</b><span>S/ {{ "{:,.2f}".format(resumen.totales.et) }}</span></div>
-    <div class="resumen-linea total"><b>TOTAL EJECUTADO ACUMULADO</b><span>S/ {{ "{:,.2f}".format(resumen.totales.ejecutado) }} ({{ "{:.2f}".format(resumen.totales.porc) }}%)</span></div>
-    <div class="resumen-linea"><b>Saldo del presupuesto</b><span>S/ {{ "{:,.2f}".format(resumen.totales.saldo) }}</span></div>
-    <div style="font-size:8.2pt;font-style:italic;color:var(--texto);margin-top:3px">
-      Monto total ejecutado: {{ monto_letras(resumen.totales.ejecutado) }}.
+
+  <div class="sec-subtitulo">4. Recursos empleados en costos directos: personal (planillas); bienes; servicios; adquisición de activos no financieros</div>
+  <table class="tabla">
+    <thead><tr><th>Componente</th><th>Específica de gasto / recurso</th><th class="num">Presupuesto ET (S/)</th><th class="num">Ejecutado (S/)</th><th class="num">Saldo (S/)</th></tr></thead>
+    <tbody>
+      {% for r in consolidado.fe06.rows if r.componente == 'Costo Directo' %}
+      <tr><td>{{ r.componente }}</td><td>{{ r.detalle }}</td><td class="num">{{ "{:,.2f}".format(r.et) }}</td><td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(r.et - r.acum_total) }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr class="fila-total"><td colspan="2">SUB TOTAL COSTO DIRECTO</td><td class="num">{{ "{:,.2f}".format(resumen.por_componente|selectattr('componente','equalto','Costo Directo')|map(attribute='et')|sum) }}</td><td class="num">{{ "{:,.2f}".format(resumen.por_componente|selectattr('componente','equalto','Costo Directo')|map(attribute='acum_total')|sum) }}</td><td class="num">{{ "{:,.2f}".format(resumen.por_componente|selectattr('componente','equalto','Costo Directo')|map(attribute='saldo_et')|sum) }}</td></tr></tfoot>
+  </table>
+
+  <div class="sec-subtitulo">5. Recursos empleados en gastos generales de la obra: personal (planillas); bienes; servicios; adquisición de activos no financieros</div>
+  <table class="tabla">
+    <thead><tr><th>Componente</th><th>Específica de gasto / recurso</th><th class="num">Presupuesto ET (S/)</th><th class="num">Ejecutado (S/)</th><th class="num">Saldo (S/)</th></tr></thead>
+    <tbody>
+      {% for r in consolidado.fe06.rows if r.componente != 'Costo Directo' %}
+      <tr><td>{{ r.componente }}</td><td>{{ r.detalle }}</td><td class="num">{{ "{:,.2f}".format(r.et) }}</td><td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(r.et - r.acum_total) }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr class="fila-total"><td colspan="2">SUB TOTAL COSTOS INDIRECTOS</td><td class="num">{{ "{:,.2f}".format(consolidado.fe06.rows|rejectattr('componente','equalto','Costo Directo')|map(attribute='et')|sum) }}</td><td class="num">{{ "{:,.2f}".format(consolidado.fe06.rows|rejectattr('componente','equalto','Costo Directo')|map(attribute='acum_total')|sum) }}</td><td class="num">{{ "{:,.2f}".format(consolidado.fe06.rows|rejectattr('componente','equalto','Costo Directo')|map(attribute='et')|sum - consolidado.fe06.rows|rejectattr('componente','equalto','Costo Directo')|map(attribute='acum_total')|sum) }}</td></tr></tfoot>
+  </table>
+
+  <div class="sec-subtitulo">6. Aporte valorizado por saldos patrimoniales</div>
+  <table class="tabla">
+    <thead><tr><th>N.°</th><th>Descripción del insumo</th><th class="ctr">Und.</th><th class="num">Cantidad</th><th class="num">P.U. (S/)</th><th class="num">Valor (S/)</th></tr></thead>
+    <tbody>
+      {% for s in sobrantes %}
+      <tr><td class="ctr">{{ loop.index }}</td><td>{{ s.descripcion }}</td><td class="ctr">{{ s.und }}</td><td class="num">{{ "{:,.2f}".format(s.cantidad) }}</td><td class="num">{{ "{:,.2f}".format(s.pu) }}</td><td class="num">{{ "{:,.2f}".format(s.valor) }}</td></tr>
+      {% else %}
+      <tr><td colspan="6" class="ctr">Sin saldos de materiales por transferir.</td></tr>
+      {% endfor %}
+    </tbody>
+    {% if sobrantes %}
+    <tfoot><tr class="fila-total"><td colspan="5">TOTAL SALDO PATRIMONIAL</td><td class="num">{{ "{:,.2f}".format(sobrantes|map(attribute='valor')|sum) }}</td></tr></tfoot>
+    {% endif %}
+  </table>
+
+</div>
+
+<!-- ==================== HOJA 2 (horizontal): cuadros 7-8 (almacenes) ==================== -->
+<div class="hoja horiz salto-pagina">
+
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Informe Final de la Obra</div>
+      <div class="subtitulo">Cuadros Técnicos — Almacenes (continuación)</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">PERÍODO {{ p.anio }}</div>
+      {% if I.n_informe %}<div class="num-doc" style="margin-top:6px">INFORME N.°&nbsp;{{ I.n_informe }}</div>{% endif %}
     </div>
   </div>
 
-  <div class="sec-titulo">IV. Conclusiones</div>
-  {% if I.conclusiones %}<p class="sec-parrafo">{{ I.conclusiones }}</p>
-  {% else %}<p class="sec-parrafo">(Conclusiones de la ejecución presupuestal y financiera de la obra.)</p>{% endif %}
+  <div class="sec-subtitulo">7. Cuaderno de registro de almacenes de la obra</div>
+  <table class="tabla">
+    <thead><tr><th>Fecha</th><th class="ctr">Tipo</th><th>Documento</th><th>Descripción</th><th class="ctr">Und.</th><th class="num">Cantidad</th><th class="num">P.U. (S/)</th><th class="num">Importe (S/)</th></tr></thead>
+    <tbody>
+      {% set movs = [] %}
+      {% for it in almacen %}{% for f in it.filas %}{% set _ = movs.append({'descripcion': it.descripcion, 'und': it.und, 'f': f}) %}{% endfor %}{% endfor %}
+      {% for mv in movs|sort(attribute='f.fecha') %}
+      <tr>
+        <td>{{ mv.f.fecha.strftime('%d/%m/%Y') if mv.f.fecha else '' }}</td>
+        <td class="ctr">{{ 'E' if mv.f.tipo == 'E' else 'S' }}</td>
+        <td>{{ mv.f.numero_doc or mv.f.pecosa or '' }}</td>
+        <td>{{ mv.descripcion }}</td>
+        <td class="ctr">{{ mv.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(mv.f.cantidad) }}</td>
+        <td class="num">{{ "{:,.2f}".format(mv.f.pu) }}</td>
+        <td class="num">{{ "{:,.2f}".format(mv.f.valor) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="ctr">Sin movimientos de almacén registrados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
-  <div class="sec-titulo">V. Recomendaciones</div>
-  {% if I.recomendaciones %}<p class="sec-parrafo">{{ I.recomendaciones }}</p>
-  {% else %}<p class="sec-parrafo">(Recomendaciones para la liquidación, el cierre y la transferencia de la obra.)</p>{% endif %}
+  <div class="sec-subtitulo">8. Internamiento de insumos (materiales, herramientas, implementos de seguridad, útiles de escritorio, bienes duraderos y otros)</div>
+  <table class="tabla">
+    <thead><tr><th>Fecha</th><th>Documento (O/C, Guía, NEA)</th><th>Descripción del insumo</th><th class="ctr">Und.</th><th class="num">Cantidad</th><th class="num">P.U. (S/)</th><th class="num">Importe (S/)</th><th>Proveedor</th></tr></thead>
+    <tbody>
+      {% set entradas = [] %}
+      {% for it in almacen %}{% for f in it.filas %}{% if f.tipo == 'E' %}{% set _ = entradas.append({'descripcion': it.descripcion, 'und': it.und, 'f': f}) %}{% endif %}{% endfor %}{% endfor %}
+      {% for mv in entradas|sort(attribute='f.fecha') %}
+      <tr>
+        <td>{{ mv.f.fecha.strftime('%d/%m/%Y') if mv.f.fecha else '' }}</td>
+        <td>{{ mv.f.numero_doc or mv.f.pecosa or mv.f.siaf or '' }}</td>
+        <td>{{ mv.descripcion }}</td>
+        <td class="ctr">{{ mv.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(mv.f.cantidad) }}</td>
+        <td class="num">{{ "{:,.2f}".format(mv.f.pu) }}</td>
+        <td class="num">{{ "{:,.2f}".format(mv.f.valor) }}</td>
+        <td>{{ mv.f.proveedor }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="ctr">Sin internamientos de insumos registrados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
-  <div class="sec-titulo">VI. Anexos</div>
-  {% if I.anexos %}<p class="sec-parrafo">{{ I.anexos }}</p>
-  {% else %}<p class="sec-parrafo">(Documentos adjuntos: acta de recepción, conformidades, manifiestos de gasto, valorizaciones, etc.)</p>{% endif %}
+</div>
+
+<!-- ==================== HOJA 3 (horizontal): cuadro 9 y Anexos A/B ==================== -->
+<div class="hoja horiz salto-pagina">
+
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Informe Final de la Obra</div>
+      <div class="subtitulo">Cuadro N° 01 y Anexos A-B (continuación)</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">PERÍODO {{ p.anio }}</div>
+      {% if I.n_informe %}<div class="num-doc" style="margin-top:6px">INFORME N.°&nbsp;{{ I.n_informe }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="sec-subtitulo">9. Cuadro N° 01: Consolidado de materiales utilizados en la obra (y Anexos A y B)</div>
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th rowspan="2">N.°</th><th rowspan="2">Descripción de materiales</th><th rowspan="2" class="ctr">Unidad de medida</th>
+        <th colspan="2" class="ctr">Ingreso</th><th colspan="2" class="ctr">Salida</th><th colspan="2" class="ctr">Saldo</th>
+      </tr>
+      <tr><th class="num">Cant.</th><th class="num">Valor (S/)</th><th class="num">Cant.</th><th class="num">Valor (S/)</th><th class="num">Cant.</th><th class="num">Valor (S/)</th></tr>
+    </thead>
+    <tbody>
+      {% for it in almacen %}
+      <tr>
+        <td class="ctr">{{ loop.index }}</td>
+        <td>{{ it.descripcion }}</td>
+        <td class="ctr">{{ it.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(it.cant_in) }}</td>
+        <td class="num">{{ "{:,.2f}".format(it.valor_in) }}</td>
+        <td class="num">{{ "{:,.2f}".format(it.cant_out) }}</td>
+        <td class="num">{{ "{:,.2f}".format(it.valor_out) }}</td>
+        <td class="num">{{ "{:,.2f}".format(it.saldo) }}</td>
+        <td class="num">{{ "{:,.2f}".format(it.valor_saldo) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="ctr">Sin materiales registrados en almacén.</td></tr>
+      {% endfor %}
+    </tbody>
+    {% if almacen %}
+    <tfoot><tr class="fila-total"><td colspan="4">TOTAL</td><td class="num">{{ "{:,.2f}".format(almacen|map(attribute='valor_in')|sum) }}</td><td></td><td class="num">{{ "{:,.2f}".format(almacen|map(attribute='valor_out')|sum) }}</td><td></td><td class="num">{{ "{:,.2f}".format(almacen|map(attribute='valor_saldo')|sum) }}</td></tr></tfoot>
+    {% endif %}
+  </table>
+
+  <div class="sec-subtitulo">Anexo A y Anexo B — Movimiento de almacén en obra (según Kardex)</div>
+  <p class="nota">Los saldos de materiales del Anexo (A) figuran en el Anexo (B). Los saldos deben ser concordantes con el Acta de Saldos de Materiales Valorizado al concluir la obra. Por los saldos de materiales, el residente solicita al almacén central la elaboración de la Nota de Entrada al Almacén (NEA) para su disposición final como acto resolutivo.</p>
+  <table class="tabla">
+    <thead><tr><th>Descripción</th><th class="ctr">Und.</th><th>O/C</th><th class="num">Ing. Cant.</th><th class="num">Ing. Valor</th><th class="num">Sal. Cant.</th><th class="num">Sal. Valor</th><th class="num">Saldo Cant.</th><th class="num">Saldo Valor</th></tr></thead>
+    <tbody>
+      {% for it in almacen %}
+      <tr><td>{{ it.descripcion }}</td><td class="ctr">{{ it.und }}</td><td>{{ it.oc }}</td><td class="num">{{ "{:,.2f}".format(it.cant_in) }}</td><td class="num">{{ "{:,.2f}".format(it.valor_in) }}</td><td class="num">{{ "{:,.2f}".format(it.cant_out) }}</td><td class="num">{{ "{:,.2f}".format(it.valor_out) }}</td><td class="num">{{ "{:,.2f}".format(it.saldo) }}</td><td class="num">{{ "{:,.2f}".format(it.valor_saldo) }}</td></tr>
+      {% else %}
+      <tr><td colspan="9" class="ctr">Sin movimientos de almacén registrados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+
+<!-- ==================== HOJA 4 (vertical): caja chica, documentación y conclusiones ==================== -->
+<div class="hoja anexo02 salto-pagina">
+
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Informe Final de la Obra</div>
+      <div class="subtitulo">Documentación y Conclusiones (continuación)</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">PERÍODO {{ p.anio }}</div>
+      {% if I.n_informe %}<div class="num-doc" style="margin-top:6px">INFORME N.°&nbsp;{{ I.n_informe }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="sec-subtitulo">10. Cuadro de utilización de rendiciones de fondos para pagos en efectivo (caja chica)</div>
+  <table class="tabla">
+    <thead><tr><th>N.°</th><th>Fecha</th><th>N.° de rendición</th><th>Concepto</th><th class="num">Importe (S/)</th><th class="ctr">N.° de comprobantes</th><th class="num">Saldo (S/)</th></tr></thead>
+    <tbody>
+      <tr><td class="ctr">1</td><td></td><td></td><td></td><td class="num"></td><td class="ctr"></td><td class="num"></td></tr>
+      <tr><td class="ctr">2</td><td></td><td></td><td></td><td class="num"></td><td class="ctr"></td><td class="num"></td></tr>
+      <tr><td class="ctr">3</td><td></td><td></td><td></td><td class="num"></td><td class="ctr"></td><td class="num"></td></tr>
+    </tbody>
+    <tfoot><tr class="fila-total"><td colspan="4">TOTAL</td><td class="num">0.00</td><td class="ctr"></td><td class="num">0.00</td></tr></tfoot>
+  </table>
+  <p class="nota">Se adjunta el cuadro de utilización de rendiciones de fondos para pagos en efectivo (caja chica) con los comprobantes sustentatorios.</p>
+
+  <div class="sec-titulo">Documentación Técnica Financiera y Administrativa de la Obra</div>
+  <ul class="lista">
+    <li>Declaratoria de viabilidad del Proyecto de Inversión.</li>
+    <li>Copias del expediente técnico inicial, adicionales, deductivos y ampliaciones de plazo, aprobados por documento resolutivo.</li>
+    <li>Informe de compatibilidad del proyecto, realizado por el residente y el supervisor o inspector de obra.</li>
+    <li>Memoria descriptiva valorizada del Proyecto de Inversión.</li>
+    <li>Informe financiero del Proyecto de Inversión: resumen de gastos efectuados por divisionaria —Personal, Bienes, Servicios y Adquisición de Activos No Financieros, para costos directos; y costos indirectos (gastos generales, supervisión, seguimiento y evaluación, etc.), según corresponda.</li>
+    <li>Informe físico (metrados realmente ejecutados, mayores metrados, metrados deductivos, valorización final de la obra, valorización de mayores metas y valorización de obras nuevas).</li>
+    <li>Certificados de control de calidad y protocolos de pruebas de campo (presión hidráulica, hermeticidad, resistividad, etc.), de acuerdo con el tipo de proyecto.</li>
+    <li>Inventario final de materiales en cancha adquiridos con cargo al Proyecto de Inversión, y saldos patrimoniales transferidos con documento resolutivo.</li>
+    <li>Inventario de equipos, herramientas y otros bienes de activo fijo adquiridos con cargo al presupuesto del Proyecto de Inversión ejecutado.</li>
+    <li>Movimiento de almacén en obra según los Anexos A y B del Cuadro N.° 1; adjuntar Bincard, vales de consumo de combustible, Notas de Entrada de Almacenes (NEA) y saldo de materiales en cancha.</li>
+    <li>Resumen de maquinaria y equipos utilizados, adjuntando partes diarios.</li>
+    <li>Panel fotográfico de la ejecución del Proyecto (antes, durante y después).</li>
+    <li>Planos de replanteo finales del proyecto, visados por el residente y el supervisor o inspector.</li>
+    <li>Cuaderno de obra, en original.</li>
+    <li>Documentos que sustenten los gastos efectuados en la ejecución del Proyecto de Inversión Pública (C/P, O/C, O/S, Pecosas, Planillas).</li>
+    <li>Resoluciones de aprobación y convenios.</li>
+    <li>Actas de: entrega de terreno (adjuntar título de propiedad según corresponda), inicio de los trabajos, culminación de los trabajos, recepción del proyecto (según corresponda), internamiento de insumos nuevos y de insumos usados (materiales, herramientas) al almacén central de la Entidad.</li>
+    <li>Licencia de construcción y conformidad de obra.</li>
+    <li>Formato N.° 9 - Cierre de inversiones.</li>
+    <li>Otros que el ejecutor considere necesarios para demostrar la ejecución de la obra.</li>
+  </ul>
+  <p class="nota">Los documentos se presentan conforme al tipo de proyecto; el plazo para remitir toda esta información es de siete (7) días hábiles contados a partir de la culminación del proyecto.</p>
+
+  <div class="sec-titulo">Observaciones, Conclusiones y Recomendaciones</div>
+  <div class="sec-subtitulo">Observaciones</div>
+  {% if I.anexos %}<p class="sec-parrafo">{{ I.anexos }}</p>{% else %}<p class="sec-parrafo">-</p>{% endif %}
+  <div class="sec-subtitulo">Conclusiones</div>
+  {% if I.conclusiones %}<p class="sec-parrafo">{{ I.conclusiones }}</p>{% else %}<p class="sec-parrafo">-</p>{% endif %}
+  <div class="sec-subtitulo">Recomendaciones</div>
+  {% if I.recomendaciones %}<p class="sec-parrafo">{{ I.recomendaciones }}</p>{% else %}<p class="sec-parrafo">-</p>{% endif %}
+
+  <p class="nota">Nota.- El Informe Final de la Obra deberá estar visada en todos los folios por el residente y el supervisor o inspector de la obra.</p>
 
   <div class="firmas">
-    <div class="firma">
-      <div class="linea"></div>
-      <div class="nombres">{{ p.residente or '' }}</div>
-      <div class="cargo">Residente de Obra</div>
-      <div class="reg">{{ 'CIP ' ~ p.cip_residente if p.cip_residente else '' }}</div>
-    </div>
-    <div class="firma">
-      <div class="linea"></div>
-      <div class="nombres">{{ p.supervisor or '' }}</div>
-      <div class="cargo">Supervisor de Obra</div>
-      <div class="reg">{{ 'CIP ' ~ p.cip_supervisor if p.cip_supervisor else '' }}</div>
-    </div>
+    <div class="firma"><div class="linea"></div><div class="nombres">{{ p.residente or '' }}</div><div class="cargo">Residente de Obra</div>{% if p.cip_residente %}<div class="reg">CIP {{ p.cip_residente }}</div>{% endif %}</div>
+    <div class="firma"><div class="linea"></div><div class="nombres">{{ p.supervisor or '' }}</div><div class="cargo">Supervisor / Inspector de Obra</div>{% if p.cip_supervisor %}<div class="reg">CIP {{ p.cip_supervisor }}</div>{% endif %}</div>
   </div>
 
 </div>
 
-{% include '_formatos_consolidados_impresion.html' %}
+<!-- ==================== COMPENDIO: REPORTES POR MES (Manifiesto, FE-05 y FE-06) ==================== -->
+<!-- ============ COMPENDIO: MANIFIESTO DE GASTO (todos los meses, con divisor por mes) ============ -->
+<div class="hoja horiz salto-pagina">
+  <div class="r-manifiesto">
+    <div class="rep-mes-sep">
+      <span>Manifiesto de Gasto · Consolidado de meses</span>
+      <span class="rep-mes-n">{{ compendio.periodo }}</span>
+    </div>
+    {% with hdr = compendio.mf_hdr %}{% include 'reportes/_manifiesto_cab.html' %}{% endwith %}
+    {% with bloques = compendio.mf_bloques, total_gral = compendio.mf_total, total_label = 'TOTAL GENERAL ACUMULADO' %}
+      {% include 'reportes/_manifiesto_tabla.html' %}
+    {% endwith %}
+    {% with hdr = compendio.mf_hdr %}{% include 'reportes/_manifiesto_firmas.html' %}{% endwith %}
+  </div>
+</div>
+
+<!-- ============ COMPENDIO: FE-05 EJECUCIÓN PRESUPUESTAL (todos los meses, con divisor por mes) ============ -->
+<div class="hoja horiz salto-pagina">
+  <div class="r-fe05">
+    <div class="rep-mes-sep">
+      <span>FE-05 Ejecución Presupuestal Mensual · Consolidado de meses</span>
+      <span class="rep-mes-n">{{ compendio.periodo }}</span>
+    </div>
+    {% with periodo_txt = compendio.periodo %}{% include 'reportes/_fe05_cab.html' %}{% endwith %}
+    {% with bloques = compendio.fe05_bloques %}{% include 'reportes/_fe05_tabla.html' %}{% endwith %}
+    {% include 'reportes/_fe05_firmas.html' %}
+  </div>
+</div>
+
+<!-- ============ COMPENDIO: FE-06 PRESUPUESTO vs EJECUTADO (solo el último mes) ============ -->
+<div class="hoja horiz salto-pagina">
+  <div class="rep-mes-sep">
+    <span>FE-06 Presupuesto vs Ejecutado · {{ compendio.fe06_nombre }} {{ p.anio }}</span>
+    <span class="rep-mes-n">Acumulado de todos los meses ejecutados</span>
+  </div>
+  {% with mes = compendio.fe06_mes, anio = p.anio, fe06_sintesis = compendio.fe06_sintesis, meses_vis = compendio.fe06_meses_vis %}
+    {% include 'reportes/_fe06_body.html' %}
+  {% endwith %}
+</div>
 
 <script src="{{ url_for('static', filename='js/imprimir_autofit.js') }}"></script>
 

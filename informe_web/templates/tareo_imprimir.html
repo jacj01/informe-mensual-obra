@@ -7,7 +7,7 @@
 <meta name="description" content="Tareo mensual de personal de obra en administración directa. Lista de obreros y técnicos con días trabajados, domingos, feriados y total de días por período. Incluye resumen por cargo y estado de devengado. Imprimir planilla de pagos con firma del supervisor.">
 <title>TAREO MENSUAL - {{ MESES[mes-1] }} {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
 <style>
   .panel-titulo { font-size: 9.5pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase;
                   letter-spacing: .4px; margin: 5px 0 3px; }
@@ -29,10 +29,14 @@
   .fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 6.6pt; }
   .fila-total td.rs, .fila-resumen td.rs { text-align: center; font-variant-numeric: tabular-nums; }
 
-  .firmas { margin-top: 70px; }
+  .firmas { margin-top: 80px; }
   .firma .nombres { min-height: 13px; font-size: 8pt; }
   .firma .cargo { font-size: 7pt; }
   .firma .reg { font-size: 6.5pt; }
+
+  .vacio-planilla { margin: 18px 0 6px; padding: 16px 18px; border: 1px dashed var(--borde);
+                    border-radius: 6px; background: #F8FAFC; color: var(--texto2);
+                    font-size: 9pt; line-height: 1.5; text-align: center; }
 </style>
 </head>
 <body>
@@ -183,6 +187,13 @@
 
   {% if tecnicos or resumen_tecnicos %}
   {{ tabla_tareo(tecnicos, resumen_tecnicos, total_dias_tecnicos, 'Personal Técnico') }}
+  {% endif %}
+
+  {% if not obreros and not tecnicos %}
+  <div class="vacio-planilla">
+    No hay tareo registrado en {{ MESES[mes-1] }} {{ anio }}.
+    Agregue trabajadores en «Tareo» y marque sus días para generar el tareo.
+  </div>
   {% endif %}
 
   <div class="firmas">

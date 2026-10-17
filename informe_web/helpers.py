@@ -459,7 +459,17 @@ def fe06_rows():
             gastos_map[key] = [0.0] * 12
         gastos_map[key][mes - 1] = round(gastos_map[key][mes - 1] + (total or 0), 2)
 
+    # Años anteriores efectivamente considerados (num_anios_anteriores). Si la
+    # configuración excluye alguno, su columna y el acumulado no lo cuentan.
+    num_anios = p.num_anios_anteriores if p.num_anios_anteriores is not None else 3
+    num_anios = max(0, min(3, num_anios))
+    anios_activos = {anio - i for i in range(1, num_anios + 1)}
+
+    def _act(yr):
+        return yr in anios_activos
+
     rows = []
+    usados = set()
     for comp in COMPONENTES_FE06:
         clasificadores_comp = [(clas, det) for _comp, clas, det in CLAS_DEFECTO
                                if _comp == comp]
@@ -467,11 +477,12 @@ def fe06_rows():
             clasif_real = clasif
             cfg = cfg_cache.get((comp, detalle))
             et = cfg.et or 0 if cfg else 0
-            e2023 = cfg.ejec2023 or 0 if cfg else 0
-            e2024 = cfg.ejec2024 or 0 if cfg else 0
-            e2025 = cfg.ejec2025 or 0 if cfg else 0
+            e2023 = (cfg.ejec2023 or 0) if (cfg and _act(2023)) else 0
+            e2024 = (cfg.ejec2024 or 0) if (cfg and _act(2024)) else 0
+            e2025 = (cfg.ejec2025 or 0) if (cfg and _act(2025)) else 0
             pim = cfg.pim2026 or 0 if cfg else 0
             mensual = gastos_map.get((comp, clasif_real), [0.0] * 12)
+            usados.add((comp, clasif_real))
             total_anio = round(sum(mensual), 2)
             acum_total = round(e2023 + e2024 + e2025 + total_anio, 2)
             rows.append({
@@ -491,7 +502,31 @@ def fe06_rows():
                 "porc_et": (acum_total / et * 100) if et else 0,
                 "saldo_et": round(et - acum_total, 2),
             })
+
+    # Gastos cuyo clasificador ya no coincide con la configuración de
+    # Presupuesto (p.ej. se cambio el clasificador en Datos del Proyecto):
+    # se agregan como fila extra del componente para no perder el monto en el
+    # FE-06/PANEL (el KPI del panel sí los suma via _all_gastos_anio).
+    clasi_proy = clasificadores_proyecto()
+    for (comp, clasif), mensual in gastos_map.items():
+        if (comp, clasif) in usados or comp not in COMPONENTES_FE06:
+            continue
+        detalle = clasi_proy.get(clasif) or clasif
+        rows.append({
+            "componente": comp,
+            "clasificador": clasif,
+            "detalle": detalle,
+            "et": 0.0, "e2023": 0.0, "e2024": 0.0, "e2025": 0.0, "pim": 0.0,
+            "mensual": mensual,
+            "total_anio": round(sum(mensual), 2),
+            "porc_pim": 0,
+            "saldo_pim": 0.0,
+            "acum_total": round(sum(mensual), 2),
+            "porc_et": 0,
+            "saldo_et": 0.0,
+        })
     return rows
+
 
 
 def fe06_resumen(rows):
@@ -622,11 +657,16 @@ def numero_a_letras(n):
 
 
 def monto_letras(monto):
-    """Monto en letras: 'un millon ciento veinte y dos mil ... con 52/100 soles'."""
+    """Monto en letras: 'un millon ciento veinte y dos mil ... con 52/100 soles'.
+
+    Los montos negativos se escriben anteponiendo 'menos' (sin basura de
+    numeros negativos en numero_a_letras)."""
     monto = round(monto or 0, 2)
+    signo = "menos " if monto < 0 else ""
+    monto = abs(monto)
     enteros = int(monto)
     cent = int(round((monto - enteros) * 100))
-    return f"{numero_a_letras(enteros)} con {cent:02d}/100 soles"
+    return f"{signo}{numero_a_letras(enteros)} con {cent:02d}/100 soles"
 
 
 def get_liquidacion():
@@ -665,27 +705,39 @@ def liquidacion_resumen():
 
     Usa la misma agregación del formato FE-06 (años anteriores de la
     configuración presupuestal + ejecución real del año en curso).
+    Si la configuración presupuestal excluye los años anteriores, el
+    ejecutado acumulado es solo la ejecución del año en curso (coherente
+    con el anexo FE-06 y el PANEL).
     """
     rows = fe06_rows()
     resumen = fe06_resumen(rows)
+    incluir = incluir_anios()
+
+    def acum_efectivo(r):
+        return r["acum_total"] if incluir else r["total_anio"]
+
     por_componente = []
     for comp in COMPONENTES_FE06:
         r = resumen[comp]
+        acum = acum_efectivo(r)
         por_componente.append({
             "componente": comp,
             "et": r["et"],
-            "acum_total": r["acum_total"],
-            "porc_et": round(r["acum_total"] / r["et"] * 100, 2) if r["et"] else 0,
-            "saldo_et": r["saldo_et"],
+            "acum_total": acum,
+            "porc_et": round(acum / r["et"] * 100, 2) if r["et"] else 0,
+            "saldo_et": round(r["et"] - acum, 2),
         })
-    por_clasificador = [{
-        "componente": r["componente"],
-        "detalle": r["detalle"],
-        "et": r["et"],
-        "acum_total": r["acum_total"],
-        "porc_et": r["porc_et"],
-        "saldo_et": r["saldo_et"],
-    } for r in rows]
+    por_clasificador = []
+    for r in rows:
+        acum = acum_efectivo(r)
+        por_clasificador.append({
+            "componente": r["componente"],
+            "detalle": r["detalle"],
+            "et": r["et"],
+            "acum_total": acum,
+            "porc_et": round(acum / r["et"] * 100, 2) if r["et"] else 0,
+            "saldo_et": round(r["et"] - acum, 2),
+        })
     et_total = round(sum(r["et"] for r in por_componente), 2)
     ejec_total = round(sum(r["acum_total"] for r in por_componente), 2)
     saldo_total = round(et_total - ejec_total, 2)
@@ -854,6 +906,7 @@ def panel_datos(mes, anio=None):
     saldo_pim = round(pim - tot["total_anio"], 2)
     et = tot["et"]
     ejec_anio = tot["total_anio"]
+    ejec_mes = round(sum(r["mensual"][m - 1] for r in rows for m in meses_col), 2)
     acum_total = tot["acum_total"] if incluir else ejec_anio
 
     et_comp = {c: 0.0 for c in COMPONENTES_FE06}
@@ -867,9 +920,6 @@ def panel_datos(mes, anio=None):
     meta_num = int(m.group(1)) if m else 0
 
     # ---------------- I. RESUMEN DE LA EJECUCION PRESUPUESTAL ----------------
-    meta_map = {
-        1: p.meta_ejec2025 or 0 if p.num_anios_anteriores else 0,
-    }
     resumen_i = [{"concepto": "Presupuesto total", "monto": et, "meta": 0}]
     if incluir:
         for i in range(num_anios, 0, -1):
@@ -888,7 +938,7 @@ def panel_datos(mes, anio=None):
     resumen_i.append({"concepto": f"Presupuesto Anual (PIN {anio}) (S/)",
                       "monto": pim, "meta": meta_num})
     resumen_i.append({"concepto": f"Gasto Devengado {MESES[0]} a {MESES[mes-1]} (S/)",
-                      "monto": ejec_anio, "meta": 0})
+                      "monto": ejec_mes, "meta": 0})
     resumen_i.append({"concepto": f"SALDO {anio}", "monto": saldo_pim, "meta": 0})
 
     # ---------------- Sub-cuadro PIN / BASE DE CALCULO ----------------
@@ -898,7 +948,7 @@ def panel_datos(mes, anio=None):
     pct = lambda x: round(x / pim * 100, 2) if pim else 0.0
     pin_rows = [
         {"concepto": f"PIN Aprobado para {anio}", "monto": pim,
-         "pct": pct(saldo_pim),
+         "pct": 100.0 if pim else 0.0,
          "base": f"Monto vigente para la meta {meta_num:03d}"},
         {"concepto": (f"Avance Acumulado anterior ({MESES[0]} - {prev})"
                       if meses_prev else "Avance Acumulado anterior"),
@@ -931,7 +981,7 @@ def panel_datos(mes, anio=None):
                 "clas": r.get("clasificador", clas),
                 "detalle": det,
                 "valores": [round(r["mensual"][m - 1], 2) if r else 0.0 for m in meses_col],
-                "acum": round(r["total_anio"], 2) if r else 0.0,
+                "acum": round(sum(r["mensual"][m - 1] for m in meses_col), 2) if r else 0.0,
             })
         return out
 
@@ -939,7 +989,7 @@ def panel_datos(mes, anio=None):
                     "filas": filas_dev([g for g in grupos3 if g[0] == comp])}
                    for comp in COMPONENTES_FE06]
     dev_mensual_total = [round(sum(r["mensual"][m - 1] for r in rows), 2) for m in meses_col]
-    dev_acum_total = round(sum(r["total_anio"] for r in rows), 2)
+    dev_acum_total = round(sum(r["mensual"][m - 1] for r in rows for m in meses_col), 2)
 
     # ---------------- V. RESUMEN GASTO DEVENGADO ----------------
     resumen_dev = []
@@ -960,12 +1010,24 @@ def panel_datos(mes, anio=None):
                          "pct": round(gas5 / pin5 * 100, 2) if pin5 else 0.0}
 
     # ---------------- EJECUCION PRESUPUESTAL ----------------
+    # Clasificadores REALES configurados en Datos del Proyecto (con fallback a
+    # los codigos base), para que los cuadros 2.2-2.6 reflejen la configuracion.
     CLAS_ORDER = [
-        ("2.6.8.1.3.1", "Elaboración de Expediente Técnico."),
-        ("2.6.2.3.99.3", "Costo de Construccion por Administracion directa - Personal"),
-        ("2.6.2.3.99.4", "Costo de Construccion por Administracion directa - Bienes"),
-        ("2.6.2.3.99.5", "Costo de Construccion por Administracion directa - Servicios"),
+        (p.clasificador_expediente or "2.6.8.1.3.1", "Elaboración de Expediente Técnico."),
+        (p.clasificador_personal or "2.6.2.3.99.3", "Costo de Construccion por Administracion directa - Personal"),
+        (p.clasificador_bienes or "2.6.2.3.99.4", "Costo de Construccion por Administracion directa - Bienes"),
+        (p.clasificador_servicios or "2.6.2.3.99.5", "Costo de Construccion por Administracion directa - Servicios"),
+        (p.clasificador_liquidacion or "LIQUIDACION", "Liquidación de Obra"),
     ]
+    # Clasificadores presentes en la ejecución que no estén mapeados (p.ej. por
+    # un cambio de clasificador en Datos del Proyecto): se agregan al final para
+    # que los cuadros 2.1-2.6 y los totales sigan cuadrando con el acumulado.
+    _vistos_clas = {c for c, _ in CLAS_ORDER}
+    for r in rows:
+        c = r["clasificador"]
+        if c and c not in _vistos_clas:
+            _vistos_clas.add(c)
+            CLAS_ORDER.append((c, r["detalle"] or c))
 
     ejec_anuales = []
     if incluir:
@@ -1155,11 +1217,12 @@ def f05_datos(mes, anio):
 
     secciones = []
     for key in orden:
-        label, componente = key
+        tipo, componente = key
+        label = f"{componente} - {tipo}" if componente else tipo
         lista = grupos[key]
         totales = {"n": 0.0, "o": 0.0, "directos": 0.0, "generales": 0.0,
-                   "supervision": 0.0, "total": 0.0,
-                   "clasif": {c: 0.0 for c in clasif_cols}}
+                   "supervision": 0.0, "expediente": 0.0, "liquidacion": 0.0,
+                   "total": 0.0, "clasif": {c: 0.0 for c in clasif_cols}}
         filas = []
         prov_cont = 0
         prev = None
@@ -1178,6 +1241,8 @@ def f05_datos(mes, anio):
                 directos = d.importe if g.componente == "Costo Directo" else 0.0
                 generales = d.importe if g.componente == "Gastos Generales" else 0.0
                 supervision = d.importe if g.componente == "Gastos de Supervisión" else 0.0
+                expediente = d.importe if g.componente == "Elaboración de Expediente Técnico" else 0.0
+                liquidacion = d.importe if g.componente == "Liquidación de Obra" else 0.0
                 por_clasif = {}
                 for c in clasif_cols:
                     por_clasif[c] = d.importe if g.clasificador == c else 0.0
@@ -1185,6 +1250,7 @@ def f05_datos(mes, anio):
                               "clasif": por_clasif,
                               "directos": directos,
                               "generales": generales, "supervision": supervision,
+                              "expediente": expediente, "liquidacion": liquidacion,
                               "prov_num": prov_cont,
                               "prov_first": header and idx_d == 0})
                 totales["n"] += n
@@ -1194,10 +1260,13 @@ def f05_datos(mes, anio):
                 totales["directos"] += directos
                 totales["generales"] += generales
                 totales["supervision"] += supervision
+                totales["expediente"] += expediente
+                totales["liquidacion"] += liquidacion
                 totales["total"] += d.importe
         secciones.append({"label": label, "componente": componente,
                           "filas": filas, "totales": totales})
     total_gral = {"n": 0.0, "o": 0.0, "directos": 0.0, "generales": 0.0, "supervision": 0.0,
+                  "expediente": 0.0, "liquidacion": 0.0,
                   "total": 0.0, "clasif": {c: 0.0 for c in clasif_cols}}
     for s in secciones:
         for k in total_gral:
@@ -1363,7 +1432,13 @@ def almacen_items(mes, anio):
     for key, item in items.items():
         q_in = sum(m.cantidad for m in item["entradas"])
         q_out = sum(m.cantidad for m in item["salidas"])
-        pu = item["pu"] or 0
+        # Valorizacion por movimiento (mismo criterio que almacen_valorizado /
+        # FE-08) para no divergir cuando un insumo tiene precios distintos.
+        valor_in = round(sum((m.cantidad or 0) * (m.precio_unitario or 0)
+                             for m in item["entradas"]), 2)
+        valor_out = round(sum((m.cantidad or 0) * (m.precio_unitario or 0)
+                              for m in item["salidas"]), 2)
+        pu = round(valor_in / q_in, 2) if q_in else 0
         result.append({
             "descripcion": item["descripcion"],
             "und": item["und"],
@@ -1372,9 +1447,68 @@ def almacen_items(mes, anio):
             "cant_in": q_in,
             "cant_out": q_out,
             "saldo": round(q_in - q_out, 2),
-            "valor_in": round(q_in * pu, 2),
-            "valor_out": round(q_out * pu, 2),
-            "valor_saldo": round((q_in - q_out) * pu, 2),
+            "pu": pu,
+            "valor_in": valor_in,
+            "valor_out": valor_out,
+            "valor_saldo": round(valor_in - valor_out, 2),
+        })
+    return result
+
+
+def almacen_consolidado():
+    """Consolidado de TODOS los movimientos de almacén del proyecto para el
+    Cuadro N° 01 y los Anexos A/B del Informe Final: por insumo (descripción y
+    unidad) con ingreso, salida y saldo valorizados, más el detalle de cada
+    movimiento (fecha, tipo, documento, cantidad, P.U., importe y O/C)."""
+    movs = (AlmacenMovimiento.query
+            .order_by(AlmacenMovimiento.descripcion,
+                      AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
+    items = {}
+    orden = []
+    for m in movs:
+        desc = (m.descripcion or "").strip()
+        if not desc:
+            continue
+        key = (desc, m.und or "")
+        it = items.get(key)
+        if it is None:
+            it = {"descripcion": desc, "und": m.und or "", "oc": "",
+                  "cant_in": 0.0, "cant_out": 0.0, "valor_in": 0.0,
+                  "valor_out": 0.0, "filas": []}
+            items[key] = it
+            orden.append(key)
+        pu = m.precio_unitario or 0
+        cant = m.cantidad or 0
+        it["filas"].append({
+            "fecha": m.fecha, "tipo": m.tipo, "cantidad": cant, "pu": pu,
+            "valor": round(cant * pu, 2),
+            "numero_doc": m.numero_doc or "", "pecosa": m.pecosa_guia or "",
+            "siaf": m.numero_siaf or "", "proveedor": m.proveedor or "",
+            "responsable": m.responsable or "", "actividad": m.actividad or "",
+        })
+        if m.tipo == "E":
+            it["cant_in"] += cant
+            it["valor_in"] += cant * pu
+            if not it["oc"] and m.numero_doc:
+                it["oc"] = m.numero_doc
+        else:
+            it["cant_out"] += cant
+            it["valor_out"] += cant * pu
+    result = []
+    for key in orden:
+        it = items[key]
+        cant_in = round(it["cant_in"], 2)
+        cant_out = round(it["cant_out"], 2)
+        valor_in = round(it["valor_in"], 2)
+        valor_out = round(it["valor_out"], 2)
+        pu = round(valor_in / cant_in, 2) if cant_in else 0
+        result.append({
+            "descripcion": it["descripcion"], "und": it["und"], "oc": it["oc"],
+            "cant_in": cant_in, "cant_out": cant_out,
+            "saldo": round(cant_in - cant_out, 2),
+            "pu": pu, "valor_in": valor_in, "valor_out": valor_out,
+            "valor_saldo": round(valor_in - valor_out, 2),
+            "filas": it["filas"],
         })
     return result
 

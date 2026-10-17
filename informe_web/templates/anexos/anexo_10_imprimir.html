@@ -1,0 +1,51 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Antecedentes de la modificación</div>
+<p class="sec-parrafo">Durante la ejecución de la obra «{{ p.nombre or '' }}» se identificaron circunstancias que ameritan la
+modificación del Expediente Técnico. El sustento se detalla a continuación:</p>
+{{ parrafo(av.get('ante_modificacion'), '(Registre los antecedentes de la modificación.)') }}
+
+<div class="sec-titulo">III. Control de modificaciones</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>N°</th>
+      <th>Tipo de modificación</th>
+      <th>Descripción</th>
+      <th class="num">Monto (S/)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>{{ av.get('mod1_tipo') or '__________' }}</td><td>{{ av.get('mod1_desc') or '__________' }}</td><td class="num">{{ num(av.get('mod1_monto')) }}</td></tr>
+    <tr><td>2</td><td>{{ av.get('mod2_tipo') or '__________' }}</td><td>{{ av.get('mod2_desc') or '__________' }}</td><td class="num">{{ num(av.get('mod2_monto')) }}</td></tr>
+  </tbody>
+</table>
+
+<div class="sec-titulo">IV. Partidas nuevas y precios nuevos</div>
+{{ parrafo(av.get('partidas_nuevas'), '(Detalle las partidas nuevas, precios nuevos y su sustento técnico.)') }}
+
+<div class="sec-titulo">V. Análisis y opinión</div>
+{{ parrafo(av.get('analisis'), '(Registre el análisis de procedencia de la modificación.)') }}
+
+<div class="sec-titulo">VI. Conclusiones y recomendaciones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones y recomendaciones.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.residente or '' }}</div>
+    <div class="cargo">Residente de Obra</div>
+    {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

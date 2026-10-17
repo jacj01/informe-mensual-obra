@@ -3,7 +3,7 @@
   <input type="hidden" name="modal" value="1">
   <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-person-lines-fill"></i> Proveedor</h3></div>
+    <div class="card-head"><h2><i class="bi bi-person-lines-fill"></i> Proveedor</h2></div>
     <table class="table table-compact">
       <tbody>
         <tr><td class="strong">Proveedor</td><td>{{ g.proveedor }}</td></tr>
@@ -16,7 +16,7 @@
   </div>
   <div class="card">
     <div class="card-head">
-      <h3><i class="bi bi-basket"></i> {{ 'Editar detalle' if es_edicion else 'Datos del material / servicio' }}</h3>
+      <h2><i class="bi bi-basket"></i> {{ 'Editar detalle' if es_edicion else 'Datos del material / servicio' }}</h2>
     </div>
     <div class="form-grid">
       <div class="field full">

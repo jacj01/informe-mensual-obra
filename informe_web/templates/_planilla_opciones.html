@@ -1,7 +1,7 @@
 <div class="form-panel">
   <div class="card">
     <div class="card-head">
-      <h3><i class="bi bi-file-earmark-spreadsheet"></i> Generar Planilla de Pagos - {{ MESES[mes-1] }} {{ anio }}</h3>
+      <h2><i class="bi bi-file-earmark-spreadsheet"></i> Generar Planilla de Pagos - {{ MESES[mes-1] }} {{ anio }}</h2>
     </div>
     <div class="planilla-seccion-activa">
       <i class="bi {{ 'bi-person-wrench' if seccion == 'obrero' else 'bi-person-gear' }}"></i>
@@ -27,8 +27,9 @@
     <div>
       La opción <b>Con Beneficios y Descuentos de Ley</b> se calcula con la tabla
       salarial oficial vigente de <b>Construcción Civil</b> (CAPECO-FTCCP) para el
-      año {{ anio }} y los días marcados en el tareo de
-      {{ MESES[mes-1] }} {{ anio }} ({{ TABLA_CIVIL_POR_ANIO|length }} tabla(s) disponible(s)).
+      año {{ anio }}{% if tabla and tabla.vigencia %} (vigencia del {{ tabla.vigencia[0] }}
+      al {{ tabla.vigencia[1] }}){% endif %} y los días marcados en el tareo de
+      {{ MESES[mes-1] }} {{ anio }}.
       La opción <b>Sin Beneficios</b> usa el Sueldo mensual (S/) registrado en cada
       trabajador, prorrateado por los días marcados (sueldo ÷ 30 × días).
     </div>

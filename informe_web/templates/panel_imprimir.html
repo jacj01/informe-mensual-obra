@@ -7,16 +7,21 @@
 <meta name="description" content="Resumen financiero imprimible del informe mensual de obra - {{ d.mes_nombre }} {{ d.anio }}.">
 <title>Informe Mensual {{ d.mes_nombre }} {{ d.anio }} - Resumen Financiero</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
 <style>
-  .hoja { width: 210mm; min-height: 297mm; padding: 10mm 12mm; margin: 0 auto; background: #fff; }
-  table.tabla { width: 100%; margin: 4px 0 6px; table-layout: auto; font-size: 8pt; border-collapse: collapse; }
+  .hoja { box-sizing: border-box; width: 210mm; min-height: 297mm; padding: 19.1mm 17.8mm; margin: 0 auto; background: #fff; }
+  table.tabla { width: 100%; margin: 3px 0 5px; table-layout: fixed; font-size: 8.2pt; border-collapse: collapse; }
+  table.tabla th, table.tabla td { padding: 2px 3px; line-height: 1.25; border: .5px solid #ccc; height: auto; }
+  table.tabla th { font-size: 6.9pt; }
+  tr.fila-sub td { font-size: 7.1pt; }
+  tr.fila-total td { font-size: 7.3pt; }
   table.tabla.tabla-ancha { width: 100%; }
-  table.tabla th, table.tabla td { padding: 2px 4px; line-height: 1.35; border: .5px solid #ccc; }
+  table.tabla th, table.tabla td { padding: 1px 3px; line-height: 1.18; border: .5px solid #ccc; height: auto; }
   table.tabla th { background: var(--azul); color: #fff; font-weight: 700; font-size: 7.4pt; text-transform: uppercase; text-align: center; }
-  tr.fila-sub td { background: #E8EEF5; color: var(--azul-osc); font-weight: 700; font-size: 7.6pt; text-transform: uppercase; }
-  tr.fila-total td { background: #D9E1E8; color: var(--azul-osc); font-weight: 800; font-size: 8pt; }
+  tr.fila-sub td { background: #E8EEF5; color: var(--azul-osc); font-weight: 700; font-size: 8.4pt; text-transform: uppercase; }
+  tr.fila-total td { background: #D9E1E8; color: var(--azul-osc); font-weight: 800; font-size: 8.8pt; }
   table.tabla td.num { text-align: right; }
+  table.tabla th.num { text-align: right; white-space: normal; }
   table.tabla td.ctr { text-align: center; }
   table.tabla td strong { font-weight: 800; }
 
@@ -40,7 +45,7 @@
   .sec-band.b3 { background: var(--azul-claro); font-size: 8pt; margin-top: 5px; }
 
   .sec-txt { margin: 3px 2px 4px; font-size: 8pt; text-align: justify; line-height: 1.4; }
-  .meta-line { margin: 1px 2px; font-size: 7.6pt; line-height: 1.3; }
+  .meta-line { margin: 1px 2px; font-size: 8.6pt; line-height: 1.35; }
   .meta-line .lbl { font-weight: 700; color: var(--azul-osc); }
   .meta-grid { margin: 3px 2px; }
 
@@ -61,16 +66,41 @@
   .bar-label { font-size: 6.2pt; color: var(--texto2); margin-top: 1px; }
 
   @media print {
-    @page { size: A4 portrait; margin: 12mm 12mm 12mm; }
+    @page { size: A4 portrait; margin: 19.1mm 17.8mm; }
+    table.tabla { font-size: 8pt; }
+    table.tabla td { font-size: 8pt; }
+    table.tabla th, table.tabla thead th { font-size: 7.4pt; }
+    table.tabla th, table.tabla td { padding: 1.5px 3px; line-height: 1.22; height: auto; }
+    tr.fila-sub td { font-size: 8.4pt; }
+    tr.fila-total td { font-size: 8.8pt; }
+    .sec-band { font-size: 9.6pt; }
+    .sec-band.b2 { font-size: 9pt; }
+    .sec-band.b3 { font-size: 8.6pt; }
+    .sec-txt { font-size: 8.8pt; line-height: 1.45; }
+    .meta-line { font-size: 8.6pt; line-height: 1.35; }
+    .pv-lab { font-size: 7.6pt; }
+    .pv-val { font-size: 8.6pt; }
+    .entidad { font-size: 10.5pt; }
+    .entidad-sub { font-size: 9pt; }
+    .titulo { font-size: 15pt; }
+    .subtitulo { font-size: 9.5pt; }
+    .periodo { font-size: 9.5pt; }
+    .chart-title { font-size: 8.6pt; }
+    .chart-sub { font-size: 7.4pt; }
+    .bar-val { font-size: 6.6pt; }
+    .bar-label { font-size: 7pt; }
+    .firmas .nombres { font-size: 9.5pt; }
+    .firmas .cargo { font-size: 8pt; }
+    .firmas .reg { font-size: 7.6pt; }
     html, body { background: #fff !important; }
     .hoja { width: 100% !important; min-height: auto !important; margin: 0 !important; box-shadow: none !important; padding: 0 !important; }
     .toolbar { display: none !important; }
-    .firmas { break-inside: avoid; margin-top: 70px; }
+    .firmas { break-inside: avoid; margin-top: 40px; }
     .pv, .sec-txt, .meta-grid, .charts-row { break-inside: avoid; page-break-inside: avoid; }
     .sec-band, .sec-band.b2, .sec-band.b3 { break-after: avoid; page-break-after: avoid; }
-    .tabla { break-inside: avoid; page-break-inside: avoid; margin-top: 2px; }
+    .tabla { break-inside: avoid; page-break-inside: avoid; margin-top: 1px; }
     tr { break-inside: avoid; page-break-inside: avoid; }
-    .panel-main { margin: 0 0 4px; font-size: 13pt; }
+    .panel-main { margin: 0 0 3px; font-size: 13pt; }
   }
 </style>
 </head>
@@ -78,14 +108,28 @@
 <div class="toolbar">
   <h2>Resumen Financiero - Informe Mensual {{ d.mes_nombre }} {{ d.anio }}</h2>
   <div class="spacer"></div>
-  <span class="nota">Replica de la hoja PANEL del informe financiero.</span>
+  <span class="nota">Vista previa para impresión.</span>
+  <a class="btn-excel" href="{{ url_for('panel_excel', mes=d.mes, anio=d.anio) }}">Exportar a Excel</a>
   <button type="button" onclick="window.print()">Imprimir</button>
   <a class="volver" href="{{ url_for('formatos', mes=d.mes, anio=d.anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
 </div>
 
 <div class="hoja">
 
-  <div class="panel-main">Informe Mensual {{ d.mes_nombre }} {{ d.anio }}</div>
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Ejecución Presupuestal Mensual</div>
+      <div class="subtitulo">TOTAL COSTO DE CONSTRUCCION POR ADM. DIRECTA</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">PERIODO: {{ d.mes_nombre }} - {{ d.anio }}</div>
+    </div>
+  </div>
 
   <!-- ===================== CABECERA ===================== -->
   <div class="pv">
@@ -116,7 +160,7 @@
   </div>
 
   <!-- ===================== INTRODUCCION ===================== -->
-  <div class="sec-band b2">Introduccion</div>
+  <div class="sec-band b2">Introducción</div>
   <div class="sec-txt">
     Que mediante la aprobaci&oacute;n del expediente t&eacute;cnico
     &ldquo;{{ d.p.nombre or '' }}&rdquo;, con Resoluci&oacute;n de Alcald&iacute;a N&deg;
@@ -133,7 +177,7 @@
       <div class="pv-val">&ldquo;{{ d.p.nombre or '' }}&rdquo;</div>
     </div>
     <div class="pv-line">
-      <div class="pv-lab">Codigo Unico de Inversion</div>
+      <div class="pv-lab">Código Único de Inversión</div>
       <div class="pv-val">N&deg; {{ d.p.cui or '' }}.</div>
     </div>
     <div class="pv-line">
@@ -149,7 +193,7 @@
       <div class="pv-val">{{ d.p.unidad_ejecutora or '' }}.</div>
     </div>
     <div class="pv-line">
-      <div class="pv-lab">Aprobacion</div>
+      <div class="pv-lab">Aprobación</div>
       <div class="pv-val">{{ d.p.aprobacion or '' }}{% if d.p.fecha_aprobacion %}, de fecha {{ d.p.fecha_aprobacion|fecha_larga }}{% endif %}.</div>
     </div>
     <div class="pv-line">
@@ -203,7 +247,7 @@
   </div>
 
   <!-- ===================== I. RESUMEN DE LA EJECUCION PRESUPUESTAL ===================== -->
-  <div class="sec-band">I. Resumen de la Ejecucion Presupuestal</div>
+  <div class="sec-band">I. Resumen de la Ejecución Presupuestal</div>
   <table class="tabla">
     <colgroup><col style="width:330px"><col style="width:135px"><col style="width:55px"></colgroup>
     <thead>
@@ -223,7 +267,7 @@
   <table class="tabla">
     <colgroup><col style="width:285px"><col style="width:115px"><col style="width:95px"><col style="width:205px"></colgroup>
     <thead>
-      <tr><th>Concepto</th><th class="num">Monto</th><th class="num">% de Ejecucion (PIM)</th><th>Base de Calculo</th></tr>
+      <tr><th>Concepto</th><th class="num">Monto</th><th class="num">% de Ejecución (PIM)</th><th>Base de Cálculo</th></tr>
     </thead>
     <tbody>
       {% for f in d.pin_rows %}
@@ -242,7 +286,7 @@
   <table class="tabla">
     <colgroup><col style="width:40px"><col style="width:470px"></colgroup>
     <thead>
-      <tr><th>Item</th><th>Descripcion Detallada de Actividades</th></tr>
+      <tr><th>Item</th><th>Descripción Detallada de Actividades</th></tr>
     </thead>
     <tbody>
       {% for a in d.actividades %}
@@ -261,7 +305,7 @@
     <thead>
       <tr>
         <th rowspan="2">Clasificador</th>
-        <th rowspan="2">Descripcion del Gasto</th>
+        <th rowspan="2">Descripción del Gasto</th>
         <th colspan="{{ d.meses_col|length }}">Gasto devengado {{ MESES[0] }} a {{ MESES[d.mes-1] }} (S/)</th>
       </tr>
       <tr>
@@ -294,7 +338,7 @@
   <table class="tabla">
     <colgroup><col style="width:105px"><col style="width:165px"><col style="width:155px"></colgroup>
     <thead>
-      <tr><th>Clasificador</th><th>Descripcion del Gasto</th><th class="num">Gasto devengado {{ MESES[0] }} a {{ MESES[d.mes-1] }} (S/.)</th></tr>
+      <tr><th>Clasificador</th><th>Descripción del Gasto</th><th class="num">Gasto devengado {{ MESES[0] }} a {{ MESES[d.mes-1] }} (S/.)</th></tr>
     </thead>
     <tbody>
       {% for grupo in d.dev_acum %}
@@ -324,10 +368,10 @@
     <thead>
       <tr>
         <th>Clasificador</th>
-        <th>Descripcion del Gasto</th>
+        <th>Descripción del Gasto</th>
         <th class="num">Presupuesto Anual (PIN {{ d.anio }}) (S/.)</th>
         <th class="num">Gasto devengado {{ MESES[0] }} a {{ MESES[d.mes-1] }} (S/.)</th>
-        <th class="num">% Ejecucion Presupuestal Anual (Gasto/PIN)</th>
+        <th class="num">% Ejecución Presupuestal Anual (Gasto/PIN)</th>
       </tr>
     </thead>
     <tbody>
@@ -352,7 +396,7 @@
   </table>
 
   <!-- ===================== EJECUCION PRESUPUESTAL ===================== -->
-  <div class="sec-band">Ejecucion Presupuestal</div>
+  <div class="sec-band">Ejecución Presupuestal</div>
 
   <div class="sec-band b2">1. Del Presupuesto</div>
   <div class="sec-txt">
@@ -374,7 +418,7 @@
     </tbody>
   </table>
 
-  <div class="sec-band b2">2. Resumen de Ejecucion Presupuestal</div>
+  <div class="sec-band b2">2. Resumen de Ejecución Presupuestal</div>
 
   {% if d.ejec_anuales %}
   {% for ej in d.ejec_anuales %}
@@ -388,7 +432,7 @@
   <table class="tabla">
     <colgroup><col style="width:105px"><col style="width:300px"><col style="width:145px"></colgroup>
     <thead>
-      <tr><th>Codigo</th><th>Detalle</th><th class="num">{{ d.p.rubro or 'CANON SOBRECANON, REGALIAS, RENTAS DE ADUANAS Y PARTICIPACIONES.' }}</th></tr>
+      <tr><th>Código</th><th>Detalle</th><th class="num">{{ d.p.rubro or 'CANON SOBRECANON, REGALIAS, RENTAS DE ADUANAS Y PARTICIPACIONES.' }}</th></tr>
     </thead>
     <tbody>
       {% for f in ej.filas %}
@@ -404,23 +448,24 @@
   {% endfor %}
   {% endif %}
 
-  <div class="sec-band b3">2.4. Resumen General de Ejecucion Presupuestal</div>
+  {% set base_sec = 1 + d.num_anios %}
+  <div class="sec-band b3">2.{{ base_sec }}. Resumen General de Ejecución Presupuestal</div>
   <div class="meta-grid">
     <div class="meta-line"><span class="lbl">Modalidad de ejecuci&oacute;n:</span> Por administraci&oacute;n directa.</div>
     <div class="meta-line"><span class="lbl">Fuente de financiamiento:</span> {{ d.p.fuente or '' }}.</div>
     <div class="meta-line"><span class="lbl">Rubro:</span> {{ d.p.rubro or '' }}.</div>
     {% if d.incluir_anios %}
       {% for y in range(d.anio - d.num_anios, d.anio + 1) %}
-      <div class="meta-line"><span class="lbl">Mes y a&ntilde;o:</span> a diciembre del {{ y }}.</div>
+      <div class="meta-line"><span class="lbl">Mes y a&ntilde;o:</span> {% if y < d.anio %}a diciembre del {{ y }}{% else %}al mes de {{ d.mes_nombre }} del {{ y }}{% endif %}.</div>
       {% endfor %}
     {% else %}
-      <div class="meta-line"><span class="lbl">Mes y a&ntilde;o:</span> a diciembre del {{ d.anio }}.</div>
+      <div class="meta-line"><span class="lbl">Mes y a&ntilde;o:</span> al mes de {{ d.mes_nombre }} del {{ d.anio }}.</div>
     {% endif %}
   </div>
   <table class="tabla">
     <colgroup><col style="width:105px"><col style="width:295px"><col style="width:145px"><col style="width:55px"></colgroup>
     <thead>
-      <tr><th>Codigo</th><th>Detalle</th><th class="num">{{ d.p.rubro or 'CANON SOBRECANON, REGALIAS, RENTAS DE ADUANAS Y PARTICIPACIONES.' }}</th><th>A&ntilde;o</th></tr>
+      <tr><th>Código</th><th>Detalle</th><th class="num">{{ d.p.rubro or 'CANON SOBRECANON, REGALIAS, RENTAS DE ADUANAS Y PARTICIPACIONES.' }}</th><th>A&ntilde;o</th></tr>
     </thead>
     <tbody>
       {% for f in d.gen %}
@@ -435,11 +480,11 @@
     </tbody>
   </table>
 
-  <div class="sec-band b3">2.5. Resumen General</div>
+  <div class="sec-band b3">2.{{ base_sec + 1 }}. Resumen General</div>
   <table class="tabla">
     <colgroup><col style="width:105px"><col style="width:300px"><col style="width:145px"></colgroup>
     <thead>
-      <tr><th>Codigo</th><th>Detalle</th><th class="num">{{ d.p.rubro or 'CANON SOBRECANON, REGALIAS, RENTAS DE ADUANAS Y PARTICIPACIONES.' }}</th></tr>
+      <tr><th>Código</th><th>Detalle</th><th class="num">{{ d.p.rubro or 'CANON SOBRECANON, REGALIAS, RENTAS DE ADUANAS Y PARTICIPACIONES.' }}</th></tr>
     </thead>
     <tbody>
       {% for f in d.resumen_general %}
@@ -453,7 +498,7 @@
     </tbody>
   </table>
 
-  <div class="sec-band b3">2.6. De la Ejecucion Financiera</div>
+  <div class="sec-band b3">2.{{ base_sec + 2 }}. De la Ejecución Financiera</div>
   <div class="sec-txt">{{ d.ejec_fin_texto }}</div>
   <table class="tabla">
     <colgroup><col style="width:375px"><col style="width:145px"><col style="width:145px"></colgroup>

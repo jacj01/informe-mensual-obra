@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="Reporte imprimible FE-07 Movimiento Diario: registro diario de movimientos de almacén de obra en administración directa. Cada línea incluye fecha, tipo de movimiento (entrada/salida), material, cantidad, usuario y motivo. Control detallado de entradas y salidas con firma del responsable por turno.">
+<meta name="description" content="Informe imprimible FE-07 Movimiento Diario: registro diario de movimientos de almacén de obra en administración directa. Cada línea incluye fecha, tipo de movimiento (entrada/salida), material, cantidad, usuario y motivo. Control detallado de entradas y salidas con firma del responsable por turno.">
 <title>FE-07 Movimiento Diario - {{ MESES[mes-1] }} {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
 <style>
   .seccion { margin-top: 10px; page-break-inside: avoid; }
   .seccion-titulo { background: var(--azul); color: #fff; font-weight: 700; font-size: 8.5pt; padding: 6px 12px; border-radius: 4px 4px 0 0; margin: 0; }
@@ -45,7 +45,7 @@
   </div>
   <div class="info-grid">
     <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
-    <div class="info-item"><span class="info-label">Codigo Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Código Único</span><span class="info-val">{{ p.cui or '' }}</span></div>
     <div class="info-item"><span class="info-label">Responsable Almacén</span><span class="info-val">{{ p.responsable_almacen or '' }}</span></div>
   </div>
   <div class="responsables">

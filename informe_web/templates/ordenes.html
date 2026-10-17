@@ -8,14 +8,14 @@
 {% block content %}
 <div class="card">
   <div class="card-head">
-    <h3><i class="bi bi-bag-plus"></i> Registrar orden (proveedor)</h3>
+    <h2><i class="bi bi-bag-plus"></i> Registrar orden (proveedor)</h2>
     <form method="get" class="filters">
       <select name="mes" aria-label="Mes" onchange="guardarScrollY(); this.form.submit()">
         {% for m in MESES %}
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
       </select>
-      <input type="number" name="anio" value="{{ anio }}" readonly title="Año configurado en la cabecera del proyecto">
+      <input type="number" name="anio" value="{{ anio }}" readonly aria-label="Año" title="Año configurado en la cabecera del proyecto">
     </form>
   </div>
 
@@ -187,9 +187,9 @@
   <div class="tab-panel active" id="tab-oc" role="tabpanel">
     <div class="card">
       <div class="card-head between">
-        <h3><i class="bi bi-bag-check"></i> Órdenes de Compra - {{ MESES[mes-1] }} {{ anio }}</h3>
+        <h2><i class="bi bi-bag-check"></i> Órdenes de Compra - {{ MESES[mes-1] }} {{ anio }}</h2>
         <div style="display:flex;align-items:center;gap:10px">
-          <a class="btn btn-print" href="{{ url_for('ordenes_imprimir') }}" target="_blank" title="Imprimir reporte general de todas las órdenes registradas (O/C y O/S)"><i class="bi bi-printer"></i> Reporte de órdenes</a>
+          <a class="btn btn-print" href="{{ url_for('ordenes_imprimir') }}" target="_blank" title="Imprimir informe general de todas las órdenes registradas (O/C y O/S)"><i class="bi bi-printer"></i> Informe de órdenes</a>
           <input type="text" id="searchOC" placeholder="Buscar por O/C..." 
                  style="padding:6px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;width:200px"
                  oninput="filtrarOrdenes('oc')">
@@ -217,9 +217,9 @@
   <div class="tab-panel" id="tab-os" role="tabpanel">
     <div class="card">
       <div class="card-head between">
-        <h3><i class="bi bi-bag-check"></i> Órdenes de Servicio - {{ MESES[mes-1] }} {{ anio }}</h3>
+        <h2><i class="bi bi-bag-check"></i> Órdenes de Servicio - {{ MESES[mes-1] }} {{ anio }}</h2>
         <div style="display:flex;align-items:center;gap:10px">
-          <a class="btn btn-print" href="{{ url_for('ordenes_imprimir') }}" target="_blank" title="Imprimir reporte general de todas las órdenes registradas (O/C y O/S)"><i class="bi bi-printer"></i> Reporte de órdenes</a>
+          <a class="btn btn-print" href="{{ url_for('ordenes_imprimir') }}" target="_blank" title="Imprimir informe general de todas las órdenes registradas (O/C y O/S)"><i class="bi bi-printer"></i> Informe de órdenes</a>
           <input type="text" id="searchOS" placeholder="Buscar por O/S..." 
                  style="padding:6px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;width:200px"
                  oninput="filtrarOrdenes('os')">
@@ -248,9 +248,9 @@
   <div class="tab-panel" id="tab-ot" role="tabpanel">
     <div class="card">
       <div class="card-head between">
-        <h3><i class="bi bi-bag-check"></i> Otros registros - {{ MESES[mes-1] }} {{ anio }}</h3>
+        <h2><i class="bi bi-bag-check"></i> Otros registros - {{ MESES[mes-1] }} {{ anio }}</h2>
         <div style="display:flex;align-items:center;gap:10px">
-          <a class="btn btn-print" href="{{ url_for('ordenes_imprimir') }}" target="_blank" title="Imprimir reporte general de todas las órdenes registradas (O/C y O/S)"><i class="bi bi-printer"></i> Reporte de órdenes</a>
+          <a class="btn btn-print" href="{{ url_for('ordenes_imprimir') }}" target="_blank" title="Imprimir informe general de todas las órdenes registradas (O/C y O/S)"><i class="bi bi-printer"></i> Informe de órdenes</a>
           <input type="text" id="searchOT" placeholder="Buscar..." 
                  style="padding:6px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;width:200px"
                  oninput="filtrarOrdenes('ot')">

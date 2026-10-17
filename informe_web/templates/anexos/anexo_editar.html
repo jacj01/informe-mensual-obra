@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Editar Anexo N° {{ ax.codigo }} - {{ ax.titulo }}{% endblock %}
+{% block heading %}Anexo N° {{ ax.codigo }} &middot; {{ ax.corto }}{% endblock %}
+{% block subheading %}Complete los datos de este anexo ({{ MESES[mes-1] }} {{ anio }}){% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head between">
+    <a class="btn btn-outline" href="{{ url_for('anexos', mes=mes, anio=anio) }}"><i class="bi bi-arrow-left"></i> Anexos</a>
+    <a class="btn btn-primary" href="{{ url_for('imprimir_anexo', cod=ax.codigo, mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Ver impresión</a>
+  </div>
+  <div style="padding:4px 20px 16px">
+    <p style="margin:0;color:var(--texto2);font-size:.9rem;line-height:1.5">
+      Los cuadros (presupuesto, ejecución, personal, plazos y firmas) se llenan automáticamente desde el proyecto.
+      Complete aquí únicamente los datos específicos del anexo; el documento impreso mostrará lo registrado.
+    </p>
+  </div>
+</div>
+
+<form method="post" class="form-panel" data-no-validar novalidate>
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <div class="card">
+    <div class="card-head"><h2><i class="bi bi-card-heading"></i> Documento</h2></div>
+    <div class="form-grid">
+      <div class="field span2">
+        <label for="ax-n_doc">N.° de documento (memorándum / informe)</label>
+        <input type="text" name="n_doc" id="ax-n_doc" value="{{ A.n_doc }}" placeholder="Ej.: 012-2026-SGIPDU/AyA" maxlength="60">
+      </div>
+      <div class="field span2">
+        <label for="ax-fecha">Fecha del documento</label>
+        <input type="date" name="fecha" id="ax-fecha" value="{{ A.fecha.isoformat() if A.fecha else '' }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2><i class="bi bi-pencil-square"></i> Datos del anexo</h2></div>
+    <div class="form-grid">
+      {% for f in campos %}
+      {% if f.t == 'textarea' %}
+      <div class="field full">
+        <label for="ax-{{ f.k }}">{{ f.l }}</label>
+        <textarea name="{{ f.k }}" id="ax-{{ f.k }}" rows="4">{{ av.get(f.k, '') }}</textarea>
+      </div>
+      {% elif f.t == 'select' %}
+      <div class="field span2">
+        <label for="ax-{{ f.k }}">{{ f.l }}</label>
+        <select name="{{ f.k }}" id="ax-{{ f.k }}">
+          <option value="">-- Seleccionar --</option>
+          {% for op in f.opciones %}
+          <option value="{{ op }}" {{ 'selected' if av.get(f.k, '') == op }}>{{ op }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% elif f.t == 'date' %}
+      <div class="field span2">
+        <label for="ax-{{ f.k }}">{{ f.l }}</label>
+        <input type="date" name="{{ f.k }}" id="ax-{{ f.k }}" value="{{ av.get(f.k, '') }}">
+      </div>
+      {% elif f.t == 'number' %}
+      <div class="field span2">
+        <label for="ax-{{ f.k }}">{{ f.l }}</label>
+        <input type="number" step="0.01" name="{{ f.k }}" id="ax-{{ f.k }}" value="{{ av.get(f.k, '') }}">
+      </div>
+      {% else %}
+      <div class="field span2">
+        <label for="ax-{{ f.k }}">{{ f.l }}</label>
+        <input type="text" name="{{ f.k }}" id="ax-{{ f.k }}" value="{{ av.get(f.k, '') }}">
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head between">
+      <h2><i class="bi bi-save"></i> Guardar cambios</h2>
+      <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle"></i> Guardar anexo</button>
+        <a class="btn btn-outline" href="{{ url_for('anexos', mes=mes, anio=anio) }}">Cancelar</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

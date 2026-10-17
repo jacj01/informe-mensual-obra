@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Anexos - Directiva N° 017-2023-CG/GMPL{% endblock %}
+{% block og_title %}Anexos - Directiva N° 017-2023-CG/GMPL{% endblock %}
+{% block meta_description %}Anexos imprimibles de la Directiva N° 017-2023-CG/GMPL para la ejecución de obras públicas por administración directa.{% endblock %}
+{% block heading %}Anexos de la Directiva N° 017-2023-CG/GMPL{% endblock %}
+{% block subheading %}Formatos imprimibles de la ejecución de obras por Administración Directa{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head between">
+    <div>
+      <h2 style="margin:0">Anexos de la Directiva N° 017-2023-CG/GMPL</h2>
+      <div style="font-size:.85rem;color:var(--texto2);margin-top:4px">
+        Contraloría General de la República &middot; Aprobada por R.C. N° 432-2023-CG &middot; Vigente desde el 01/04/2024
+      </div>
+    </div>
+    <span class="pill">{{ MESES[mes-1] }} {{ anio }}</span>
+  </div>
+  <p style="margin-top:12px;color:var(--texto2);font-size:.9rem">
+    Los siguientes anexos se generan solo para impresión, tomando automáticamente los datos del proyecto.
+    Complete la información faltante sobre el documento impreso o en el editor antes de suscribirlo.
+  </p>
+</div>
+
+<div class="cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px">
+  {% for ax in anexos %}
+  <div class="card" style="margin:0;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:var(--bg);color:var(--azul);font-size:1.3rem">
+        <i class="bi {{ ax.icono }}"></i>
+      </span>
+      <div>
+        <div style="font-size:.78rem;font-weight:700;color:var(--azul);text-transform:uppercase;letter-spacing:.5px">Anexo N° {{ ax.codigo }}</div>
+        <div style="font-weight:700;color:var(--azul-osc);line-height:1.25">{{ ax.titulo }}</div>
+      </div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+      <a class="btn btn-outline" href="{{ url_for('anexo_editar', cod=ax.codigo, mes=mes, anio=anio) }}">
+        <i class="bi bi-pencil"></i> Editar
+      </a>
+      <a class="btn btn-primary" href="{{ url_for('imprimir_anexo', cod=ax.codigo, mes=mes, anio=anio) }}" target="_blank">
+        <i class="bi bi-printer"></i> Imprimir
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -7,7 +7,7 @@
 
 {% block content %}
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-database"></i> Base de datos actual</h3></div>
+  <div class="card-head"><h2><i class="bi bi-database"></i> Base de datos actual</h2></div>
   <div class="form-grid">
     <div class="field">
       <label>Ubicación</label>
@@ -54,7 +54,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-plus-circle"></i> Crear respaldo</h3></div>
+  <div class="card-head"><h2><i class="bi bi-plus-circle"></i> Crear respaldo</h2></div>
   <form method="post">
     <input type="hidden" name="accion" value="crear">
     <button type="submit" class="btn btn-primary"><i class="bi bi-database-add"></i> Crear respaldo ahora</button>
@@ -62,7 +62,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-upload"></i> Restaurar desde archivo</h3></div>
+  <div class="card-head"><h2><i class="bi bi-upload"></i> Restaurar desde archivo</h2></div>
   <form method="post" enctype="multipart/form-data"
         data-confirm="¿Restaurar la base de datos desde un archivo externo? Se guardará una copia automática del estado actual antes de restaurar."
         data-confirm-title="Restaurar desde archivo" data-confirm-btn="Restaurar">
@@ -88,7 +88,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-clock-history"></i> Respaldos guardados</h3></div>
+  <div class="card-head"><h2><i class="bi bi-clock-history"></i> Respaldos guardados</h2></div>
   {% if respaldos %}
   <div class="table-scroll">
     <table class="table">

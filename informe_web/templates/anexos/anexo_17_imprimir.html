@@ -1,0 +1,127 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Cronograma actualizado de ejecución</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Mes</th>
+      <th class="num">% Programado acum.</th>
+      <th class="num">% Ejecutado acum.</th>
+      <th class="num">Ejecutado real (S/)</th>
+      <th class="num">Ejecutado acum. (S/)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% set nsp = namespace(ej_acum=0) %}
+    {% for i in range(12) %}
+    {% set vmes = namespace(v=0) %}
+    {% for comp, r in fe06_resumen.items() %}{% set vmes.v = vmes.v + r.mensual[i] %}{% endfor %}
+    {% set nsp.ej_acum = nsp.ej_acum + vmes.v %}
+    {% set pct_pr = av.get('prog_%d' % (i + 1)) %}
+    <tr>
+      <td>{{ MESES[i] }}</td>
+      <td class="num">{% if pct_pr is not none and pct_pr|string != '' %}{{ pct_pr }}%{% else %}__________{% endif %}</td>
+      <td class="num">{% if curva_s %}{{ "{:.2f}".format(curva_s[i].ej) }}%{% else %}__________{% endif %}</td>
+      <td class="num">{{ "{:,.2f}".format(vmes.v) }}</td>
+      <td class="num">{{ "{:,.2f}".format(nsp.ej_acum) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="fila-total">
+      <td>TOTAL</td>
+      <td class="num">__________</td>
+      <td class="num">{{ "{:.2f}".format(resumen.totales.porc) }}%</td>
+      <td class="num">{{ "{:,.2f}".format(fe06_sintesis.ejec_anio) }}</td>
+      <td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="sec-titulo">III. Curva S y avance físico acumulado</div>
+{% set ns = namespace(ej_pts=[], pr_pts=[], pr_any=false,
+                      W=620, H=250, L=48, R=16, T=18, B=36) %}
+{% for pt in curva_s %}
+{% set pl = ns.W - ns.L - ns.R %}
+{% set x = ns.L + pl * (pt.mes - 1) / 11 %}
+{% set ya = ns.H - ns.T - ns.B %}
+{% set ye = ns.T + ya * (1 - pt.ej / 100) %}
+{% set ns.ej_pts = ns.ej_pts + [(x|round(1)) ~ ',' ~ (ye|round(1))] %}
+{% if pt.prog is not none %}
+{% set yp = ns.T + ya * (1 - pt.prog / 100) %}
+{% set ns.pr_pts = ns.pr_pts + [(x|round(1)) ~ ',' ~ (yp|round(1))] %}
+{% set ns.pr_any = true %}
+{% endif %}
+{% endfor %}
+<div style="text-align:center;margin:6px 0">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{ ns.W }} {{ ns.H }}" width="100%" max-width="620" style="max-width:620px;font-family:Calibri,Arial,sans-serif">
+    <rect x="0" y="0" width="{{ ns.W }}" height="{{ ns.H }}" fill="#ffffff" stroke="#999" stroke-width="1"/>
+    {% set pl = ns.W - ns.L - ns.R %}{% set ya = ns.H - ns.T - ns.B %}
+    {% for g in [0, 20, 40, 60, 80, 100] %}
+    {% set yg = ns.T + ya * (1 - g / 100) %}
+    <line x1="{{ ns.L }}" y1="{{ yg|round(1) }}" x2="{{ ns.W - ns.R }}" y2="{{ yg|round(1) }}" stroke="#d8dee5" stroke-width="1" {% if g != 0 and g != 100 %}stroke-dasharray="3 3"{% endif %}/>
+    <text x="{{ ns.L - 5 }}" y="{{ (yg + 3)|round(1) }}" text-anchor="end" font-size="9" fill="#555">{{ g }}%</text>
+    {% endfor %}
+    {% for i in range(12) %}
+    {% set xm = ns.L + pl * i / 11 %}
+    <text x="{{ xm|round(1) }}" y="{{ ns.H - ns.B + 14 }}" text-anchor="middle" font-size="9" fill="#555">{{ MESES[i][:1] }}</text>
+    {% endfor %}
+    <line x1="{{ ns.L }}" y1="{{ ns.T + ya }}" x2="{{ ns.W - ns.R }}" y2="{{ ns.T + ya }}" stroke="#333" stroke-width="1"/>
+    <line x1="{{ ns.L }}" y1="{{ ns.T }}" x2="{{ ns.L }}" y2="{{ ns.T + ya }}" stroke="#333" stroke-width="1"/>
+    {% if ns.pr_any %}
+    <polyline points="{{ ns.pr_pts|join(' ') }}" fill="none" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="5 4"/>
+    {% endif %}
+    <polyline points="{{ ns.ej_pts|join(' ') }}" fill="none" stroke="#1f6fb2" stroke-width="2"/>
+    {% for pt in curva_s %}
+    {% set x = ns.L + pl * (pt.mes - 1) / 11 %}
+    {% set ye = ns.T + ya * (1 - pt.ej / 100) %}
+    <circle cx="{{ x|round(1) }}" cy="{{ ye|round(1) }}" r="2.2" fill="#1f6fb2"/>
+    {% if pt.prog is not none %}
+    {% set yp = ns.T + ya * (1 - pt.prog / 100) %}
+    <circle cx="{{ x|round(1) }}" cy="{{ yp|round(1) }}" r="2" fill="#c0392b"/>
+    {% endif %}
+    {% endfor %}
+  </svg>
+  <div style="display:flex;gap:18px;justify-content:center;font-size:9pt;margin-top:2px">
+    <span><span style="display:inline-block;width:14px;height:2px;background:#1f6fb2;vertical-align:middle"></span> Ejecutado real</span>
+    <span><span style="display:inline-block;width:14px;height:2px;background:#c0392b;vertical-align:middle;border-top:1px dashed #c0392b;background:none"></span> Programado</span>
+  </div>
+</div>
+
+<table class="tabla">
+  <thead>
+    <tr><th>Indicador</th><th class="num">Valor</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Monto del Expediente Técnico (S/)</td><td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td></tr>
+    <tr><td>Ejecutado acumulado (S/)</td><td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td></tr>
+    <tr><td>Avance acumulado (%)</td><td class="num">{{ "{:.2f}".format(resumen.totales.porc) }}%</td></tr>
+    <tr><td>Saldo por ejecutar (S/)</td><td class="num">{{ "{:,.2f}".format(resumen.totales.saldo) }}</td></tr>
+  </tbody>
+</table>
+
+<div class="sec-titulo">IV. Observaciones del cronograma</div>
+{{ parrafo(av.get('observaciones'), '(Comente el comportamiento del avance real frente al programado.)') }}
+
+<div class="sec-titulo">V. Conclusiones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones del avance del proyecto.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.residente or '' }}</div>
+    <div class="cargo">Residente de Obra</div>
+    {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

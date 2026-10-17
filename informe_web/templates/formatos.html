@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Formatos Financieros{% endblock %}
 {% block og_title %}Formatos Financieros{% endblock %}
-{% block meta_description %}Generación de formatos oficiales del informe financiero mensual de obra: manifiesto, FE05, FE06, panel y reportes imprimibles.{% endblock %}
+{% block meta_description %}Generación de formatos oficiales del informe financiero mensual de obra: manifiesto, FE05, FE06, panel e informes imprimibles.{% endblock %}
 {% block heading %}Formatos Oficiales{% endblock %}
 {% block subheading %}Generados automáticamente desde los datos registrados{% endblock %}
 
@@ -14,11 +14,13 @@
         <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>
         {% endfor %}
       </select>
-      <input type="number" name="anio" value="{{ anio }}" readonly title="Año configurado en la cabecera del proyecto">
+      <input type="number" name="anio" value="{{ anio }}" readonly aria-label="Año" title="Año configurado en la cabecera del proyecto">
     </form>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
       <a class="btn btn-outline" href="javascript:void(0)" onclick="return abrirModal('{{ url_for('formatos_actividades', mes=mes, anio=anio) }}')">
         <i class="bi bi-list-check"></i> Ingresar Actividades</a>
+      <a class="btn btn-outline" href="{{ url_for('anexos', mes=mes, anio=anio) }}">
+        <i class="bi bi-journal-check"></i> Anexos Directiva 017</a>
       <a class="btn btn-primary" href="{{ url_for('imprimir_panel', mes=mes, anio=anio) }}" target="_blank">
         <i class="bi bi-clipboard-data"></i> Resumen Financiero</a>
     </div>
@@ -32,7 +34,7 @@
 
 <div class="tab-panel active" id="tab-f05" role="tabpanel">
   <div class="card">
-    <div class="card-head between"><h3>EJECUCIÓN PRESUPUESTAL MENSUAL - {{ MESES[mes-1] }} {{ anio }}</h3>
+    <div class="card-head between"><h2>EJECUCIÓN PRESUPUESTAL MENSUAL - {{ MESES[mes-1] }} {{ anio }}</h2>
       <div style="display:flex;gap:8px">
         <a class="btn btn-primary" href="{{ url_for('fe05_excel', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-file-earmark-excel"></i> Excel</a>
         <a class="btn btn-primary" href="{{ url_for('imprimir_fe05', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
@@ -50,7 +52,8 @@
             <th class="num">P.U</th><th class="num">Importe</th>
             {% for c in clasif_cols %}<th class="num">{{ c }}</th>{% endfor %}
             <th class="num">Directos</th><th class="num">Grales</th>
-            <th class="num">Superv.</th><th class="num">Total</th>
+            <th class="num">Superv.</th><th class="num">Exp.Téc</th>
+            <th class="num">Liquid.</th><th class="num">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -71,6 +74,8 @@
             <td class="num">{{ "{:,.2f}".format(f.directos) if f.directos else '-' }}</td>
             <td class="num">{{ "{:,.2f}".format(f.generales) if f.generales else '-' }}</td>
             <td class="num">{{ "{:,.2f}".format(f.supervision) if f.supervision else '-' }}</td>
+            <td class="num">{{ "{:,.2f}".format(f.expediente) if f.expediente else '-' }}</td>
+            <td class="num">{{ "{:,.2f}".format(f.liquidacion) if f.liquidacion else '-' }}</td>
             <td class="num strong">{{ "{:,.2f}".format(f.d.importe) }}</td>
           </tr>
           {% endfor %}
@@ -82,6 +87,8 @@
             <td class="num strong">{{ "{:,.2f}".format(sec.totales.directos) }}</td>
             <td class="num strong">{{ "{:,.2f}".format(sec.totales.generales) }}</td>
             <td class="num strong">{{ "{:,.2f}".format(sec.totales.supervision) }}</td>
+            <td class="num strong">{{ "{:,.2f}".format(sec.totales.expediente) }}</td>
+            <td class="num strong">{{ "{:,.2f}".format(sec.totales.liquidacion) }}</td>
             <td class="num strong">{{ "{:,.2f}".format(sec.totales.total) }}</td>
           </tr>
         </tfoot>
@@ -98,7 +105,7 @@
 
 <div class="tab-panel" id="tab-f06" role="tabpanel">
   <div class="card">
-    <div class="card-head between"><h3>CUADRO COMPARATIVO PRESUPUESTO ANALÍTICO APROBADO Y EJECUTADO</h3>
+    <div class="card-head between"><h2>CUADRO COMPARATIVO PRESUPUESTO ANALÍTICO APROBADO Y EJECUTADO</h2>
       <div style="display:flex;gap:8px">
         <a class="btn btn-primary" href="{{ url_for('fe06_excel', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-file-earmark-excel"></i> Excel</a>
         <a class="btn btn-primary" href="{{ url_for('imprimir_fe06', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
@@ -171,13 +178,13 @@
           <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='e2024')) }}</td>
           <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='e2025')) }}</td>
           {% endif %}
-          <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='pim')) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='pim') + fe06_sintesis.ampliacion) }}</td>
           {% for m in meses_vis %}
           <td class="num strong">{{ "{:,.2f}".format(fe06_totales_mensual[m-1]) }}</td>
           {% endfor %}
           <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='total_anio')) }}</td>
           <td></td>
-          <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='saldo_pim')) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='saldo_pim') + fe06_sintesis.ampliacion) }}</td>
           {% if p.incluir_anios_anteriores %}
           <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='acum_total')) }}</td>
           <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='saldo_et')) }}</td>
@@ -190,7 +197,7 @@
 
   <div class="grid-2 resumen-fe06">
     <div class="card">
-      <div class="card-head"><h3>RESUMEN A NIVEL PIM</h3></div>
+      <div class="card-head"><h2>RESUMEN A NIVEL PIM</h2></div>
       <div class="table-scroll">
       <table class="table table-compact">
         <thead>
@@ -224,7 +231,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><h3>RESUMEN A NIVEL DE EXPEDIENTE</h3></div>
+      <div class="card-head"><h2>RESUMEN A NIVEL DE EXPEDIENTE</h2></div>
       <div class="table-scroll">
       <table class="table table-compact">
         <thead>

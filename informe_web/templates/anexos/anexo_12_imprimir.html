@@ -1,0 +1,58 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Flujo documentario del expediente técnico</div>
+<table class="tabla">
+  <thead>
+    <tr><th>Etapa</th><th>Documento / actuación</th><th>Fecha</th><th>Responsable</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Formulación / elaboración</td><td>{{ av.get('doc_elaboracion') or '__________' }}</td><td>__________</td><td>__________</td></tr>
+    <tr><td>Aprobación</td><td>{{ p.aprobacion or '__________' }}</td><td>{% if p.fecha_aprobacion %}{{ p.fecha_aprobacion.strftime('%d/%m/%Y') }}{% else %}__________{% endif %}</td><td>__________</td></tr>
+    <tr><td>Revisión</td><td>{{ av.get('doc_revision') or '__________' }}</td><td>__________</td><td>__________</td></tr>
+  </tbody>
+</table>
+<p class="sec-parrafo">Rubro: {{ p.rubro or '____________' }}. Monto aprobado del expediente técnico:
+S/ {{ "{:,.2f}".format(resumen.totales.et) }}.</p>
+
+<div class="sec-titulo">III. Verificación del contenido del expediente</div>
+<table class="tabla">
+  <thead>
+    <tr><th>N°</th><th>Aspecto a verificar</th><th>Cumple</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>Memoria descriptiva y especificaciones técnicas completas</td><td>____</td></tr>
+    <tr><td>2</td><td>Planos de ejecución actualizados y suscritos</td><td>____</td></tr>
+    <tr><td>3</td><td>Presupuesto de obra y análisis de precios unitarios</td><td>____</td></tr>
+    <tr><td>4</td><td>Fórmula polinómica y relación de insumos</td><td>____</td></tr>
+    <tr><td>5</td><td>Cronograma de ejecución y de adquisiciones</td><td>____</td></tr>
+    <tr><td>6</td><td>Estudio de suelos, topografía y evaluación de riesgos</td><td>____</td></tr>
+    <tr><td>7</td><td>Autorizaciones, licencias y estudios complementarios</td><td>____</td></tr>
+  </tbody>
+</table>
+
+<div class="sec-titulo">IV. Análisis y observaciones</div>
+{{ parrafo(av.get('observaciones_verif'), '(Registre las observaciones de la verificación.)') }}
+{{ parrafo(av.get('analisis'), '') }}
+
+<div class="sec-titulo">V. Conclusiones y recomendaciones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones y recomendaciones.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.residente or '' }}</div>
+    <div class="cargo">Residente de Obra</div>
+    {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+{% set ns = namespace(mes=0) %}
+{% for comp, r in fe06_resumen.items() %}{% set ns.mes = ns.mes + r.mensual[mes-1] %}{% endfor %}
+
+<div class="sec-titulo">II. Control de avance físico</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Componente</th>
+      <th class="num">% Programado</th>
+      <th class="num">% Ejecutado real</th>
+      <th class="num">Desviación</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for cr in resumen.por_componente %}
+    <tr>
+      <td>{{ cr.componente }}</td>
+      <td class="num">______ %</td>
+      <td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td>
+      <td class="num">______ %</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="fila-total">
+      <td>TOTAL</td>
+      <td class="num">______ %</td>
+      <td class="num">{{ "{:.2f}".format(resumen.totales.porc) }}%</td>
+      <td class="num">______ %</td>
+    </tr>
+  </tfoot>
+</table>
+{{ parrafo(av.get('desviacion'), '(Registre las observaciones del avance físico y desviaciones detectadas.)') }}
+
+<div class="sec-titulo">III. Control del monto valorizado</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Concepto</th>
+      <th class="num">Monto (S/)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Presupuesto de obra (Expediente Técnico)</td><td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td></tr>
+    <tr><td>PIM (Presupuesto Institucional Modificado)</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.pim) }}</td></tr>
+    <tr><td>Valorizado ejecutado del mes de {{ MESES[mes-1] }}</td><td class="num">{{ "{:,.2f}".format(ns.mes) }}</td></tr>
+    <tr><td>Valorizado acumulado del ejercicio {{ anio }}</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.ejec_anio) }}</td></tr>
+    <tr><td>Valorizado acumulado total del proyecto</td><td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td></tr>
+    <tr><td>Saldo por ejecutar del proyecto</td><td class="num">{{ "{:,.2f}".format(resumen.totales.saldo) }}</td></tr>
+  </tbody>
+</table>
+{% set alm = namespace(e=0, s=0, vin=0.0, vout=0.0) %}
+{% for r in almacen_rows %}
+  {% set alm.vin = alm.vin + (r.valor_in or 0) %}
+  {% set alm.vout = alm.vout + (r.valor_out or 0) %}
+  {% for f in r.filas %}{% if f.tipo == 'E' %}{% set alm.e = alm.e + 1 %}{% else %}{% set alm.s = alm.s + 1 %}{% endif %}{% endfor %}
+{% endfor %}
+{% set mani_total = "{:,.2f}".format(manifiesto|sum(attribute='importe')) %}
+<p class="sec-parrafo">Como sustento de la valorización del mes se registraron {{ manifiesto|length }} documento(s)
+en el manifiesto de gastos por S/ {{ mani_total }}, y {{ alm.e }} entrada(s) y {{ alm.s }} salida(s) en el almacén
+por S/ {{ "{:,.2f}".format(alm.vin) }} y S/ {{ "{:,.2f}".format(alm.vout) }}, respectivamente.</p>
+
+<div class="sec-titulo">IV. Control del personal en obra</div>
+<table class="tabla">
+  <thead>
+    <tr><th>N°</th><th>Nombre completo</th><th>DNI</th><th>Cargo / ocupación</th><th>Tipo</th><th>Días</th></tr>
+  </thead>
+  <tbody>
+    {% for t in trabajadores %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ t.nombre }}</td>
+      <td>{{ t.dni or '__________' }}</td>
+      <td>{{ t.cargo or '__________' }}</td>
+      <td>{{ t.tipo|capitalize }}</td>
+      <td class="num">{{ t.dias_lista|length }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" style="text-align:center">Sin personal registrado en {{ MESES[mes-1] }} {{ anio }}.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="sec-titulo">V. Control técnico</div>
+{% if actividades %}
+<p class="sec-parrafo">Actividades ejecutadas en el periodo:</p>
+<ul class="lista-num">
+  {% for a in actividades %}
+  <li>{{ a.descripcion }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{{ parrafo(av.get('control_tecnico'), '(Registre las observaciones del control técnico.)') }}
+
+<div class="sec-titulo">VI. Observaciones y conclusiones</div>
+{{ parrafo(av.get('observaciones'), '(Registre las observaciones y conclusiones del control.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.residente or '' }}</div>
+    <div class="cargo">Residente de Obra</div>
+    {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

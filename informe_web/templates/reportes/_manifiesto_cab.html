@@ -1,0 +1,30 @@
+  <!-- ===================== ENCABEZADO OFICIAL ===================== -->
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if hdr.logo_path %}<img src="{{ url_for('static', filename=hdr.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ hdr.entidad or '' }}</div>
+      <div class="entidad-sub">{{ hdr.unidad or '' }}</div>
+      <div class="titulo">Manifiesto de Gasto</div>
+      <div class="subtitulo">{{ hdr.modalidad or '' }}</div>
+    </div>
+    <div class="enc-der">
+      {% if hdr.n_manifiesto %}<div class="num-doc">N°&nbsp;{{ hdr.n_manifiesto }}</div>{% endif %}
+      <div style="margin-top:6px;font-weight:700;color:var(--azul)">PERÍODO:&nbsp;{{ hdr.periodo or '' }}</div>
+    </div>
+  </div>
+
+  <!-- ===================== DATOS GENERALES ===================== -->
+  <div class="info-grid">
+    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ hdr.proyecto or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Código Unico</span><span class="info-val">{{ hdr.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Correlativo Meta</span><span class="info-val">{{ hdr.meta or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Fuente Financ.</span><span class="info-val">{{ hdr.fuente or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Modalidad</span><span class="info-val">{{ hdr.modalidad or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Ubicación</span><span class="info-val">{{ hdr.ubicacion or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Residente de Obra</span><span class="info-val">{{ hdr.residente or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Supervisor de Obra</span><span class="info-val">{{ hdr.supervisor or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Admin. de Obra</span><span class="info-val">{{ hdr.asistente or '' }}</span></div>
+    <div class="info-item info-ancho"><span class="info-label">Período</span><span class="info-val">{{ hdr.periodo or '' }}</span></div>
+  </div>

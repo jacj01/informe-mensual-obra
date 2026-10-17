@@ -4,26 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="Planilla de pagos de personal de obra: listado completo de obreros y técnicos con sueldo base, horas extras, descuentos por ley, deducciones y total a pagar por período. Incluye días trabajados, domingos, feriados, total de días y firmas del supervisor y contador. Reporte quincenal o mensual de nómina en administración directa.">
+<meta name="description" content="Planilla de pagos de personal de obra: listado completo de obreros y técnicos con sueldo base, horas extras, descuentos por ley, deducciones y total a pagar por período. Incluye días trabajados, domingos, feriados, total de días y firmas del supervisor y contador. Informe quincenal o mensual de nómina en administración directa.">
 <title>PLANILLA DE PAGOS - {{ MESES[mes-1] }} {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
 <style>
   .panel-titulo { font-size: 9.5pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase;
                   letter-spacing: .4px; margin: 10px 0 3px; }
 
   table.tabla th, table.tabla td { padding: 2px 3px; font-size: 6.6pt; }
   table.tabla thead th { font-size: 6pt; padding: 4px 2px; }
-  td.monto { text-align: right; font-variant-numeric: tabular-nums; }
+  table.tabla td.monto { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 6.3pt; padding: 2px 1px; }
   td.nombre { text-align: left; padding-left: 5px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
   .fila-resumen td { background: #F8FAFC; font-weight: 700; border-top: 1.4px solid var(--borde); font-size: 6.8pt; }
   .fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 7pt; }
   .firma-celda, .huella-celda { height: 78px; }
   .nota-pie { font-size: 6.4pt; color: var(--texto2); margin-top: 5px; line-height: 1.45; }
-  .firmas { margin-top: 60px; }
+  .firmas { margin-top: 70px; }
   .firma .nombres { min-height: 13px; font-size: 8pt; }
   .firma .cargo { font-size: 7pt; }
   .firma .reg { font-size: 6.5pt; }
+
+  .vacio-planilla { margin: 18px 0 6px; padding: 16px 18px; border: 1px dashed var(--borde);
+                    border-radius: 6px; background: #F8FAFC; color: var(--texto2);
+                    font-size: 9pt; line-height: 1.5; text-align: center; }
 </style>
 </head>
 <body>
@@ -107,21 +111,21 @@
   <div class="panel-titulo">Personal Obrero - Construcción Civil</div>
   <table class="tabla">
     <colgroup>
-      <col style="width:5mm"><col style="width:36mm"><col style="width:12mm"><col style="width:13mm">
+      <col style="width:5mm"><col style="width:30mm"><col style="width:12mm"><col style="width:13mm">
       <col style="width:5mm"><col style="width:5mm"><col style="width:5mm"><col style="width:6mm">
       {% if con_beneficios %}
-      <col style="width:11mm"><col style="width:11mm"><col style="width:11mm"><col style="width:11mm"><col style="width:11mm">
+      <col style="width:14mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm">
       {% else %}
-      <col style="width:18mm">
+      <col style="width:22mm">
       {% endif %}
       {% if con_beneficios %}
-      <col style="width:10mm"><col style="width:10mm"><col style="width:12mm"><col style="width:11mm">
+      <col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm">
       {% endif %}
-      <col style="width:13mm">
+      <col style="width:15mm">
       {% if con_beneficios %}
-      <col style="width:11mm"><col style="width:11mm"><col style="width:13mm">
+      <col style="width:12mm"><col style="width:12mm"><col style="width:15mm">
       {% endif %}
-      <col style="width:22mm"><col style="width:18mm">
+      <col style="width:18mm"><col style="width:16mm">
     </colgroup>
     <thead>
       <tr>
@@ -150,7 +154,7 @@
         <th>BUC</th>
         <th>Movilidad</th>
         {% else %}
-        <th>Sueldo<br>Mensual</th>
+        <th>Sueldo<br>del Mes</th>
         {% endif %}
         {% if con_beneficios %}
         <th>Vacaciones</th>
@@ -176,6 +180,11 @@
       </tr>
     </tbody>
   </table>
+  {% elif seccion == 'obrero' %}
+  <div class="vacio-planilla">
+    No hay <b>personal obrero</b> registrado en {{ MESES[mes-1] }} {{ anio }}.
+    Agregue trabajadores en «Tareo» y marque sus días para generar la planilla.
+  </div>
   {% endif %}
 
   {% if seccion == 'tecnico' and filas_tecnicos %}
@@ -247,6 +256,11 @@
       </tr>
     </tbody>
   </table>
+  {% elif seccion == 'tecnico' %}
+  <div class="vacio-planilla">
+    No hay <b>personal técnico y administrativo</b> registrado en {{ MESES[mes-1] }} {{ anio }}.
+    Agregue trabajadores en «Tareo» y marque sus días para generar la planilla.
+  </div>
   {% endif %}
 
   {% if seccion == 'obrero' %}

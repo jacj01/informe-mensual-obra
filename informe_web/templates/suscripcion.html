@@ -28,7 +28,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-credit-card-2-front"></i> Estado actual</h3></div>
+  <div class="card-head"><h2><i class="bi bi-credit-card-2-front"></i> Estado actual</h2></div>
   {% if not s %}
   <p class="empty">Aún no hay una suscripción registrada.</p>
   {% else %}
@@ -49,7 +49,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-calendar-plus"></i> Renovar o activar suscripción</h3></div>
+  <div class="card-head"><h2><i class="bi bi-calendar-plus"></i> Renovar o activar suscripción</h2></div>
   <form method="post" action="{{ url_for('suscripcion_renovar') }}" class="form-panel">
     <div class="form-grid">
       <div class="field">
@@ -75,7 +75,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-key"></i> Generar código de licencia</h3></div>
+  <div class="card-head"><h2><i class="bi bi-key"></i> Generar código de licencia</h2></div>
   <form method="post" action="{{ url_for('licencia_generar') }}" class="form-panel">
     <div class="form-grid">
       <div class="field">
@@ -112,7 +112,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-key-fill"></i> Renovar con código de licencia</h3></div>
+  <div class="card-head"><h2><i class="bi bi-key-fill"></i> Renovar con código de licencia</h2></div>
   <form method="post" action="{{ url_for('licencia_subir') }}" class="form-panel">
     <div class="form-grid">
       <div class="field full">
@@ -135,7 +135,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-sliders"></i> Estado del aplicativo</h3></div>
+  <div class="card-head"><h2><i class="bi bi-sliders"></i> Estado del aplicativo</h2></div>
   {% if s and s.activa %}
   <form method="post" action="{{ url_for('suscripcion_pausar') }}" class="inline"
         data-confirm="¿Pausar la suscripción? Todo el aplicativo quedará bloqueado (excepto el Administrador)."
@@ -150,7 +150,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-clock-history"></i> Historial de movimientos</h3></div>
+  <div class="card-head"><h2><i class="bi bi-clock-history"></i> Historial de movimientos</h2></div>
   <div class="table-scroll">
     <table class="table">
       <thead>
@@ -184,7 +184,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3><i class="bi bi-people"></i> Días restantes de licencia por usuario</h3></div>
+  <div class="card-head"><h2><i class="bi bi-people"></i> Días restantes de licencia por usuario</h2></div>
   <div class="table-scroll">
     <table class="table">
       <thead>

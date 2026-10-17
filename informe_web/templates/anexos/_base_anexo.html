@@ -1,0 +1,113 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Anexo N° {{ ax.codigo }} - {{ ax.titulo }} | {{ MESES[mes-1] }} {{ anio }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
+  <style>
+    @page { size: A4 portrait; margin: 10mm 13mm; }
+    .hoja { box-sizing: border-box; width: 210mm; min-height: 297mm; padding: 10mm 13mm; }
+    .encabezado { margin-bottom: 4px; padding-bottom: 4px; }
+    .logo-box { width: 54px; height: 54px; flex: 0 0 54px; }
+    .logo-box img { max-width: 50px; max-height: 50px; }
+    .titulo { font-size: 13pt; margin-top: 4px; }
+    .sec-titulo {
+      font-size: 10.5pt; font-weight: 800; color: var(--azul-osc);
+      text-transform: uppercase; letter-spacing: .3px;
+      border-bottom: 1.5px solid var(--azul-claro); padding-bottom: 1px;
+      margin: 5px 0 2px;
+    }
+    .sec-sub { font-size: 9.6pt; font-weight: 700; color: var(--azul-osc); margin: 6px 0 3px; }
+    .sec-parrafo { font-size: 9.4pt; line-height: 1.3; color: var(--texto); text-align: justify; margin: 1px 0; white-space: pre-wrap; }
+    .hint { font-size: 8pt; font-style: italic; color: var(--texto2); }
+    .campo {
+      display: inline-block; border-bottom: 1px dotted #6b7280;
+      min-width: 170px; height: 1.05em; vertical-align: bottom;
+    }
+    .campo.corto { min-width: 90px; }
+    .campo.largo { min-width: 320px; }
+    .lineas-blancas { margin: 3px 0 5px; }
+    .lineas-blancas .ln { border-bottom: 1px dotted #9ca3af; height: 18px; }
+    .check { display: inline-block; width: 12px; height: 12px; border: 1.2px solid var(--azul); margin: 0 6px 0 0; vertical-align: -1px; }
+    .opciones { font-size: 9.5pt; margin: 3px 0; }
+    .opciones span { margin-right: 20px; }
+    .lista-num { margin: 3px 0; padding-left: 0; list-style: none; font-size: 9.5pt; line-height: 1.4; }
+    .lista-num li { margin: 2px 0; padding-left: 22px; text-indent: -22px; }
+    table.tabla td, table.tabla th { font-size: 7.9pt; padding: 1.5px 4px; line-height: 1.25; }
+    table.tabla td.cto { width: 34%; }
+    .info-grid { gap: 3px 9px; margin: 4px 0 3px; }
+    .info-label { font-size: 7pt; padding: 2.5px 7px; }
+    .info-val { font-size: 8.1pt; padding: 2.5px 7px; min-height: 13px; }
+    .firmas { margin-top: 40px; }
+    .pie-anexo {
+      margin-top: 0; padding-top: 1px; border-top: .6px solid var(--borde);
+      font-size: 7.2pt; line-height: 1.2; color: var(--texto2); text-align: center;
+    }
+    @media print {
+      @page { size: A4 portrait; margin: 10mm 13mm; }
+      .hoja { width: auto; min-height: auto; margin: 0; box-shadow: none; padding: 0; }
+      .sec-titulo { margin-top: 5px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h2>Anexo N° {{ ax.codigo }} &middot; {{ ax.corto }}</h2>
+    <div class="spacer"></div>
+    <button type="button" onclick="window.print()">Imprimir</button>
+    <a class="volver" href="{{ url_for('anexos') }}">Volver</a>
+  </div>
+
+  <div class="hoja">
+    <div class="encabezado">
+      <div class="logo-box">
+        {% if p.logo_path %}
+        <img src="{{ url_for('static', filename=p.logo_path) }}" alt="Logo institucional">
+        {% else %}
+        <div class="sin-logo">LOGO<br>INSTITUCIONAL</div>
+        {% endif %}
+      </div>
+      <div class="enc-cen">
+        <div class="entidad">{{ p.entidad or 'Entidad Pública' }}</div>
+        <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+        <div class="titulo">{{ ax.titulo }}</div>
+        <div class="subtitulo">Anexo N° {{ ax.codigo }} &middot; Directiva N° 017-2023-CG/GMPL</div>
+      </div>
+      <div class="enc-der">
+        <span class="num-doc">{{ ('N.°&nbsp;' ~ A.n_doc) if A.n_doc else 'N.°&nbsp;______' }}</span>
+        <div class="periodo">{{ MESES[mes-1] }} {{ anio }}</div>
+        <div>{% if A.fecha %}{{ A.fecha.strftime('%d/%m/%Y') }}{% endif %}</div>
+      </div>
+    </div>
+
+    {% block contenido %}{% endblock %}
+
+    {% block firmas %}
+    <div class="firmas">
+      <div class="firma">
+        <div class="linea"></div>
+        <div class="nombres">{{ p.residente or '' }}</div>
+        <div class="cargo">Residente de Obra</div>
+        {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+      </div>
+      <div class="firma">
+        <div class="linea"></div>
+        <div class="nombres">{{ p.supervisor or '' }}</div>
+        <div class="cargo">Supervisor / Inspector de Obra</div>
+        {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+      </div>
+    </div>
+    {% endblock %}
+
+    <div class="pie-anexo">
+      Anexo N° {{ ax.codigo }} &middot; Directiva N° 017-2023-CG/GMPL (Ejecución de Obras Públicas por Administración Directa) &middot;
+      {{ p.entidad or '' }} &middot; {{ MESES[mes-1] }} {{ anio }}
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/imprimir_autofit.js') }}"></script>
+</body>
+</html>

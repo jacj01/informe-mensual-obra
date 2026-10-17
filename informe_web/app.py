@@ -23,7 +23,7 @@ from functools import wraps
 from flask import (Flask, render_template, request, redirect, url_for,
                    flash, jsonify, session, abort, Response, send_file)
 import io
-from sqlalchemy import event, text
+from sqlalchemy import and_, event, or_, text
 from sqlalchemy.engine import Engine
 
 
@@ -40,7 +40,7 @@ from models import (db, Proyecto, Presupuesto, Gasto, GastoDetalle,
                     AlmacenMovimiento, ActividadEjecutada, Trabajador, Usuario,
                     CLASIFICADORES, COMPONENTES, Suscripcion,
                     SuscripcionHistorial, LicenciaUtilizada, LicenciaEmitida,
-                    PLANES_SUSCRIPCION, sumar_meses)
+                    PLANES_SUSCRIPCION, sumar_meses, Anexo)
 import version as _app_version
 from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      suscripcion_vigente, suscripcion_usuario, gastos_mes,
@@ -48,7 +48,7 @@ from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      ejecucion_por_mes, ejecucion_por_componente, fe06_rows,
                      fe06_resumen, fe06_sintesis, f05_datos, almacen_items, almacen_diario,
                      saldo_insumo, almacen_valorizado, oc_para_material,
-                     materiales_sobrantes_acta,
+                     materiales_sobrantes_acta, almacen_consolidado,
                      meses_con_ejecucion, meses_visibles, ampliacion_presupuestal,
                      mes_inicio_manifiesto, clasificadores_proyecto,
                      calendario_mes, resumen_tareo, panel_cuadro1, panel_datos,
@@ -152,6 +152,15 @@ def migrar_schema():
             "dni_responsable_almacen": "VARCHAR(50) DEFAULT ''",
             "asistente_tecnico": "VARCHAR(300) DEFAULT ''",
             "dni_cip_asistente": "VARCHAR(50) DEFAULT ''",
+            "localidad": "VARCHAR(200) DEFAULT ''",
+            "viabilidad": "VARCHAR(300) DEFAULT ''",
+            "horizonte": "VARCHAR(100) DEFAULT ''",
+            "sector": "VARCHAR(300) DEFAULT ''",
+            "pliego": "VARCHAR(300) DEFAULT ''",
+            "categoria_presupuestal": "VARCHAR(300) DEFAULT ''",
+            "programa_presupuestal": "VARCHAR(300) DEFAULT ''",
+            "categoria_gasto": "VARCHAR(200) DEFAULT ''",
+            "grupo_generico": "VARCHAR(200) DEFAULT ''",
         }.items():
             if nuevo_col not in cols:
                 conn.execute(text(
@@ -553,6 +562,11 @@ def create_app():
     # Cache de 30 dias: css/js usan versionado (?v=N) y el logo tambien, asi que
     # el navegador solo vuelve a bajar lo que realmente cambia.
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 2592000
+    # Recargar las plantillas automaticamente al editarlas, sin reiniciar el
+    # servidor. En esta app de escritorio el costo de comprobar el mtime es
+    # despreciable y evita servir HTML en cache despues de un cambio.
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.jinja_env.auto_reload = True
     app.jinja_env.finalize = lambda v: "" if v is None else v
 
     # Version del aplicativo (para el check de actualizaciones).
@@ -733,6 +747,24 @@ def parse_fecha(val):
         return None
 
 
+def monto_form(val, por_defecto=None):
+    """Convierte un monto de formulario a float tolerando separadores de miles.
+
+    Acepta "1,122,926.52", "1122926.52", "1122926.52 " y "" (0.0). Devuelve
+    `por_defecto` (None) cuando el valor no es numerico, de modo que un dato mal
+    formado no sobrescriba con 0 un monto ya guardado.
+    """
+    if val is None:
+        return por_defecto
+    txt = str(val).strip().replace(",", "").replace(" ", "")
+    if txt == "":
+        return 0.0 if por_defecto is None else por_defecto
+    try:
+        return float(txt)
+    except ValueError:
+        return por_defecto
+
+
 def fecha_defecto(p):
     """Fecha por defecto segun el mes/anio configurado en Datos del Proyecto."""
     try:
@@ -880,7 +912,7 @@ def _enviar_reporte_bug(datos, imagenes):
     destino = conf["destino"] or conf["usuario"]
     remitente = conf["usuario"]
 
-    asunto = "[Informe Mensual] Reporte de error: %s" % (
+    asunto = "[Informe Mensual] Informe de error: %s" % (
         datos.get("asunto") or "Sin asunto")
 
     cuerpo = []
@@ -2070,7 +2102,7 @@ def _verificar_paquete_update(zip_path, tag, repo):
     esperado = _descargar_asset_sha256(repo, tag)
     if not esperado:
         return False, ("No se pudo verificar la integridad del paquete: falta "
-                       "el asset .sha256 en la release. Se anula la actualizacion.")
+                       "el asset .sha256 en la release. Se anula la actualización.")
     try:
         with open(zip_path, "rb") as fh:
             calc = hashlib.sha256(fh.read()).hexdigest()
@@ -2241,8 +2273,8 @@ def registrar_rutas(app):
 
             if not tag:
                 return jsonify({"ok": False,
-                                "error": "No se pudo obtener la version remota. "
-                                         "Verifique su conexion a internet."}), 400
+                                "error": "No se pudo obtener la versión remota. "
+                                         "Verifique su conexión a internet."}), 400
 
             # CN-008: no instalar versiones iguales o inferiores a la local.
             if _vt(tag) <= _vt(local_v):
@@ -2317,7 +2349,7 @@ def registrar_rutas(app):
                              creationflags=subprocess.CREATE_NO_WINDOW,
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
-            return jsonify({"ok": True, "msg": "Actualizacion iniciada; el servidor se reiniciara en breve."})
+            return jsonify({"ok": True, "msg": "Actualización iniciada; el servidor se reiniciará en breve."})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -2336,7 +2368,7 @@ def registrar_rutas(app):
         _reportes_bug[k_bug] = [t for t in _reportes_bug[k_bug]
                                 if ahora - t < _BUG_VENTANA]
         if len(_reportes_bug[k_bug]) > _BUG_MAX:
-            return jsonify({"ok": False, "error": "Demasiados reportes. "
+            return jsonify({"ok": False, "error": "Demasiados informes. "
                              "Espere unos minutos e intente de nuevo."}), 429
 
         nombre = request.form.get("nombre", "").strip()
@@ -2402,12 +2434,12 @@ def registrar_rutas(app):
         except RuntimeError as e:
             logging.getLogger("app").exception("Bug report: error de runtime")
             return jsonify({"ok": False,
-                            "error": "No se pudo enviar el reporte. "
+                            "error": "No se pudo enviar el informe. "
                                      "Inténtelo más tarde."}), 500
         except Exception:
             logging.getLogger("app").exception("Bug report: error inesperado")
             return jsonify({"ok": False,
-                            "error": "Error al enviar el reporte. "
+                            "error": "Error al enviar el informe. "
                                      "Inténtelo más tarde."}), 500
         return jsonify({"ok": True, "msg": msg})
 
@@ -2541,6 +2573,8 @@ def registrar_rutas(app):
             active = "liquidacion"
         elif ep in ("informe_final", "informe_final_imprimir"):
             active = "informe_final"
+        elif ep in ("anexos", "imprimir_anexo", "anexo_editar"):
+            active = "anexos"
         elif ep == "configuracion":
             active = "configuracion"
         elif ep in ("usuarios", "usuario_nuevo", "usuario_editar", "usuario_eliminar"):
@@ -3380,28 +3414,37 @@ def registrar_rutas(app):
                            "responsable_almacen",
                            "n_resolucion_adicional", "cip_supervisor", "cip_residente",
                            "colegiatura_admin", "dni_responsable_almacen",
-                           "asistente_tecnico", "dni_cip_asistente"]:
+                           "asistente_tecnico", "dni_cip_asistente",
+                           "localidad", "viabilidad", "horizonte", "sector", "pliego",
+                           "categoria_presupuestal", "programa_presupuestal",
+                           "categoria_gasto", "grupo_generico"]:
                 setattr(p, campo, request.form.get(campo, "").strip().upper())
-            try:
-                setattr(p, "monto_ampliacion",
-                        float(request.form.get("monto_ampliacion", 0) or 0))
-            except ValueError:
-                pass
-            # Guardar presupuesto desglosado (et y pim) por componente/detalle
+            mont_amp = monto_form(request.form.get("monto_ampliacion"))
+            if mont_amp is not None:
+                p.monto_ampliacion = mont_amp
+            # Guardar presupuesto desglosado (et y pim) por componente/detalle.
+            # Solo se tocan las filas presentes en el formulario y se toleran
+            # separadores de miles, para no poner en cero el presupuesto cuando
+            # el formulario se envía sin re-normalizar los montos (p. ej. sin JS).
             for i, (comp, det) in enumerate(PRESUPUESTO_DETALLE):
-                try:
-                    et_val = float(request.form.get('pres_et_%d' % i, 0) or 0)
-                    pim_val = float(request.form.get('pres_pim_%d' % i, 0) or 0)
-                except ValueError:
-                    et_val = pim_val = 0
+                et_key = 'pres_et_%d' % i
+                pim_key = 'pres_pim_%d' % i
+                if et_key not in request.form and pim_key not in request.form:
+                    continue
+                et_val = monto_form(request.form.get(et_key))
+                pim_val = monto_form(request.form.get(pim_key))
                 cfg = Presupuesto.query.filter_by(componente=comp, detalle=det).first()
                 if cfg:
-                    cfg.et = et_val
-                    cfg.pim2026 = pim_val
+                    if et_val is not None:
+                        cfg.et = et_val
+                    if pim_val is not None:
+                        cfg.pim2026 = pim_val
                 else:
                     clasif = detalle_clasificador(det)
                     db.session.add(Presupuesto(componente=comp, clasificador=clasif,
-                                               detalle=det, et=et_val, pim2026=pim_val))
+                                               detalle=det,
+                                               et=et_val if et_val is not None else 0.0,
+                                               pim2026=pim_val if pim_val is not None else 0.0))
             db.session.flush()
             # Parsear clasificadores extras desde el formulario primero
             extras = []
@@ -3424,19 +3467,24 @@ def registrar_rutas(app):
                 codigo = (ex.get("codigo") or "").strip().upper()
                 if not nombre:
                     continue
-                try:
-                    et_val = float(request.form.get('pres_et_extra_%d' % i, 0) or 0)
-                    pim_val = float(request.form.get('pres_pim_extra_%d' % i, 0) or 0)
-                except ValueError:
-                    et_val = pim_val = 0
+                if not nombre:
+                    continue
+                et_key = 'pres_et_extra_%d' % i
+                pim_key = 'pres_pim_extra_%d' % i
+                et_val = monto_form(request.form.get(et_key))
+                pim_val = monto_form(request.form.get(pim_key))
                 cfg = Presupuesto.query.filter_by(componente=componente, detalle=nombre).first()
                 if cfg:
-                    cfg.et = et_val
-                    cfg.pim2026 = pim_val
+                    if et_val is not None:
+                        cfg.et = et_val
+                    if pim_val is not None:
+                        cfg.pim2026 = pim_val
                     cfg.clasificador = codigo or cfg.clasificador
                 else:
                     db.session.add(Presupuesto(componente=componente, clasificador=codigo,
-                                               detalle=nombre, et=et_val, pim2026=pim_val))
+                                               detalle=nombre,
+                                               et=et_val if et_val is not None else 0.0,
+                                               pim2026=pim_val if pim_val is not None else 0.0))
             db.session.flush()
             # Eliminar Presupuesto rows de clasificadores extra que ya no existen
             base_dets = {det for _, det in PRESUPUESTO_DETALLE}
@@ -3540,6 +3588,7 @@ def registrar_rutas(app):
                 p.n_resolucion_adicional = ""
                 p.ampliacion_presupuestal = False
                 p.monto_ampliacion = 0
+            anio_prev, mes_prev = p.anio, p.mes_actual
             try:
                 p.anio = int(request.form.get("anio", p.anio))
             except ValueError:
@@ -3548,12 +3597,28 @@ def registrar_rutas(app):
                 p.mes_actual = int(request.form.get("mes_actual", p.mes_actual))
             except ValueError:
                 pass
-            if p.fecha_inicio and not p.adicional_obra:
+            if p.fecha_inicio:
                 if p.fecha_fin:
                     p.dias_ejecucion = max(0, (p.fecha_fin - p.fecha_inicio).days)
                 elif p.dias_ejecucion:
                     p.fecha_fin = p.fecha_inicio + timedelta(days=p.dias_ejecucion)
             db.session.commit()
+            # Al cambiar el mes de trabajo, las órdenes NO devengadas pasan al
+            # nuevo mes para seguir trabajándose con normalidad; las que ya tienen
+            # el check de devengado quedan cerradas en el mes anterior.
+            if (p.anio, p.mes_actual) != (anio_prev, mes_prev):
+                movidas = (Gasto.query
+                           .filter(Gasto.devengado.isnot(True))
+                           .filter(db.or_(Gasto.anio != p.anio,
+                                          Gasto.mes != p.mes_actual))
+                           .all())
+                for g in movidas:
+                    g.mes, g.anio = p.mes_actual, p.anio
+                if movidas:
+                    db.session.commit()
+                    flash(f"{len(movidas)} orden(es) pendiente(s) se trasladaron a "
+                          f"{MESES[p.mes_actual - 1]} {p.anio} para continuar su registro.",
+                          "success")
             flash("Datos de cabecera guardados correctamente.", "success")
             return redirect(url_for("cabecera"))
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -3817,6 +3882,7 @@ def registrar_rutas(app):
         total_devengado = 0.0
         total_oc = 0
         total_os = 0
+        total_plla = 0
         for g in lista:
             subtotal = g.importe
             total_general += subtotal
@@ -3824,16 +3890,18 @@ def registrar_rutas(app):
                 total_devengado += subtotal
             if g.tipo_doc == "O/S":
                 total_os += 1
+            elif g.tipo_doc == "PLLA":
+                total_plla += 1
             else:
                 total_oc += 1
             if not periodos or periodos[-1]["clave"] != (g.anio, g.mes):
                 periodos.append({
                     "clave": (g.anio, g.mes),
                     "nombre": f"{MESES[g.mes - 1]} {g.anio}",
-                    "oc_ordenes": [], "os_ordenes": [],
+                    "oc_ordenes": [], "os_ordenes": [], "plla_ordenes": [],
                     "cant": 0, "subtotal": 0.0,
-                    "cant_oc": 0, "cant_os": 0,
-                    "subtotal_oc": 0.0, "subtotal_os": 0.0,
+                    "cant_oc": 0, "cant_os": 0, "cant_plla": 0,
+                    "subtotal_oc": 0.0, "subtotal_os": 0.0, "subtotal_plla": 0.0,
                 })
             item = {
                 "g": g,
@@ -3845,6 +3913,10 @@ def registrar_rutas(app):
                 periodos[-1]["os_ordenes"].append(item)
                 periodos[-1]["cant_os"] += 1
                 periodos[-1]["subtotal_os"] += round(g.importe, 2)
+            elif g.tipo_doc == "PLLA":
+                periodos[-1]["plla_ordenes"].append(item)
+                periodos[-1]["cant_plla"] += 1
+                periodos[-1]["subtotal_plla"] += round(g.importe, 2)
             else:
                 periodos[-1]["oc_ordenes"].append(item)
                 periodos[-1]["cant_oc"] += 1
@@ -3856,6 +3928,7 @@ def registrar_rutas(app):
             "total_ordenes": len(lista),
             "total_oc": total_oc,
             "total_os": total_os,
+            "total_plla": total_plla,
             "total_general": round(total_general, 2),
             "total_devengado": round(total_devengado, 2),
             "total_pendiente": round(total_general - total_devengado, 2),
@@ -4531,10 +4604,7 @@ def registrar_rutas(app):
                 siaf = int(request.form.get("siaf", 0) or 0)
             except ValueError:
                 siaf = 0
-            try:
-                num_doc = int(request.form.get("num_doc", 0) or 0)
-            except ValueError:
-                num_doc = 0
+            num_doc = (request.form.get("num_doc", "") or "").strip()[:40]
             try:
                 monto = round(float(request.form.get("monto", 0) or 0), 2)
             except (TypeError, ValueError):
@@ -4647,8 +4717,7 @@ def registrar_rutas(app):
             seccion = "obrero"
         return render_template("_planilla_opciones.html", p=p, mes=mes, anio=anio,
                                seccion=seccion,
-                               MESES=MESES,
-                               TABLA_CIVIL_POR_ANIO=TABLA_CIVIL_POR_ANIO)
+                               MESES=MESES, tabla=tabla_civil(anio))
 
     @app.route("/tareo/planilla/imprimir")
     def planilla_imprimir():
@@ -4853,13 +4922,8 @@ def registrar_rutas(app):
         return render_template("_actividades_form.html", p=p, mes=mes, anio=anio,
                                MESES=MESES, actividades=actividades_mes(mes, anio))
 
-    @app.route("/formatos/manifiesto/imprimir", methods=["GET"])
-    def imprimir_manifiesto():
-        """Plantilla imprimible institucional del Manifiesto de Gasto con datos reales."""
-        p = get_proyecto()
-        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
-        anio = p.anio
-
+    def _manifiesto_ctx(p, mes, anio):
+        """Cabecera, secciones y total del Manifiesto de Gasto (reutilizable)."""
         # Cabecera institucional y datos generales
         ubicacion = " - ".join(x for x in [p.distrito, p.provincia, p.departamento] if x)
         # Correlativo del manifiesto: inicia en el mes en que se inicio el ingreso
@@ -4930,6 +4994,15 @@ def registrar_rutas(app):
             secciones.append(gr)
 
         total_gral = round(total_gastos_mes(mes, anio, devengado=True), 2)
+        return hdr, secciones, total_gral
+
+    @app.route("/formatos/manifiesto/imprimir", methods=["GET"])
+    def imprimir_manifiesto():
+        """Plantilla imprimible institucional del Manifiesto de Gasto con datos reales."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        hdr, secciones, total_gral = _manifiesto_ctx(p, mes, anio)
         return render_template("manifiesto_imprimir.html", p=p, mes=mes, anio=anio,
                                MESES=MESES, hdr=hdr, secciones=secciones,
                                total_gral=total_gral)
@@ -5313,9 +5386,9 @@ def registrar_rutas(app):
         nc_m = 11  # A-K
         info_pairs = [
             [("Proyecto", hdr["proyecto"])],
-            [("Codigo Unico", hdr["cui"]), ("Correlativo Meta", hdr["meta"])],
+            [("Código Único", hdr["cui"]), ("Correlativo Meta", hdr["meta"])],
             [("Fuente Financ.", hdr["fuente"]), ("Modalidad", hdr["modalidad"])],
-            [("Ubicacion", hdr["ubicacion"]), ("Residente de Obra", hdr["residente"])],
+            [("Ubicación", hdr["ubicacion"]), ("Residente de Obra", hdr["residente"])],
             [("Supervisor de Obra", hdr["supervisor"]), ("Admin. de Obra", hdr["asistente"])],
         ]
         font_num_doc = Font(name=FN, size=10, bold=True, color=AZUL)
@@ -5720,7 +5793,7 @@ def registrar_rutas(app):
 
     @app.route("/formatos/fe05/excel")
     def fe05_excel():
-        """Genera archivo .xlsx del FE-05 Ejecucion Presupuestal Mensual fiel
+        """Genera archivo .xlsx del FE-05 Ejecución Presupuestal Mensual fiel
         al diseño de la hoja de impresión."""
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -5811,7 +5884,7 @@ def registrar_rutas(app):
         logo_file = os.path.join(app.root_path, "static", p.logo_path) if p.logo_path else None
         info_pairs = [
             [("Proyecto", p.nombre or "")],
-            [("Codigo Unico", p.cui or ""), ("Correlativo Meta", p.meta or "")],
+            [("Código Único", p.cui or ""), ("Correlativo Meta", p.meta or "")],
             [("Fuente Financ.", p.fuente or ""), ("Modalidad", "ADMINISTRACION DIRECTA")],
         ]
         responsables = [
@@ -5821,7 +5894,7 @@ def registrar_rutas(app):
         ]
         tabla_start = _build_xl_header(
             ws, ncols,
-            "Ejecucion Presupuestal Mensual",
+            "Ejecución Presupuestal Mensual",
             "Total Costo de Construccion por Adm. Directa",
             {"entidad": p.entidad or "", "unidad": p.unidad_ejecutora or "",
              "periodo": f"PERIODO: {MESES[mes-1]} - {anio}"},
@@ -6031,7 +6104,7 @@ def registrar_rutas(app):
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        filename = f"FE05_Ejecucion_{MESES[mes-1]}_{anio}.xlsx"
+        filename = f"FE05_Ejecución_{MESES[mes-1]}_{anio}.xlsx"
         return send_file(buf, as_attachment=True, download_name=filename,
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -6156,7 +6229,7 @@ def registrar_rutas(app):
         logo_file = os.path.join(app.root_path, "static", p.logo_path) if p.logo_path else None
         info_pairs = [
             [("Proyecto", p.nombre or "")],
-            [("Codigo Unico", p.cui or ""), ("Correlativo Meta", p.meta or "")],
+            [("Código Único", p.cui or ""), ("Correlativo Meta", p.meta or "")],
             [("Fuente Financ.", p.fuente or ""), ("Modalidad", "ADMINISTRACION DIRECTA")],
         ]
         responsables = [
@@ -6395,6 +6468,9 @@ def registrar_rutas(app):
             letra = get_column_letter(col)
             refs = ",".join(f"{letra}{fr}" for fr in filas_rubro)
             ws.cell(row=total_row, column=col).value = f"=SUM({refs})"
+            if col in (col_pim, col_saldo) and sintesis["ampliacion"]:
+                ws.cell(row=total_row, column=col).value = (
+                    f"=SUM({refs})+{sintesis['ampliacion']}")
         cpct = ws.cell(row=total_row, column=col_pct)
         cpct.value = (f"=IF({letra_pim}{total_row}=0,0,"
                       f"{letra_ejec}{total_row}/{letra_pim}{total_row})")
@@ -6561,6 +6637,406 @@ def registrar_rutas(app):
         datos = panel_datos(mes, anio)
         return render_template("panel_imprimir.html", p=p, MESES=MESES, d=datos)
 
+    @app.route("/formatos/panel/excel")
+    def panel_excel():
+        """Genera archivo .xlsx del Resumen Financiero (hoja PANEL) con todos
+        sus cuadros, listo para imprimir en A4 vertical."""
+        import math
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        d = panel_datos(mes, anio)
+
+        AZUL = "1E3A5F"; AZUL_OSC = "162D45"; AZUL_CLARO = "2C527A"
+        BG = "F8FAFC"; BLANCO = "FFFFFF"; BORDE = "CBD5E1"
+
+        FN = "Calibri"
+        thin_o = Side(style="thin", color=AZUL_OSC)
+        border_all = Border(left=thin_o, right=thin_o, top=thin_o, bottom=thin_o)
+        thin_g = Side(style="thin", color=BORDE)
+        border_grid = Border(left=thin_g, right=thin_g, top=thin_g, bottom=thin_g)
+
+        fill_azul = PatternFill("solid", fgColor=AZUL)
+        fill_azul_osc = PatternFill("solid", fgColor=AZUL_OSC)
+        fill_claro = PatternFill("solid", fgColor=AZUL_CLARO)
+        fill_bg = PatternFill("solid", fgColor=BG)
+        fill_sub = PatternFill("solid", fgColor="E8EEF5")
+        fill_total = PatternFill("solid", fgColor="D9E1E8")
+
+        font_band = Font(name=FN, size=10, bold=True, color=BLANCO)
+        font_band2 = Font(name=FN, size=9.5, bold=True, color=BLANCO)
+        font_band3 = Font(name=FN, size=9, bold=True, color=BLANCO)
+        font_th = Font(name=FN, size=8, bold=True, color=BLANCO)
+        font_td = Font(name=FN, size=9)
+        font_td_b = Font(name=FN, size=9, bold=True)
+        font_sub = Font(name=FN, size=9, bold=True, color=AZUL_OSC)
+        font_txt = Font(name=FN, size=9, color="1F2937")
+        font_letra = Font(name=FN, size=9, italic=True, color="64748B")
+        font_firma = Font(name=FN, size=9, bold=True, color="1F2937")
+        font_firma2 = Font(name=FN, size=8, bold=True, color=AZUL_OSC)
+
+        align_c = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        align_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        align_l_nw = Alignment(horizontal="left", vertical="center", wrap_text=False)
+        align_r = Alignment(horizontal="right", vertical="center")
+        align_r_w = Alignment(horizontal="right", vertical="center", wrap_text=True)
+
+        num_fmt = '#,##0.00'
+        meses_col = d["meses_col"]
+        ncols = max(7, 2 + len(meses_col))
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Resumen Financiero"
+        ws.sheet_view.showGridLines = False
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.orientation = "portrait"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.page_margins.left = 0.4
+        ws.page_margins.right = 0.4
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.5
+
+        anchos = {1: 15, 2: 46}
+        for j in range(3, ncols + 1):
+            anchos[j] = 12
+        for j in range(3, 3 + len(meses_col)):
+            anchos[j] = 10
+        for j in range(1, ncols + 1):
+            ws.column_dimensions[get_column_letter(j)].width = anchos.get(j, 12)
+        last_col = get_column_letter(ncols)
+        total_w = sum(anchos.get(j, 12) for j in range(1, ncols + 1))
+
+        def _h(texto, size=9, min_h=15):
+            if not texto:
+                return min_h
+            per_line = max(1, int(total_w * 0.95))
+            lineas = max(1, math.ceil(len(str(texto)) / per_line))
+            return max(min_h, lineas * (size * 1.85))
+
+        def band(row, texto, level=1):
+            ws.merge_cells(start_row=row, start_column=1,
+                           end_row=row, end_column=ncols)
+            c = ws.cell(row=row, column=1, value=texto)
+            c.font = (font_band if level == 1
+                      else (font_band2 if level == 2 else font_band3))
+            c.alignment = align_l_nw
+            fill = (fill_azul if level == 1
+                    else (fill_azul_osc if level == 2 else fill_claro))
+            for col in range(1, ncols + 1):
+                cc = ws.cell(row=row, column=col)
+                cc.fill = fill
+                cc.border = border_all
+            ws.row_dimensions[row].height = 19 if level == 1 else 16
+            return row + 1
+
+        def para(row, texto, italic=False):
+            ws.merge_cells(start_row=row, start_column=1,
+                           end_row=row, end_column=ncols)
+            c = ws.cell(row=row, column=1, value=texto)
+            c.font = font_letra if italic else font_txt
+            c.alignment = align_l
+            ws.row_dimensions[row].height = _h(texto, 9, 15)
+            return row + 1
+
+        def th_row(row, cells):
+            col = 1
+            for label, span, al in cells:
+                if span > 1:
+                    ws.merge_cells(start_row=row, start_column=col,
+                                   end_row=row, end_column=col + span - 1)
+                c = ws.cell(row=row, column=col, value=label)
+                c.font = font_th
+                c.alignment = al
+                for k in range(span):
+                    cc = ws.cell(row=row, column=col + k)
+                    cc.fill = fill_azul
+                    cc.border = border_all
+                col += span
+            ws.row_dimensions[row].height = 24
+            return row + 1
+
+        def td_row(row, cells, kind="normal"):
+            col = 1
+            for val, span, al, fmt in cells:
+                if span > 1:
+                    ws.merge_cells(start_row=row, start_column=col,
+                                   end_row=row, end_column=col + span - 1)
+                c = ws.cell(row=row, column=col, value=val)
+                if kind == "sub":
+                    c.font = font_sub
+                elif kind == "total":
+                    c.font = font_td_b
+                else:
+                    c.font = font_td
+                c.alignment = al
+                if fmt:
+                    c.number_format = fmt
+                for k in range(span):
+                    cc = ws.cell(row=row, column=col + k)
+                    if kind == "sub":
+                        cc.fill = fill_sub
+                    elif kind == "total":
+                        cc.fill = fill_total
+                    cc.border = border_grid
+                col += span
+            return row + 1
+
+        # ── Encabezado ──
+        logo_file = (os.path.join(app.root_path, "static", p.logo_path)
+                     if p.logo_path else None)
+        info_pairs = [
+            [("Proyecto", p.nombre or "")],
+            [("Código Único de Inversión", p.cui or ""), ("Meta", p.meta or "")],
+            [("Entidad Ejecutora", p.entidad or ""),
+             ("Unidad Ejecutora", p.unidad_ejecutora or "")],
+            [("Ubicación", d["ubicacion"])],
+            [("Presupuesto segun Expediente Tecnico",
+              f"S/ {d['presupuesto_et']:,.2f}"),
+             ("Costo Directo", f"S/ {d['costo_directo']:,.2f}")],
+            [("Rubro", p.rubro or ""),
+             ("Fuente de Financiamiento", p.fuente or "")],
+        ]
+        responsables = [
+            ("Residente de Obra", p.residente or ""),
+            ("Supervisor de Obra", p.supervisor or ""),
+            ("Asistente Administrativo", p.asistente or ""),
+        ]
+        r = _build_xl_header(
+            ws, ncols,
+            "Resumen Financiero",
+            f"Periodo: {d['mes_nombre']} - {anio}",
+            {"entidad": p.entidad or "", "unidad": p.unidad_ejecutora or "",
+             "periodo": f"PERIODO: {d['mes_nombre']} - {anio}"},
+            logo_file, info_pairs, responsables,
+            title_font_size=14,
+            header_heights={'entity': 22, 'sub': 15, 'title': 24, 'subtitle': 15,
+                            'project': 34, 'pair': 15, 'resp': 16})
+        r += 1
+
+        # ── I. Resumen de la Ejecución Presupuestal ──
+        r = band(r, "I. RESUMEN DE LA EJECUCION PRESUPUESTAL", 1)
+        r = th_row(r, [("Concepto", ncols - 2, align_l_nw),
+                       ("Monto", 1, align_r), ("Meta", 1, align_c)])
+        for f in d["resumen_i"]:
+            meta_txt = f"{f['meta']:03d}" if f.get("meta") else ""
+            r = td_row(r, [(f["concepto"], ncols - 2, align_l, None),
+                           (f["monto"], 1, align_r, num_fmt),
+                           (meta_txt, 1, align_c, None)])
+        r += 1
+        r = th_row(r, [("Concepto", ncols - 3, align_l_nw),
+                       ("Monto", 1, align_r),
+                       ("% de Ejecución (PIM)", 1, align_r),
+                       ("Base de Cálculo", 1, align_l_nw)])
+        for f in d["pin_rows"]:
+            r = td_row(r, [(f["concepto"], ncols - 3, align_l, None),
+                           (f["monto"], 1, align_r, num_fmt),
+                           (f["pct"] / 100.0, 1, align_r, '0.00%'),
+                           (f["base"], 1, align_l, None)])
+        r += 1
+
+        # ── II. Actividades Ejecutadas ──
+        r = band(r, "II. ACTIVIDADES EJECUTADAS", 1)
+        r = th_row(r, [("Item", 1, align_c),
+                       ("Descripción Detallada de Actividades", ncols - 1, align_l_nw)])
+        for i, a in enumerate(d["actividades"], 1):
+            r = td_row(r, [(i, 1, align_c, None),
+                           (getattr(a, "descripcion", ""), ncols - 1, align_l, None)])
+        r += 1
+
+        # ── III. Devengado Mensual ──
+        r = band(r, "III. DEVENGADO MENSUAL", 1)
+        r = th_row(r, [(f"Gasto devengado {MESES[0]} a {MESES[mes-1]} (S/)",
+                        ncols, align_c)])
+        r = th_row(r, [("Clasificador", 1, align_c),
+                       ("Descripción del Gasto", 1, align_l_nw)]
+                   + [(MESES[m - 1], 1, align_c) for m in meses_col])
+        for grupo in d["dev_mensual"]:
+            filas_act = [f for f in grupo["filas"] if f["acum"] > 0]
+            if not filas_act:
+                continue
+            r = td_row(r, [(grupo["grupo"], ncols, align_l, None)], kind="sub")
+            for f in filas_act:
+                celdas = [(f["clas"], 1, align_l_nw, None),
+                          (f["detalle"], 1, align_l, None)]
+                celdas += [(v, 1, align_r, num_fmt) for v in f["valores"]]
+                r = td_row(r, celdas)
+        tot3 = [("TOTAL", 2, align_r, None)]
+        tot3 += [(v, 1, align_r, num_fmt) for v in d["dev_mensual_total"]]
+        r = td_row(r, tot3, kind="total")
+        r += 1
+
+        # ── IV. Devengado hasta el mes ──
+        r = band(r, f"IV. DEVENGADO HASTA EL MES DE {d['mes_nombre']} {anio}", 1)
+        r = th_row(r, [("Clasificador", 1, align_c),
+                       ("Descripción del Gasto", 1, align_l_nw),
+                       (f"Gasto devengado {MESES[0]} a {MESES[mes-1]} (S/.)",
+                        ncols - 2, align_r)])
+        for grupo in d["dev_acum"]:
+            filas_act = [f for f in grupo["filas"] if f["acum"] > 0]
+            if not filas_act:
+                continue
+            r = td_row(r, [(grupo["grupo"], ncols, align_l, None)], kind="sub")
+            for f in filas_act:
+                r = td_row(r, [(f["clas"], 1, align_l_nw, None),
+                               (f["detalle"], 1, align_l, None),
+                               (f["acum"], ncols - 2, align_r, num_fmt)])
+        r = td_row(r, [("TOTAL", ncols - 1, align_r, None),
+                       (d["dev_acum_total"], 1, align_r, num_fmt)], kind="total")
+        r += 1
+
+        # ── V. Resumen Gasto Devengado ──
+        r = band(r, "V. RESUMEN GASTO DEVENGADO", 1)
+        r = th_row(r, [("Clasificador", 1, align_c),
+                       ("Descripción del Gasto", 1, align_l_nw),
+                       (f"Presupuesto Anual (PIN {anio}) (S/.)", 1, align_r_w),
+                       (f"Gasto devengado {MESES[0]} a {MESES[mes-1]} (S/.)", 1, align_r_w),
+                       ("% Ejecución Presupuestal Anual (Gasto/PIN)",
+                        ncols - 4, align_r_w)])
+        for f in d["resumen_dev"]:
+            if f["gas"] == 0 and f["pin"] == 0:
+                continue
+            r = td_row(r, [(f["clas"], 1, align_l_nw, None),
+                           (f["detalle"], 1, align_l, None),
+                           (f["pin"], 1, align_r, num_fmt),
+                           (f["gas"], 1, align_r, num_fmt),
+                           (f["pct"] / 100.0, ncols - 4, align_r, '0.00%')])
+        rt = d["resumen_dev_total"]
+        r = td_row(r, [("TOTAL", 2, align_r, None),
+                       (rt["pin"], 1, align_r, num_fmt),
+                       (rt["gas"], 1, align_r, num_fmt),
+                       (rt["pct"] / 100.0, ncols - 4, align_r, '0.00%')],
+                   kind="total")
+        r += 1
+
+        # ── Ejecución Presupuestal ──
+        r = band(r, "EJECUCION PRESUPUESTAL", 1)
+        r = band(r, "1. DEL PRESUPUESTO", 2)
+        r = para(r, f"El presupuesto total de obra es de "
+                    f"S/{d['presupuesto_et']:,.2f} ({d['presupuesto_letras']}). "
+                    f"Segun expediente tecnico.")
+        r = th_row(r, [("Componente", ncols - 1, align_l_nw),
+                       ("Presupuesto", 1, align_r)])
+        for f in d["componentes_presupuesto"]:
+            r = td_row(r, [(f["label"], ncols - 1, align_l, None),
+                           (f["monto"], 1, align_r, num_fmt)])
+        r += 1
+
+        r = band(r, "2. RESUMEN DE EJECUCION PRESUPUESTAL", 2)
+        for ej in d["ejec_anuales"]:
+            r = band(r, ej["titulo"], 3)
+            r = para(r, f"Modalidad de ejecucion: Por administracion directa.  |  "
+                        f"Fuente de financiamiento: {p.fuente or ''}.  |  "
+                        f"Rubro: {p.rubro or ''}.  |  "
+                        f"Meta: {ej['meta']} - al mes de diciembre del {ej['anio']}.")
+            r = th_row(r, [("Código", 1, align_c),
+                           ("Detalle", ncols - 2, align_l_nw),
+                           ("Monto", 1, align_r)])
+            for f in ej["filas"]:
+                r = td_row(r, [(f["clas"], 1, align_l_nw, None),
+                               (f["detalle"], ncols - 2, align_l, None),
+                               (f["monto"], 1, align_r, num_fmt)])
+            r = td_row(r, [("TOTAL", ncols - 1, align_r, None),
+                           (ej["total"], 1, align_r, num_fmt)], kind="total")
+            r += 1
+
+        base_sec = 1 + d["num_anios"]
+        r = band(r, f"2.{base_sec}. RESUMEN GENERAL DE EJECUCION PRESUPUESTAL", 3)
+        if d["incluir_anios"]:
+            meta_gral = (f"Modalidad de ejecucion: Por administracion directa.  |  "
+                         f"Fuente de financiamiento: {p.fuente or ''}.  |  "
+                         f"Rubro: {p.rubro or ''}.  |  "
+                         f"Desde {anio - d['num_anios']} hasta {d['mes_nombre']} {anio}.")
+        else:
+            meta_gral = (f"Modalidad de ejecucion: Por administracion directa.  |  "
+                         f"Fuente de financiamiento: {p.fuente or ''}.  |  "
+                         f"Rubro: {p.rubro or ''}.  |  "
+                         f"Al mes de {d['mes_nombre']} del {anio}.")
+        r = para(r, meta_gral)
+        r = th_row(r, [("Código", 1, align_c),
+                       ("Detalle", ncols - 3, align_l_nw),
+                       (p.rubro or "MONTO", 1, align_r),
+                       ("Año", 1, align_c)])
+        for f in d["gen"]:
+            r = td_row(r, [(f["clas"], 1, align_l_nw, None),
+                           (f["detalle"], ncols - 3, align_l, None),
+                           (f["monto"], 1, align_r, num_fmt),
+                           (f["anio"], 1, align_c, None)])
+        r = td_row(r, [("TOTAL", ncols - 2, align_r, None),
+                       (d["gen_total"], 1, align_r, num_fmt),
+                       ("", 1, align_c, None)], kind="total")
+        r += 1
+
+        r = band(r, f"2.{base_sec + 1}. RESUMEN GENERAL", 3)
+        r = th_row(r, [("Código", 1, align_c),
+                       ("Detalle", ncols - 2, align_l_nw),
+                       (p.rubro or "MONTO", 1, align_r)])
+        for f in d["resumen_general"]:
+            r = td_row(r, [(f["clas"], 1, align_l_nw, None),
+                           (f["detalle"], ncols - 2, align_l, None),
+                           (f["monto"], 1, align_r, num_fmt)])
+        r = td_row(r, [("TOTAL", ncols - 1, align_r, None),
+                       (d["resumen_general_total"], 1, align_r, num_fmt)],
+                   kind="total")
+        r += 1
+
+        r = band(r, f"2.{base_sec + 2}. DE LA EJECUCION FINANCIERA", 3)
+        r = para(r, d["ejec_fin_texto"])
+        r = th_row(r, [("Componentes", ncols - 2, align_l_nw),
+                       ("Presupuesto", 1, align_r),
+                       ("Ejecutado Total", 1, align_r)])
+        for f in d["ejec_fin"]:
+            r = td_row(r, [(f["label"], ncols - 2, align_l, None),
+                           (f["presupuesto"], 1, align_r, num_fmt),
+                           (f["ejecutado"], 1, align_r, num_fmt)])
+        r += 1
+
+        for n in d["narrativas"]:
+            r = band(r, n["titulo"], 3)
+            r = para(r, n["texto"])
+        r += 1
+
+        # ── Firmas ──
+        r += 1
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+        for col in range(1, 4):
+            ws.cell(row=r, column=col).border = Border(
+                top=Side(style="thin", color=AZUL_OSC))
+        r += 1
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+        c = ws.cell(row=r, column=1,
+                    value=p.administrador_obra or p.asistente or "")
+        c.font = font_firma
+        c.alignment = align_c
+        r += 1
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+        c = ws.cell(row=r, column=1, value="Administrador de Obra")
+        c.font = font_firma2
+        c.alignment = align_c
+        r += 1
+        if p.colegiatura_admin:
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+            c = ws.cell(row=r, column=1, value=f"Colegiatura: {p.colegiatura_admin}")
+            c.font = font_letra
+            c.alignment = align_c
+            r += 1
+
+        ws.print_area = f"A1:{last_col}{r}"
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        filename = f"Resumen_Financiero_{MESES[mes-1]}_{anio}.xlsx"
+        return send_file(
+            buf, as_attachment=True, download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument."
+                     "spreadsheetml.sheet")
+
     @app.route("/almacen/fe07/imprimir")
     def imprimir_fe07():
         """Vista imprimible del FE-07 Movimiento Diario de Almacén."""
@@ -6602,7 +7078,9 @@ def registrar_rutas(app):
         anio = p.anio
         filtro = request.args.get("material", "").strip()
         movs = (AlmacenMovimiento.query
-                .filter(AlmacenMovimiento.mes == mes, AlmacenMovimiento.anio == anio)
+                .filter(or_(AlmacenMovimiento.anio < anio,
+                            and_(AlmacenMovimiento.anio == anio,
+                                 AlmacenMovimiento.mes <= mes)))
                 .order_by(AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
         running = {}
         orden = []
@@ -6612,12 +7090,14 @@ def registrar_rutas(app):
             key = (m.descripcion, m.und)
             if key not in running:
                 running[key] = {"balance": 0.0, "rows": []}
-                orden.append(key)
             bal = running[key]["balance"]
             nuevo = bal + (m.cantidad or 0) if m.tipo == "E" else bal - (m.cantidad or 0)
-            running[key]["rows"].append({"mov": m, "saldo_anterior": round(bal, 2),
-                                         "saldo": round(nuevo, 2),
-                                         "importe": round((m.cantidad or 0) * (m.precio_unitario or 0), 2)})
+            if m.anio == anio and m.mes == mes:
+                if key not in {k for k in orden}:
+                    orden.append(key)
+                running[key]["rows"].append({"mov": m, "saldo_anterior": round(bal, 2),
+                                             "saldo": round(nuevo, 2),
+                                             "importe": round((m.cantidad or 0) * (m.precio_unitario or 0), 2)})
             running[key]["balance"] = nuevo
         items = []
         for key in orden:
@@ -6630,7 +7110,7 @@ def registrar_rutas(app):
             items.append({
                 "descripcion": key[0], "und": key[1], "movs": len(rows),
                 "cant_in": round(ent, 2), "cant_out": round(sal, 2),
-                "saldo": round(ent - sal, 2),
+                "saldo": round(info["balance"], 2),
                 "valor_in": round(val_ent, 2),
                 "valor_out": round(val_sal, 2),
                 "valor_saldo": round(val_ent - val_sal, 2),
@@ -6646,7 +7126,9 @@ def registrar_rutas(app):
         mes = param_int("mes", p.mes_actual, lo=1, hi=12)
         anio = p.anio
         movs = (AlmacenMovimiento.query
-                .filter(AlmacenMovimiento.mes == mes, AlmacenMovimiento.anio == anio)
+                .filter(or_(AlmacenMovimiento.anio < anio,
+                            and_(AlmacenMovimiento.anio == anio,
+                                 AlmacenMovimiento.mes <= mes)))
                 .order_by(AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
         inv = {}
         orden = []
@@ -6707,7 +7189,9 @@ def registrar_rutas(app):
         anio = p.anio
         filtro = request.args.get("material", "").strip()
         movs = (AlmacenMovimiento.query
-                .filter(AlmacenMovimiento.mes == mes, AlmacenMovimiento.anio == anio)
+                .filter(or_(AlmacenMovimiento.anio < anio,
+                            and_(AlmacenMovimiento.anio == anio,
+                                 AlmacenMovimiento.mes <= mes)))
                 .order_by(AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
         running = {}
         orden = []
@@ -6717,11 +7201,13 @@ def registrar_rutas(app):
             key = (m.descripcion, m.und)
             if key not in running:
                 running[key] = {"balance": 0.0, "rows": []}
-                orden.append(key)
             bal = running[key]["balance"]
             nuevo = bal + (m.cantidad or 0) if m.tipo == "E" else bal - (m.cantidad or 0)
-            running[key]["rows"].append({"mov": m, "saldo_anterior": round(bal, 2),
-                                         "saldo": round(nuevo, 2)})
+            if m.anio == anio and m.mes == mes:
+                if key not in {k for k in orden}:
+                    orden.append(key)
+                running[key]["rows"].append({"mov": m, "saldo_anterior": round(bal, 2),
+                                             "saldo": round(nuevo, 2)})
             running[key]["balance"] = nuevo
         items = []
         for key in orden:
@@ -6732,7 +7218,7 @@ def registrar_rutas(app):
             items.append({
                 "descripcion": key[0], "und": key[1], "movs": len(rows),
                 "cant_in": round(ent, 2), "cant_out": round(sal, 2),
-                "saldo": round(ent - sal, 2), "rows": rows,
+                "saldo": round(info["balance"], 2), "rows": rows,
             })
         return render_template("kardex_imprimir.html", p=p, mes=mes, anio=anio,
                                MESES=MESES, items=items, filtro=filtro)
@@ -6744,7 +7230,9 @@ def registrar_rutas(app):
         mes = param_int("mes", p.mes_actual, lo=1, hi=12)
         anio = p.anio
         movs = (AlmacenMovimiento.query
-                .filter(AlmacenMovimiento.mes == mes, AlmacenMovimiento.anio == anio)
+                .filter(or_(AlmacenMovimiento.anio < anio,
+                            and_(AlmacenMovimiento.anio == anio,
+                                 AlmacenMovimiento.mes <= mes)))
                 .order_by(AlmacenMovimiento.fecha, AlmacenMovimiento.id).all())
         inv = {}
         orden = []
@@ -6795,7 +7283,8 @@ def registrar_rutas(app):
             "valor_saldo": round(sum(i["valor_saldo"] for i in items), 2),
         }
         return render_template("inventario_imprimir.html", p=p, mes=mes, anio=anio,
-                               MESES=MESES, items=items, totals=totals)
+                               MESES=MESES, items=items, totals=totals,
+                               p_items=len(items))
 
     @app.route("/almacen/acta/entrega", methods=["GET", "POST"])
     def acta_entrega():
@@ -6890,8 +7379,10 @@ def registrar_rutas(app):
         cargo_recibe = request.args.get("cargo_recibe", "") or "ADMINISTRADOR DE OBRA"
         n_acta = (request.args.get("n_acta", "").strip().upper()
                   or default_n_acta(p.anio))
-        estados = [e.strip() for e in (request.args.get("est", "") or "").split(",")
-                   if e.strip()]
+        _estados_acta = {"BUENO", "OPERATIVO", "MALO"}
+        estados = [e.strip().title()
+                   for e in (request.args.get("est", "") or "").split(",")
+                   if e.strip().upper() in _estados_acta][:len(items)]
         fecha_mostrar = fecha
         try:
             fecha_mostrar = date.strptime(fecha, "%Y-%m-%d").strftime("%d/%m/%Y")
@@ -6933,6 +7424,11 @@ def registrar_rutas(app):
                 L.fecha_acta_recepcion = _fecha_iso(request.form.get("fecha_acta_recepcion"))
                 L.comision_presidente = (request.form.get("comision_presidente", "") or "").strip().upper()
                 L.comision_integrantes = request.form.get("comision_integrantes", "") or ""
+                L.responsable_exp_tecnico = (request.form.get("responsable_exp_tecnico", "") or "").strip().upper()
+                L.aprobador_exp_tecnico = (request.form.get("aprobador_exp_tecnico", "") or "").strip().upper()
+                L.responsable_oad = (request.form.get("responsable_oad", "") or "").strip().upper()
+                L.descripcion_proyecto = request.form.get("descripcion_proyecto", "") or ""
+                L.antecedentes = request.form.get("antecedentes", "") or ""
                 L.adicionales = float(request.form.get("adicionales", 0) or 0)
                 L.deducciones = float(request.form.get("deducciones", 0) or 0)
                 L.saldo_por_pagar = float(request.form.get("saldo_por_pagar", 0) or 0)
@@ -6946,9 +7442,12 @@ def registrar_rutas(app):
         resumen = liquidacion_resumen()
         costo_final = round((resumen["totales"]["et"] or 0)
                             + (L.adicionales or 0) - (L.deducciones or 0), 2)
-        return render_template("liquidacion.html", p=p, L=L, MESES=MESES,
+        _, _, saldo_materiales = materiales_sobrantes_acta()
+        return render_template("liquidacion.html", p=p, L=L, I=get_informe_final(),
+                               MESES=MESES,
                                resumen=resumen, pendientes=liquidacion_pendientes(),
                                costo_final=costo_final, CLASIFICADORES=CLASIFICADORES,
+                               saldo_materiales=saldo_materiales,
                                consolidado=formato_consolidado())
 
     @app.route("/liquidacion/imprimir")
@@ -6956,12 +7455,15 @@ def registrar_rutas(app):
         """Hoja imprimible institucional de la Liquidación Financiera de Obra."""
         p = get_proyecto()
         L = get_liquidacion()
+        I = get_informe_final()
         resumen = liquidacion_resumen()
         costo_final = round((resumen["totales"]["et"] or 0)
                             + (L.adicionales or 0) - (L.deducciones or 0), 2)
-        return render_template("liquidacion_imprimir.html", p=p, L=L, MESES=MESES,
+        _, _, saldo_materiales = materiales_sobrantes_acta()
+        return render_template("liquidacion_imprimir.html", p=p, L=L, I=I, MESES=MESES,
                                resumen=resumen, pendientes=liquidacion_pendientes(),
                                costo_final=costo_final, CLASIFICADORES=CLASIFICADORES,
+                               saldo_materiales=saldo_materiales,
                                consolidado=formato_consolidado())
 
     # ----------------- INFORME FINANCIERO FINAL DE OBRA -----------------
@@ -6985,8 +7487,11 @@ def registrar_rutas(app):
             flash("Informe financiero final guardado correctamente.", "success")
             return redirect(url_for("informe_final"))
         resumen = liquidacion_resumen()
+        sobrantes_items, _, _ = materiales_sobrantes_acta()
         return render_template("informe_final.html", p=p, I=I, MESES=MESES,
-                               resumen=resumen, consolidado=formato_consolidado())
+                               resumen=resumen, consolidado=formato_consolidado(),
+                               almacen=almacen_consolidado(),
+                               sobrantes=sobrantes_items)
 
     @app.route("/informe_final/imprimir")
     def informe_final_imprimir():
@@ -6994,8 +7499,315 @@ def registrar_rutas(app):
         p = get_proyecto()
         I = get_informe_final()
         resumen = liquidacion_resumen()
+        sobrantes_items, _, _ = materiales_sobrantes_acta()
+
+        # Compendio de reportes del Anexo N° 02: Manifiesto de Gasto y FE-05 con
+        # TODOS los meses (separados por un divisor de mes) y FE-06 del último mes.
+        activos = meses_con_ejecucion(p.anio)
+        meses = list(range(min(activos), max(activos) + 1)) if activos else [p.mes_actual]
+        f06_rows = fe06_rows()
+        f06_resumen = fe06_resumen(f06_rows)
+        f06_totales_mensual = [round(sum(r["mensual"][i] for r in f06_resumen.values()), 2)
+                               for i in range(12)]
+        mf_bloques = []
+        fe05_bloques = []
+        mf_total_acum = 0.0
+        for m in meses:
+            _hdr, mf_sec, mf_tot = _manifiesto_ctx(p, m, p.anio)
+            f05_sec, f05_tot, f05_cls = f05_datos(m, p.anio)
+            mf_bloques.append({
+                "titulo": f"MES DE {MESES[m - 1]} {p.anio}",
+                "secciones": mf_sec,
+                "subtotal_label": f"TOTAL DEL MES {MESES[m - 1]}",
+                "subtotal": mf_tot,
+            })
+            fe05_bloques.append({
+                "titulo": f"MES DE {MESES[m - 1]} {p.anio}",
+                "mes": m, "anio": p.anio,
+                "secciones": f05_sec, "total": f05_tot,
+                "clasif_cols": f05_cls,
+            })
+            mf_total_acum = round(mf_total_acum + mf_tot, 2)
+        if len(meses) > 1:
+            periodo_txt = f"{MESES[meses[0] - 1]} - {MESES[meses[-1] - 1]} {p.anio}"
+        else:
+            periodo_txt = f"{MESES[meses[0] - 1]} - {p.anio}"
+        mf_hdr = dict(_manifiesto_ctx(p, meses[0], p.anio)[0])
+        mf_hdr["periodo"] = periodo_txt
+        mf_hdr["n_manifiesto"] = ""
+        ult = meses[-1]
+        compendio = {
+            "periodo": periodo_txt,
+            "mf_hdr": mf_hdr,
+            "mf_bloques": mf_bloques,
+            "mf_total": mf_total_acum,
+            "fe05_bloques": fe05_bloques,
+            "fe06_mes": ult,
+            "fe06_nombre": MESES[ult - 1],
+            "fe06_sintesis": fe06_sintesis(ult, p.anio),
+            "fe06_meses_vis": meses_visibles(p.anio, ult),
+        }
         return render_template("informe_final_imprimir.html", p=p, I=I, MESES=MESES,
-                               resumen=resumen, consolidado=formato_consolidado())
+                               resumen=resumen, consolidado=formato_consolidado(),
+                               almacen=almacen_consolidado(),
+                               sobrantes=sobrantes_items,
+                               compendio=compendio, fe06_rows=f06_rows,
+                               fe06_resumen=f06_resumen,
+                               fe06_totales_mensual=f06_totales_mensual)
+
+    # ------- ANEXOS DE LA DIRECTIVA N° 017-2023-CG/GMPL (imprimibles) --------
+    # Plantillas SOLO IMPRIMIBLES (sin persistencia) para los anexos que la
+    # Directiva 017-2023-CG/GMPL exige y que el sistema aún no generaba.
+    # Toman datos de solo lectura del proyecto y de los cuadros ya calculados;
+    # la narrativa se completa a mano sobre el papel / en el editor.
+    ANEXOS = [
+        ("07", "Informe Técnico que sustenta la ejecución por Administración Directa",
+         "Informe Técnico", "bi-file-earmark-text"),
+        ("08", "Informe Legal", "Informe Legal", "bi-briefcase"),
+        ("09", "Informe Presupuestario", "Informe Presupuestario", "bi-cash-coin"),
+        ("10", "Informe de Modificación del Expediente de Obra",
+         "Modificación del Expediente", "bi-pencil-square"),
+        ("11", "Informe de Conformidad", "Conformidad", "bi-patch-check"),
+        ("12", "Informe de Revisión del Expediente Técnico de Obra",
+         "Revisión del Expediente Técnico", "bi-clipboard-check"),
+        ("13", "Informe Mensual de Supervisión y Valorización",
+         "Supervisión y Valorización", "bi-clipboard2-data"),
+        ("14", "Informe de Ampliación de Plazo", "Ampliación de Plazo", "bi-calendar-plus"),
+        ("15", "Informe de Reprogramación de Obra por Ampliación de Plazo",
+         "Reprogramación de Obra", "bi-calendar2-week"),
+        ("16", "Informe de Mayores Gastos Generales por Ampliación de Plazo",
+         "Mayores Gastos Generales", "bi-cash-coin"),
+        ("17", "Informe de Cronograma Actualizado de Obra", "Cronograma Actualizado",
+         "bi-bar-chart-steps"),
+        ("18", "Informe de Aprobación de Prestaciones Adicionales de Obra",
+         "Prestaciones Adicionales", "bi-plus-square"),
+        ("19", "Informe de Aprobación de Mayores Metrados", "Mayores Metrados",
+         "bi-plus-square-dotted"),
+    ]
+    _AX_MAP = {c: {"codigo": c, "titulo": t, "corto": s,
+                   "archivo": "anexos/anexo_%s_imprimir.html" % c}
+               for c, t, s, _ in ANEXOS}
+    _AX_ICON = {c: i for c, _, _, i in ANEXOS}
+
+    # Campos editables por anexo (t = text, textarea, date, number, select).
+    ANEXO_FORM = {
+        "07": [
+            {"k": "n_resolucion", "l": "Resolución de aprobación del Expediente Técnico", "t": "text"},
+            {"k": "fecha_resolucion", "l": "Fecha de aprobación", "t": "date"},
+            {"k": "sustento_modalidad", "l": "Sustento de la modalidad de ejecución", "t": "textarea"},
+            {"k": "recursos_humanos", "l": "Capacidad técnica / recursos humanos (detalle)", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones", "t": "textarea"},
+            {"k": "recomendaciones", "l": "Recomendaciones", "t": "textarea"},
+        ],
+        "08": [
+            {"k": "base_legal_otras", "l": "Otras normas aplicables (Base legal)", "t": "textarea"},
+            {"k": "antecedentes", "l": "Antecedentes", "t": "textarea"},
+            {"k": "permisos_detalle", "l": "Permisos y autorizaciones (detalle)", "t": "textarea"},
+            {"k": "analisis", "l": "Análisis", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones", "t": "textarea"},
+            {"k": "recomendaciones", "l": "Recomendaciones", "t": "textarea"},
+        ],
+        "09": [
+            {"k": "cert_credito", "l": "N° / fecha certificación de crédito presupuestario", "t": "text"},
+            {"k": "cert_monto", "l": "Monto certificación (S/)", "t": "number"},
+            {"k": "nota_modificacion", "l": "N° / fecha nota de modificación presupuestal", "t": "text"},
+            {"k": "nota_monto", "l": "Monto nota de modificación (S/)", "t": "number"},
+            {"k": "prevision", "l": "N° / fecha previsión anual de compromisos", "t": "text"},
+            {"k": "prevision_monto", "l": "Monto previsión anual (S/)", "t": "number"},
+            {"k": "analisis", "l": "Análisis presupuestal", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones y recomendaciones", "t": "textarea"},
+        ],
+        "10": [
+            {"k": "ante_modificacion", "l": "Antecedentes de la modificación", "t": "textarea"},
+            {"k": "mod1_tipo", "l": "Modificación N° 1 - tipo (Significativa / No significativa)", "t": "text"},
+            {"k": "mod1_desc", "l": "Modificación N° 1 - descripción", "t": "text"},
+            {"k": "mod1_monto", "l": "Modificación N° 1 - monto (S/)", "t": "number"},
+            {"k": "mod2_tipo", "l": "Modificación N° 2 - tipo", "t": "text"},
+            {"k": "mod2_desc", "l": "Modificación N° 2 - descripción", "t": "text"},
+            {"k": "mod2_monto", "l": "Modificación N° 2 - monto (S/)", "t": "number"},
+            {"k": "partidas_nuevas", "l": "Partidas nuevas / precios nuevos (detalle)", "t": "textarea"},
+            {"k": "analisis", "l": "Análisis y opinión", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones y recomendaciones", "t": "textarea"},
+        ],
+        "11": [
+            {"k": "conformidad", "l": "Conformidad", "t": "select",
+             "opciones": ["Conforme", "No conforme", "Con observaciones"]},
+            {"k": "conformidad_adquisicion", "l": "Conformidad de adquisiciones y equipos", "t": "text"},
+            {"k": "observaciones", "l": "Observaciones", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones y recomendaciones", "t": "textarea"},
+        ],
+        "12": [
+            {"k": "doc_elaboracion", "l": "Elaboración del Expediente - documento", "t": "text"},
+            {"k": "doc_revision", "l": "Revisión del Expediente - documento", "t": "text"},
+            {"k": "observaciones_verif", "l": "Observaciones de la verificación", "t": "textarea"},
+            {"k": "analisis", "l": "Análisis", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones y recomendaciones", "t": "textarea"},
+        ],
+        "13": [
+            {"k": "desviacion", "l": "Observaciones del avance físico y desviaciones", "t": "textarea"},
+            {"k": "control_tecnico", "l": "Observaciones del control técnico", "t": "textarea"},
+            {"k": "observaciones", "l": "Observaciones y conclusiones", "t": "textarea"},
+        ],
+        "14": [
+            {"k": "asiento1", "l": "Asiento N° 1 del cuaderno de obra (fecha + descripción)", "t": "text"},
+            {"k": "asiento2", "l": "Asiento N° 2 del cuaderno de obra", "t": "text"},
+            {"k": "causa", "l": "Causales de la ampliación", "t": "textarea"},
+            {"k": "analisis", "l": "Análisis y verificación", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones y recomendaciones", "t": "textarea"},
+        ],
+        "15": [
+            {"k": "sustento", "l": "Sustento de la reprogramación", "t": "textarea"},
+            {"k": "adquisiciones", "l": "Programación de adquisiciones (detalle)", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones", "t": "textarea"},
+        ],
+        "16": [
+            {"k": "docs_sustento", "l": "Documentación sustentatoria (detalle)", "t": "textarea"},
+            {"k": "analisis", "l": "Análisis", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones y recomendaciones", "t": "textarea"},
+        ],
+        "17": [
+            {"k": "prog_1", "l": "Enero - programado acumulado (%)", "t": "number"},
+            {"k": "prog_2", "l": "Febrero - programado acumulado (%)", "t": "number"},
+            {"k": "prog_3", "l": "Marzo - programado acumulado (%)", "t": "number"},
+            {"k": "prog_4", "l": "Abril - programado acumulado (%)", "t": "number"},
+            {"k": "prog_5", "l": "Mayo - programado acumulado (%)", "t": "number"},
+            {"k": "prog_6", "l": "Junio - programado acumulado (%)", "t": "number"},
+            {"k": "prog_7", "l": "Julio - programado acumulado (%)", "t": "number"},
+            {"k": "prog_8", "l": "Agosto - programado acumulado (%)", "t": "number"},
+            {"k": "prog_9", "l": "Septiembre - programado acumulado (%)", "t": "number"},
+            {"k": "prog_10", "l": "Octubre - programado acumulado (%)", "t": "number"},
+            {"k": "prog_11", "l": "Noviembre - programado acumulado (%)", "t": "number"},
+            {"k": "prog_12", "l": "Diciembre - programado acumulado (%)", "t": "number"},
+            {"k": "observaciones", "l": "Observaciones del cronograma", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones", "t": "textarea"},
+        ],
+        "18": [
+            {"k": "sustento", "l": "Sustento técnico y legal de las prestaciones adicionales", "t": "textarea"},
+            {"k": "verificacion", "l": "Verificación de la procedencia (detalle)", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones y recomendaciones", "t": "textarea"},
+        ],
+        "19": [
+            {"k": "met1_partida", "l": "Mayor metrado N° 1 - partida", "t": "text"},
+            {"k": "met1_und", "l": "Mayor metrado N° 1 - unidad", "t": "text"},
+            {"k": "met1_detalle", "l": "Mayor metrado N° 1 - detalle / metrados", "t": "text"},
+            {"k": "met1_monto", "l": "Mayor metrado N° 1 - monto (S/)", "t": "number"},
+            {"k": "met2_partida", "l": "Mayor metrado N° 2 - partida", "t": "text"},
+            {"k": "met2_und", "l": "Mayor metrado N° 2 - unidad", "t": "text"},
+            {"k": "met2_detalle", "l": "Mayor metrado N° 2 - detalle / metrados", "t": "text"},
+            {"k": "met2_monto", "l": "Mayor metrado N° 2 - monto (S/)", "t": "number"},
+            {"k": "sustento", "l": "Sustento y verificación", "t": "textarea"},
+            {"k": "conclusiones", "l": "Conclusiones y recomendaciones", "t": "textarea"},
+        ],
+    }
+
+    def get_anexo(cod):
+        """Fila editable del anexo (la crea en cero si aún no existe)."""
+        A = Anexo.query.filter_by(codigo=cod).first()
+        if A is None:
+            A = Anexo(codigo=cod)
+            db.session.add(A)
+            db.session.commit()
+        try:
+            datos = json.loads(A.datos or "{}")
+        except (TypeError, ValueError):
+            datos = {}
+        if not isinstance(datos, dict):
+            datos = {}
+        return A, datos
+
+    @app.route("/anexos")
+    def anexos():
+        """Página índice de los anexos de la Directiva 017-2023-CG/GMPL."""
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        lista = [dict(_AX_MAP[c], icono=_AX_ICON[c]) for c, _, _, _ in ANEXOS]
+        return render_template("anexos.html", p=p, mes=mes, anio=anio, MESES=MESES,
+                               anexos=lista)
+
+    @app.route("/anexos/<cod>/imprimir")
+    def imprimir_anexo(cod):
+        """Hoja imprimible de un anexo (solo lectura; no guarda en base)."""
+        ax = _AX_MAP.get(cod)
+        if not ax:
+            abort(404)
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        A, av = get_anexo(cod)
+        rows = fe06_rows()
+        resumen = fe06_resumen(rows)
+        sintesis = fe06_sintesis(mes, anio)
+        liq = liquidacion_resumen()
+        trabajadores = (Trabajador.query
+                        .filter_by(mes=mes, anio=anio)
+                        .order_by(Trabajador.nombre).all())
+        almacen_rows = almacen_valorizado(mes, anio) if cod in ("11", "13") else []
+        actividades = actividades_mes(mes, anio) if cod == "13" else []
+        manifiesto = gastos_mes(mes, anio) if cod in ("11", "13") else []
+        curva_s = []
+        if cod == "17":
+            et_total = liq["totales"]["et"] or 0
+            acum = 0.0
+            for i in range(12):
+                acum += round(sum(r["mensual"][i] for r in resumen.values()), 2)
+                pct_ej = round(acum / et_total * 100, 2) if et_total else 0.0
+                try:
+                    pct_pr = float(av.get("prog_%d" % (i + 1)) or 0) or None
+                except (TypeError, ValueError):
+                    pct_pr = None
+                curva_s.append({"mes": i + 1, "ej": pct_ej, "prog": pct_pr})
+        return render_template(ax["archivo"], p=p, mes=mes, anio=anio, MESES=MESES,
+                               ax=ax, icono=_AX_ICON.get(cod), A=A, av=av,
+                               fe06_rows=rows, fe06_resumen=resumen,
+                               fe06_sintesis=sintesis, resumen=liq,
+                               trabajadores=trabajadores,
+                               almacen_rows=almacen_rows,
+                               actividades=actividades,
+                               manifiesto=manifiesto,
+                               meses_vis=meses_visibles(anio, mes),
+                               curva_s=curva_s, hoy=date.today())
+
+    @app.route("/anexos/<cod>/editar", methods=["GET", "POST"])
+    def anexo_editar(cod):
+        """Edición de los campos variables del anexo (persistidos en BD)."""
+        ax = _AX_MAP.get(cod)
+        if not ax:
+            abort(404)
+        p = get_proyecto()
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        campos = ANEXO_FORM.get(cod, [])
+        A, av = get_anexo(cod)
+        if request.method == "POST":
+            A.n_doc = (request.form.get("n_doc") or "").strip().upper()[:60]
+            A.fecha = _fecha_iso(request.form.get("fecha"))
+            nuevos = {}
+            for f in campos:
+                raw = request.form.get(f["k"], "").strip()
+                t = f.get("t", "text")
+                if t == "date":
+                    fecha = _fecha_iso(raw)
+                    nuevos[f["k"]] = fecha.isoformat() if fecha else ""
+                elif t == "number":
+                    try:
+                        nuevos[f["k"]] = float(raw) if raw else ""
+                    except (TypeError, ValueError):
+                        nuevos[f["k"]] = ""
+                else:
+                    nuevos[f["k"]] = raw
+            if cod == "17":
+                # guarda también los programados aunque hayan quedado vacíos
+                for i in range(1, 13):
+                    kk = "prog_%d" % i
+                    if kk not in nuevos:
+                        nuevos[kk] = ""
+            A.datos = json.dumps(nuevos, ensure_ascii=False)
+            db.session.commit()
+            flash("Anexo N° %s guardado correctamente." % cod, "success")
+            return redirect(url_for("anexo_editar", cod=cod, mes=mes, anio=anio))
+        return render_template("anexos/anexo_editar.html", p=p, mes=mes, anio=anio,
+                               MESES=MESES, ax=ax, campos=campos, A=A, av=av)
 
     @app.route("/api/resumen")
     def api_resumen():
@@ -7021,4 +7833,3 @@ if __name__ == "__main__":
         port = 5000
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
     app.run(debug=debug, host=host, port=port)
-

@@ -1,0 +1,78 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Objeto del informe</div>
+<p class="sec-parrafo">Emitir opinión sobre la conformidad de la ejecución de la obra «{{ p.nombre or '' }}», en cuanto al
+cumplimiento del expediente técnico, la calidad de los trabajos y la valorización correspondiente al periodo.</p>
+
+<div class="sec-titulo">III. Evaluación del avance por componente</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Componente</th>
+      <th class="num">Exp. Técnico (S/)</th>
+      <th class="num">Ejecutado acumulado (S/)</th>
+      <th class="num">Avance (%)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for cr in resumen.por_componente %}
+    <tr>
+      <td>{{ cr.componente }}</td>
+      <td class="num">{{ "{:,.2f}".format(cr.et) }}</td>
+      <td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td>
+      <td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="fila-total">
+      <td>TOTAL</td>
+      <td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td>
+      <td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td>
+      <td class="num">{{ "{:.2f}".format(resumen.totales.porc) }}%</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="sec-titulo">IV. Adquisición de materiales y utilización de equipo</div>
+{% set alm = namespace(e=0, s=0, vin=0.0, vout=0.0) %}
+{% for r in almacen_rows %}
+  {% set alm.vin = alm.vin + (r.valor_in or 0) %}
+  {% set alm.vout = alm.vout + (r.valor_out or 0) %}
+  {% for f in r.filas %}{% if f.tipo == 'E' %}{% set alm.e = alm.e + 1 %}{% else %}{% set alm.s = alm.s + 1 %}{% endif %}{% endfor %}
+{% endfor %}
+{% set td = namespace(d=0) %}
+{% for t in trabajadores %}{% set td.d = td.d + (t.dias_lista|length) %}{% endfor %}
+{% set mani_n = manifiesto|length %}
+{% set mani_total = "{:,.2f}".format(manifiesto|sum(attribute='importe')) %}
+<table class="tabla">
+  <thead>
+    <tr><th>Aspecto verificado</th><th>Fuente de verificación</th><th>Observación</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Materiales adquiridos</td><td>Órdenes de compra / guías de remisión</td>
+      <td>{% if av.get('conformidad_adquisicion') %}{{ av.get('conformidad_adquisicion') }}{% else %}{{ mani_n }} documento(s) del mes por S/ {{ mani_total }}.{% endif %}</td></tr>
+    <tr><td>Ingresos y salidas de almacén</td><td>Kardex / PECOSA</td>
+      <td>{{ alm.e }} entrada(s) y {{ alm.s }} salida(s) del mes por S/ {{ "{:,.2f}".format(alm.vin) }} y S/ {{ "{:,.2f}".format(alm.vout) }}.</td></tr>
+    <tr><td>Uso de equipo y maquinaria</td><td>Partes diarios de equipo</td><td>__________</td></tr>
+    <tr><td>Mano de obra y tareo</td><td>Registro de planilla y tareo</td>
+      <td>{{ trabajadores|length }} trabajador(es) registrado(s) en el mes, {{ td.d }} días trabajados.</td></tr>
+  </tbody>
+</table>
+
+<div class="sec-titulo">V. Conformidad</div>
+<div class="opciones">
+  <span>{% if av.get('conformidad') == 'Conforme' %}<span class="check"><b>&#10003;</b></span>{% else %}<span class="check"></span>{% endif %} CONFORME</span>
+  <span>{% if av.get('conformidad') == 'No conforme' %}<span class="check"><b>&#10003;</b></span>{% else %}<span class="check"></span>{% endif %} NO CONFORME</span>
+  <span>{% if av.get('conformidad') == 'Con observaciones' %}<span class="check"><b>&#10003;</b></span>{% else %}<span class="check"></span>{% endif %} CON OBSERVACIONES</span>
+</div>
+<div class="sec-sub">Observaciones</div>
+{{ parrafo(av.get('observaciones'), '(Registre las observaciones detectadas.)') }}
+
+<div class="sec-titulo">VI. Conclusiones y recomendaciones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones y recomendaciones.)') }}
+<style>.firmas { margin-top: 28px; }</style>
+{% endblock %}

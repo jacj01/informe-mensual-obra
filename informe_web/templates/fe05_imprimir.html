@@ -4,191 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="Reporte imprimible FE-05 Ejecución Mensual: ejecución presupuestal completa por mes de obra en administración directa. Incluye totales por rubro, clasificación de gastos, saldo disponible y firmas del representante legal. Reporte listo para imprimir en formato A4.">
-<title>FE-05 Ejecucion Mensual - {{ MESES[mes-1] }} {{ anio }}</title>
+<meta name="description" content="Informe imprimible FE-05 Ejecución Mensual: ejecución presupuestal completa por mes de obra en administración directa. Incluye totales por rubro, clasificación de gastos, saldo disponible y firmas del representante legal. Informe listo para imprimir en formato A4.">
+<title>FE-05 Ejecución Mensual - {{ MESES[mes-1] }} {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=4) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
 <style>
-  /* FE-05: fixed layout con anchos calculados — TODAS las tablas alineadas */
-  .firmas { margin-top: 130px; min-height: 110px; }
-  table.tabla { margin-top: 3px; table-layout: auto; border-collapse: collapse; }
-  table.tabla th, table.tabla td {
-    padding: 2.5px 3px; line-height: 1.35;
-    border: .6px solid var(--borde); font-size: 7.6pt;
-  }
-  /* Texto largo: envolver dentro del ancho fijo sin salirse */
-  table.tabla td.txt { word-break: break-word; overflow-wrap: anywhere; white-space: normal; }
-  /* Columnas numericas/cortas: nowrap en una sola linea */
-  table.tabla td.num, table.tabla th.num { white-space: nowrap; }
-  table.tabla td.ctr, table.tabla th.ctr { white-space: nowrap; text-align: center; }
-  /* Cabeceras */
-  table.tabla thead th {
-    background: var(--azul); color: #fff; font-weight: 700; text-align: center;
-    font-size: 7pt; text-transform: uppercase; letter-spacing: .2px; padding: 4.5px 3px;
-    white-space: nowrap;
-  }
-  table.tabla thead th.clasif { font-size: 6.2pt; letter-spacing: -.2px; padding: 4px 2px; white-space: normal; overflow-wrap: anywhere; }
-  .fila-rubro td { background: #E3EAF2; color: var(--azul-osc); font-weight: 800; font-size: 8pt; text-transform: uppercase; letter-spacing: .3px; padding: 4px 5px; }
-  .fila-sub td { background: var(--bg); font-weight: 700; font-size: 8pt; color: var(--azul-osc); }
-  .fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 9pt; }
+{% include 'reportes/_rep_css.html' %}
 </style>
 </head>
 <body>
 <div class="toolbar">
-  <h2>FE-05 Ejecucion Presupuestal Mensual</h2>
+  <h2>FE-05 Ejecución Presupuestal Mensual</h2>
   <div class="spacer"></div>
   <a class="btn-excel" href="{{ url_for('fe05_excel', mes=mes, anio=anio) }}">Exportar a Excel</a>
   <button type="button" onclick="window.print()">Imprimir</button>
   <a class="volver" href="{{ url_for('formatos', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
 </div>
 <div class="hoja">
-  <div class="encabezado">
-    <div class="logo-box">
-      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
-    </div>
-    <div class="enc-cen">
-      <div class="entidad">{{ p.entidad or '' }}</div>
-      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
-      <div class="titulo">Ejecucion Presupuestal Mensual</div>
-      <div class="subtitulo">TOTAL COSTO DE CONSTRUCCION POR ADM. DIRECTA</div>
-    </div>
-    <div class="enc-der">
-      <div class="periodo">PERIODO: {{ MESES[mes-1] }} - {{ anio }}</div>
-    </div>
-  </div>
-  <div class="info-grid">
-    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
-    <div class="info-item"><span class="info-label">Codigo Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
-    <div class="info-item"><span class="info-label">Correlativo Meta</span><span class="info-val">{{ p.meta or '' }}</span></div>
-    <div class="info-item"><span class="info-label">Fuente Financ.</span><span class="info-val">{{ p.fuente or '' }}</span></div>
-    <div class="info-item"><span class="info-label">Modalidad</span><span class="info-val">ADMINISTRACION DIRECTA</span></div>
-  </div>
-  <div class="responsables">
-    <div class="resp-item"><div class="resp-label">Supervisor de Obra</div><div class="resp-val">{{ p.supervisor or '' }}</div></div>
-    <div class="resp-item"><div class="resp-label">Residente de Obra</div><div class="resp-val">{{ p.residente or '' }}</div></div>
-    <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
-  </div>
-
-  {% set ncols = 11 + clasif_cols|length + 4 %}
-  {# Anchos fijos calculados para caber en A4 horizontal (1123px).
-     Todos los colgroup idénticos = columnas perfectamente alineadas.
-     Clasificadores ajustados a ~58px para números como "15,000.00". #}
-  {% set fijos_fe05 = 18 + 36 + 62 + 28 + 26 + 138 + 192 + 26 + 32 + 52 + 62 + 56 + 52 + 48 + 60 %}
-  {% set ancho_clasif = ((1123 - fijos_fe05) / clasif_cols|length) | int if clasif_cols else 58 %}
-  {% for sec in secciones %}
-  <table class="tabla">
-    <colgroup>
-      <col style="width:18px"><col style="width:36px"><col style="width:62px"><col style="width:28px"><col style="width:26px">
-      <col style="width:138px"><col style="width:192px"><col style="width:26px"><col style="width:32px">
-      <col style="width:52px"><col style="width:62px">
-      {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
-      <col style="width:56px"><col style="width:52px"><col style="width:48px"><col style="width:60px">
-    </colgroup>
-    <thead>
-      <tr>
-        <th>N°</th><th>SIAF</th><th>Fecha</th><th>Tipo</th><th>N°</th>
-        <th>Proveedor</th><th>Detalle</th><th>Und</th><th class="num">Cant</th>
-        <th class="num">P.U</th><th class="num">Importe</th>
-        {% for c in clasif_cols %}<th class="num clasif">{{ c }}</th>{% endfor %}
-        <th class="num">Directos</th><th class="num">Grales</th>
-        <th class="num">Superv.</th><th class="num">Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr class="fila-rubro"><td colspan="{{ ncols }}">{{ sec.label }}</td></tr>
-      {% for f in sec.filas %}
-      <tr>
-        <td class="ctr">{{ f.prov_num if f.prov_first else '' }}</td>
-        <td>{{ f.g.siaf if f.prov_first else '' }}</td>
-        <td class="ctr">{{ f.g.fecha.strftime("%d/%m/%Y") if f.prov_first and f.g.fecha else '' }}</td>
-        <td class="ctr">{{ f.g.tipo_doc if f.prov_first else '' }}</td>
-        <td class="ctr">{{ f.g.num_doc if f.prov_first else '' }}</td>
-        <td class="txt">{{ f.g.proveedor if f.prov_first else '' }}</td>
-        <td class="txt">{{ f.d.detalle }}</td>
-        <td class="ctr">{{ f.d.und }}</td>
-        <td class="num">{{ "{:,.2f}".format(f.d.cantidad) if f.d.cantidad else '' }}</td>
-        <td class="num">{{ "{:,.2f}".format(f.d.precio_unitario) }}</td>
-        <td class="num">{{ "{:,.2f}".format(f.d.importe) }}</td>
-        {% for c in clasif_cols %}<td class="num">{{ "{:,.2f}".format(f.clasif[c]) if f.clasif[c] else '-' }}</td>{% endfor %}
-        <td class="num">{{ "{:,.2f}".format(f.directos) if f.directos else '-' }}</td>
-        <td class="num">{{ "{:,.2f}".format(f.generales) if f.generales else '-' }}</td>
-        <td class="num">{{ "{:,.2f}".format(f.supervision) if f.supervision else '-' }}</td>
-        <td class="num"><b>{{ "{:,.2f}".format(f.d.importe) }}</b></td>
-      </tr>
-      {% endfor %}
-      <tr class="fila-sub">
-        <td colspan="10" style="text-align:right">SUBTOTAL {{ sec.label }}</td>
-        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.total) }}</b></td>
-        {% for c in clasif_cols %}<td class="num"><b>{{ "{:,.2f}".format(sec.totales.clasif[c]) }}</b></td>{% endfor %}
-        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.directos) }}</b></td>
-        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.generales) }}</b></td>
-        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.supervision) }}</b></td>
-        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.total) }}</b></td>
-      </tr>
-    </tbody>
-  </table>
-  {% else %}
-  <table class="tabla">
-    <colgroup>
-      <col style="width:18px"><col style="width:36px"><col style="width:62px"><col style="width:28px"><col style="width:26px">
-      <col style="width:138px"><col style="width:192px"><col style="width:26px"><col style="width:32px">
-      <col style="width:52px"><col style="width:62px">
-      {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
-      <col style="width:56px"><col style="width:52px"><col style="width:48px"><col style="width:60px">
-    </colgroup>
-    <tbody>
-      <tr class="fila-rubro"><td colspan="{{ ncols }}">SIN GASTOS DEVENGADOS PARA EL PERÍODO</td></tr>
-    </tbody>
-  </table>
-  {% endfor %}
-
-  <table class="tabla">
-    <colgroup>
-      <col style="width:18px"><col style="width:36px"><col style="width:62px"><col style="width:28px"><col style="width:26px">
-      <col style="width:138px"><col style="width:192px"><col style="width:26px"><col style="width:32px">
-      <col style="width:52px"><col style="width:62px">
-      {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
-      <col style="width:56px"><col style="width:52px"><col style="width:48px"><col style="width:60px">
-    </colgroup>
-    <tbody>
-      <tr class="fila-total">
-        <td colspan="10" style="text-align:right">TOTAL GASTO EJECUTADO</td>
-        <td class="num"><b>{{ "{:,.2f}".format(total.total) }}</b></td>
-        {% for c in clasif_cols %}<td class="num"><b>{{ "{:,.2f}".format(total.clasif[c]) }}</b></td>{% endfor %}
-        <td class="num"><b>{{ "{:,.2f}".format(total.directos) }}</b></td>
-        <td class="num"><b>{{ "{:,.2f}".format(total.generales) }}</b></td>
-        <td class="num"><b>{{ "{:,.2f}".format(total.supervision) }}</b></td>
-        <td class="num"><b>{{ "{:,.2f}".format(total.total) }}</b></td>
-      </tr>
-    </tbody>
-</table>
-
-  <!-- ===================== FIRMAS ===================== -->
-  <div class="firmas">
-    <div class="firma">
-      <div class="linea"></div>
-      <div class="nombres">{{ p.residente or '' }}</div>
-      <div class="cargo">Residente de Obra</div>
-      <div class="reg">{% if p.cip_residente %}CIP: {{ p.cip_residente }}{% endif %}</div>
-    </div>
-    <div class="firma">
-      <div class="linea"></div>
-      <div class="nombres">{{ p.supervisor or '' }}</div>
-      <div class="cargo">Supervisor de Obra</div>
-      <div class="reg">{% if p.cip_supervisor %}CIP: {{ p.cip_supervisor }}{% endif %}</div>
-    </div>
-    <div class="firma">
-      <div class="linea"></div>
-      <div class="nombres">{{ p.administrador_obra or p.asistente or '' }}</div>
-      <div class="cargo">V°B° Administración / Entidad</div>
-      <div class="reg"></div>
-    </div>
-  </div>
-
+{% include 'reportes/_fe05_body.html' %}
 </div>
 <script src="{{ url_for('static', filename='js/imprimir_autofit.js') }}"></script>
 </body>
 </html>
-
-
-

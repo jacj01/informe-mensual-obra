@@ -49,3 +49,11 @@ informe_web/config_correo.py
 
 # Configuracion de red generada por el instalador (especifica de cada equipo)
 informe_web/config_red.py
+
+# Artefactos locales de trabajo (no son parte de la app)
+/informe.db
+/shots/
+/opencode/
+/temp_*.pdf
+/*.pdf
+/*.code-workspace

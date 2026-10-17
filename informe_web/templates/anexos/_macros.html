@@ -1,0 +1,15 @@
+{% macro campo(v, extra='') -%}
+<span class="campo {{ extra }}">{% if v is not none and v|string != '' %}{{ v }}{% else %}&nbsp;{% endif %}</span>
+{%- endmacro %}
+
+{% macro num(v) -%}
+<span class="campo corto">{% if v is not none and v|string != '' %}{{ "{:,.2f}".format(v) }}{% else %}&nbsp;{% endif %}</span>
+{%- endmacro %}
+
+{% macro parrafo(v, hint='') -%}
+<p class="sec-parrafo">{% if v and v|string|trim %}{{ v }}{% elif hint %}<span class="hint">{{ hint }}</span>{% else %}&nbsp;{% endif %}</p>
+{%- endmacro %}
+
+{% macro check(v) -%}
+<span class="check"></span>
+{%- endmacro %}

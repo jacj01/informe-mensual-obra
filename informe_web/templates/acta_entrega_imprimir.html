@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -7,11 +7,11 @@
 <meta name="description" content="Acta de entrega de materiales sobrantes de obra: fecha y hora de entrega, quien entrega y quien recibe, responsables de obra y cuadro de materiales sobrantes con valorización. Hoja A4 horizontal imprimible.">
 <title>Acta de Entrega de Materiales Sobrantes</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=7) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
 <style>
   /* Hoja en VERTICAL A4 (portrait) - una sola hoja */
-  @page { size: A4 portrait; margin: 10mm 12mm 12mm; }
-  .hoja { width: 210mm; min-height: 297mm; padding: 10mm 12mm; }
+  @page { size: A4 portrait; margin: 19.1mm 17.8mm; }
+  .hoja { box-sizing: border-box; width: 210mm; min-height: 297mm; padding: 19.1mm 17.8mm; }
   /* Proyecto: cuadro blanco como los responsables, label estilo "Fecha del acta" */
   .proyecto { display: flex; align-items: stretch; border: .6px solid var(--borde); border-radius: var(--radio-sm); overflow: hidden; margin: 2px 0 6px; }
   .proyecto .p-label { flex: 0 0 34%; background: var(--bg); color: var(--azul-osc); font-weight: 700; font-size: 7.2pt; text-transform: uppercase; border-right: .6px solid var(--borde); padding: 4px 8px; display: flex; align-items: center; }
@@ -30,12 +30,12 @@
   .acta-declaracion { margin-top: 12px; }
   .acta-declaracion p { font-size: 8.4pt; line-height: 1.6; color: var(--texto); text-align: justify; }
   /* Firmas: espacio antes de la 1.ª fila igual al espacio entre filas */
-  .firmas { flex-wrap: wrap; gap: 0 6%; margin-top: 126px; padding: 0; }
+  .firmas { flex-wrap: wrap; gap: 0 6%; margin-top: 84px; padding: 0; }
   .firma { flex: 1 1 47%; box-sizing: border-box; margin-bottom: 10px; }
   .firma:nth-child(-n+2) { margin-bottom: 92px; }
   .firma .linea { width: 72%; margin-bottom: 6px; }
   @media print {
-    @page { size: A4 portrait; margin: 10mm 12mm 12mm; }
+    @page { size: A4 portrait; margin: 19.1mm 17.8mm; }
     .hoja { width: auto; min-height: auto; height: auto; margin: 0; box-shadow: none; padding: 0; }
   }
 </style>
@@ -86,7 +86,7 @@
 
   <!-- ===================== PRECÁMBULO ===================== -->
   <div class="acta-precambulo">
-    <p>En las instalaciones del Almacén de Obra del distrito de Toraya, siendo el día
+    <p>En las instalaciones del Almacén de Obra del distrito de {{ p.distrito|title }}, siendo el día
     {{ fecha }} a la hora {{ hora }}, se reúnen los abajo firmantes con la finalidad de
     suscribir la presente <b>ACTA DE ENTREGA Y RECEPCIÓN DE MATERIALES SOBRANTES</b>,
     correspondientes a la ejecución de la obra por Administración Directa indicada,
@@ -172,7 +172,7 @@
     </div>
   </div>
 
-  <div style="margin-top:10px;font-size:7.5pt;color:var(--texto2);text-align:center">
+  <div style="margin-top:6px;font-size:7.5pt;color:var(--texto2);text-align:center">
     Los valores del cuadro se calculan al último precio de ingreso registrado en almacén.
     Para las cantidades se considera todo el movimiento de almacén del proyecto.
   </div>

@@ -9,6 +9,7 @@ se agrega la nueva tabla oficial (Resolucion Ministerial) a este archivo.
 TABLA_CIVIL_POR_ANIO = {
     2026: {
         "norma": "R.M. N° 197-2025-TR (vigencia del 01/01/2026 al 31/12/2026)",
+        "vigencia": ("01/01/2026", "31/12/2026"),
         "jornales": {
             "OPERARIO": 89.30,
             "OFICIAL": 69.75,
@@ -117,9 +118,12 @@ def calcular_obrero(t, calendario, anio, mes, con_beneficios):
         # dias marcados en el tareo (sueldo ÷ 30 x dias).
         vacaciones = cts = gratificacion = bonif = 0
         sueldo = float(t.sueldo_mensual or 0)
+        # El importe de la planilla es el sueldo mensual prorrateado por los
+        # dias marcados en el tareo (sueldo ÷ 30 x dias). Se muestra ese mismo
+        # importe en la columna del mes para que no contradiga "Total Ingresos".
         ingresos = sueldo * total_dias_rem / 30
         descuentos = 0
-        sueldo_planilla = sueldo
+        sueldo_planilla = ingresos
         jornal_basico = dsd = feriados = buc = movilidad = 0
 
     return {
@@ -151,6 +155,7 @@ def calcular_tecnico(t, calendario, anio, con_beneficios):
     tab = tabla_civil(anio)
     sueldo = float(t.sueldo_mensual or 0)
     trab, dom, fer = contar_dias(t, calendario)
+    total_dias = trab + dom + fer
 
     if con_beneficios:
         gratif = DL728_GRATIF_MENSUAL * sueldo
@@ -161,14 +166,16 @@ def calcular_tecnico(t, calendario, anio, con_beneficios):
         descuentos = pension
     else:
         gratif = cts = vacaciones = 0
-        ingresos = sueldo
+        # Consistente con el obrero: sin beneficios el "Sueldo mensual" se
+        # prorratea por los dias marcados en el tareo (sueldo / 30 x dias).
+        ingresos = sueldo * total_dias / 30
         descuentos = 0
 
     return {
         "t": t,
         "cargo": (t.cargo or "").strip().upper() or "TECNICO",
         "trab": trab, "dom": dom, "fer": fer,
-        "total_dias": trab + dom + fer,
+        "total_dias": total_dias,
         "sueldo": sueldo,
         "gratif": red2(gratif),
         "cts": red2(cts),

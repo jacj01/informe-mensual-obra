@@ -1,0 +1,69 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Antecedentes</div>
+{% set n_res = av.get('n_resolucion') or p.aprobacion %}
+{% set f_res = av.get('fecha_resolucion') or (p.fecha_aprobacion.strftime('%d/%m/%Y') if p.fecha_aprobacion else '') %}
+<p class="sec-parrafo">Mediante Resolución N.° {{ n_res or '__________' }} de fecha
+{{ f_res or '__________' }} se aprobó el Expediente Técnico de la obra
+«{{ p.nombre or '' }}» con un monto de S/ {{ "{:,.2f}".format(resumen.totales.et) }}. La ejecución se dispuso por la
+modalidad de <b>Administración Directa</b>.</p>
+
+<div class="sec-titulo">III. Sustento de la modalidad de ejecución</div>
+<p class="sec-parrafo">Se verificó que la Entidad cuenta con la capacidad técnica y administrativa, así como con el
+personal, la maquinaria y el equipamiento necesarios para asumir la ejecución de la obra, conforme al artículo 5 de la
+Directiva N° 017-2023-CG/GMPL. El detalle del sustento es el siguiente:</p>
+{{ parrafo(av.get('sustento_modalidad'), '(Complete el sustento de la modalidad en el módulo Anexos → Editar.)') }}
+
+<div class="sec-titulo">IV. Del presupuesto de obra</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Componente</th>
+      <th class="num">Monto del Expediente Técnico (S/)</th>
+      <th class="num">Participación</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for cr in resumen.por_componente %}
+    <tr>
+      <td>{{ cr.componente }}</td>
+      <td class="num">{{ "{:,.2f}".format(cr.et) }}</td>
+      <td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="fila-total">
+      <td>TOTAL</td>
+      <td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td>
+      <td class="num">100.00%</td>
+    </tr>
+  </tfoot>
+</table>
+<p class="sec-parrafo">El presupuesto asciende a {{ monto_letras(resumen.totales.et) }}.</p>
+
+<div class="sec-titulo">V. Capacidad operativa disponible</div>
+<table class="tabla">
+  <thead>
+    <tr><th>Categoría</th><th>Detalle / responsable</th><th>Condición</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Recursos humanos</td><td>{{ p.residente or '____________________' }} (Residente de Obra)</td><td>Acreditado</td></tr>
+    <tr><td>Equipo técnico</td><td>{{ p.asistente or '____________________' }} (Asistente técnico / administrativo)</td><td>Acreditado</td></tr>
+    <tr><td>Maquinaria y equipo</td><td>______________________________</td><td>Propio / alquilado</td></tr>
+    <tr><td>Logística y almacén</td><td>{{ p.responsable_almacen or p.almacenero or '____________________' }} (Almacén de obra)</td><td>Habilitado</td></tr>
+  </tbody>
+</table>
+{{ parrafo(av.get('recursos_humanos'), '(Detalle la capacidad técnica y los recursos humanos en el módulo Anexos → Editar.)') }}
+
+<div class="sec-titulo">VI. Visita de verificación de terreno</div>
+<p class="sec-parrafo">Se realizó la visita de verificación en campo, constatándose las condiciones de la zona de
+intervención, accesos y disponibilidad del terreno, según consta en el acta respectiva.</p>
+
+<div class="sec-titulo">VII. Conclusiones y recomendaciones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones del informe técnico.)') }}
+{{ parrafo(av.get('recomendaciones'), '(Registre las recomendaciones del informe técnico.)') }}
+{% endblock %}

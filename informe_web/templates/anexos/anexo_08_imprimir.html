@@ -1,0 +1,55 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Base legal</div>
+<ul class="lista-num">
+  <li>1. Constitución Política del Perú.</li>
+  <li>2. Ley N° 28411, Ley General del Sistema Nacional de Presupuesto.</li>
+  <li>3. Ley N° 30225, Ley de Contrataciones del Estado, y su Reglamento.</li>
+  <li>4. Directiva N° 017-2023-CG/GMPL, aprobada por Resolución de Contraloría N° 432-2023-CG.</li>
+</ul>
+<div style="font-size:10pt">{{ av.get('base_legal_otras') or '' }}</div>
+
+<div class="sec-titulo">III. Antecedentes</div>
+{{ parrafo(av.get('antecedentes'), 'Con Resolución N.° __________ se aprobó el Expediente Técnico; se cuenta con la disponibilidad presupuestal y las autorizaciones aplicables.') }}
+
+<div class="sec-titulo">IV. Permisos y autorizaciones</div>
+<table class="tabla">
+  <thead>
+    <tr><th>Documento / autorización</th><th>N.° / referencia</th><th>Estado</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Licencia de edificación / habilitación</td><td>__________</td><td>__________</td></tr>
+    <tr><td>Autorización sectorial / ambiental</td><td>__________</td><td>__________</td></tr>
+    <tr><td>Certificación / disponibilidad presupuestal</td><td>__________</td><td>__________</td></tr>
+    <tr><td>Conformidad de terreno</td><td>__________</td><td>__________</td></tr>
+  </tbody>
+</table>
+{{ parrafo(av.get('permisos_detalle'), '') }}
+
+<div class="sec-titulo">V. Análisis</div>
+{{ parrafo(av.get('analisis'), 'De la revisión de la documentación se advierte que la ejecución por Administración Directa se encuentra dentro del marco legal vigente, siendo procedente su prosecución.') }}
+
+<div class="sec-titulo">VI. Conclusiones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones del informe legal.)') }}
+
+<div class="sec-titulo">VII. Recomendaciones</div>
+{{ parrafo(av.get('recomendaciones'), '(Registre las recomendaciones del informe legal.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.administrador_obra or '' }}</div>
+    <div class="cargo">Jefe de la Oficina de Administración / Asesoría Legal</div>
+  </div>
+</div>
+{% endblock %}

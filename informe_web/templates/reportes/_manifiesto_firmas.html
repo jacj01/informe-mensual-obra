@@ -1,0 +1,21 @@
+  <!-- ===================== FIRMAS ===================== -->
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ hdr.residente or '' }}</div>
+      <div class="cargo">Residente de Obra</div>
+      <div class="reg">{% if hdr.cip_residente %}CIP: {{ hdr.cip_residente }}{% endif %}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ hdr.supervisor or '' }}</div>
+      <div class="cargo">Supervisor de Obra</div>
+      <div class="reg">{% if hdr.cip_supervisor %}CIP: {{ hdr.cip_supervisor }}{% endif %}</div>
+    </div>
+    <div class="firma">
+      <div class="linea"></div>
+      <div class="nombres">{{ (p.administrador_obra or p.asistente) if p else '' }}</div>
+      <div class="cargo">V°B° Administración / Entidad</div>
+      <div class="reg"></div>
+    </div>
+  </div>

@@ -1,0 +1,67 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Antecedentes</div>
+<p class="sec-parrafo">Durante la ejecución de la obra se identificaron mayores metrados no previstos en el Expediente
+Técnico, cuya ejecución resulta necesaria para alcanzar la finalidad de la obra. El sustento consta en los metrados
+de obra y en las anotaciones del cuaderno de obra.</p>
+
+<div class="sec-titulo">III. Mayores metrados solicitados</div>
+{% set total_mm = namespace(v=0) %}
+{% if av.get('met1_monto') is not none and av.get('met1_monto')|string != '' %}{% set total_mm.v = total_mm.v + av.get('met1_monto') %}{% endif %}
+{% if av.get('met2_monto') is not none and av.get('met2_monto')|string != '' %}{% set total_mm.v = total_mm.v + av.get('met2_monto') %}{% endif %}
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>N°</th>
+      <th>Partida / descripción</th>
+      <th class="num">Unidad</th>
+      <th class="num">Mayor metrado</th>
+      <th class="num">Monto (S/)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>{{ av.get('met1_partida') or '____________________' }}<br>{{ av.get('met1_detalle') or '' }}</td>
+      <td class="num">{{ av.get('met1_und') or '____' }}</td>
+      <td class="num">{{ av.get('met1_detalle') or '________' }}</td>
+      <td class="num">{{ num(av.get('met1_monto')) }}</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>{{ av.get('met2_partida') or '____________________' }}<br>{{ av.get('met2_detalle') or '' }}</td>
+      <td class="num">{{ av.get('met2_und') or '____' }}</td>
+      <td class="num">{{ av.get('met2_detalle') or '________' }}</td>
+      <td class="num">{{ num(av.get('met2_monto')) }}</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr class="fila-total"><td colspan="4">TOTAL MAYORES METRADOS (S/)</td><td class="num">{{ num(total_mm.v) }}</td></tr>
+  </tfoot>
+</table>
+
+<div class="sec-titulo">IV. Sustento y verificación</div>
+{{ parrafo(av.get('sustento'), '(Registre el sustento técnico y la verificación de los mayores metrados.)') }}
+
+<div class="sec-titulo">V. Conclusiones y recomendaciones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones y recomendaciones.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.residente or '' }}</div>
+    <div class="cargo">Residente de Obra</div>
+    {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -10,7 +10,7 @@
   {% endif %}
   <div class="card">
     <div class="card-head between">
-      <h3><i class="bi bi-box-seam"></i> {{ 'Editar movimiento' if m.id else 'Nuevo movimiento' }}</h3>
+      <h2><i class="bi bi-box-seam"></i> {{ 'Editar movimiento' if m.id else 'Nuevo movimiento' }}</h2>
       <button type="button" class="btn btn-green btn-sm" id="btn-oc" onclick="return abrirModal('{{ url_for('almacen_oc', mes=m.mes, anio=m.anio) }}')" title="Buscar una O/C y agregar todos sus materiales al almacén">
         <i class="bi bi-bag-check"></i> Agregar por O/C
       </button>

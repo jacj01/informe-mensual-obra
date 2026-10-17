@@ -1,0 +1,63 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Sustento de la reprogramación</div>
+<p class="sec-parrafo">Con motivo de la ampliación de plazo de {{ p.dias_ampliacion or 0 }} día(s), se reformula el cronograma
+de ejecución de obra, manteniéndose los alcances y el presupuesto contractual. La nueva fecha de término prevista es
+{% if p.nuevo_final_obra %}{{ p.nuevo_final_obra.strftime('%d/%m/%Y') }}{% else %}__________{% endif %}.</p>
+{{ parrafo(av.get('sustento'), '(Detalle el sustento técnico y legal de la reprogramación.)') }}
+
+<div class="sec-titulo">III. Cronograma valorizado reprogramado</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Mes</th>
+      <th class="num">Valorización programada (S/)</th>
+      <th class="num">% del total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% set total_et = resumen.totales.et if resumen.totales.et else 1 %}
+    {% for i in range(12) %}
+    {% set vmes = namespace(v=0) %}
+    {% for comp, r in fe06_resumen.items() %}{% set vmes.v = vmes.v + r.mensual[i] %}{% endfor %}
+    <tr>
+      <td>{{ MESES[i] }}</td>
+      <td class="num">{{ "{:,.2f}".format(vmes.v) }}</td>
+      <td class="num">{{ "{:.2f}".format(vmes.v / total_et * 100) }}%</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="fila-total">
+      <td>TOTAL</td>
+      <td class="num">{{ "{:,.2f}".format(fe06_sintesis.ejec_anio) }}</td>
+      <td class="num">{{ "{:.2f}".format(fe06_sintesis.ejec_anio / total_et * 100) }}%</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="sec-titulo">IV. Nuevas fechas y programación de adquisiciones</div>
+{{ parrafo(av.get('adquisiciones'), '(Detalle la programación de adquisiciones del periodo reprogramado.)') }}
+
+<div class="sec-titulo">V. Conclusiones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones de la reprogramación.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.residente or '' }}</div>
+    <div class="cargo">Residente de Obra</div>
+    {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

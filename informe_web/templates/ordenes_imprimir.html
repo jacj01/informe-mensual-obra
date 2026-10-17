@@ -1,20 +1,20 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="Reporte general de órdenes de compra y servicio (O/C y O/S) del informe financiero mensual de obra: todas las órdenes registradas sin excepción, agrupadas por periodo y separadas por tipo de documento (O/C y O/S). Hoja continua tamaño A4 horizontal.">
-<title>Reporte General de Órdenes (O/C y O/S)</title>
+<meta name="description" content="Informe general de órdenes de compra y servicio (O/C y O/S) del informe financiero mensual de obra: todas las órdenes registradas sin excepción, agrupadas por periodo y separadas por tipo de documento (O/C y O/S). Hoja continua tamaño A4 horizontal.">
+<title>Informe General de Órdenes (O/C y O/S)</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
 <style>
   .strong { font-weight: 700; }
   .right { text-align: right; }
   .empty-print { text-align: center; color: var(--texto2); font-size: 9pt; padding: 18px 0; }
 
   /* Hoja continua: A4 vertical (210mm) sin límite de altura */
-  .hoja { width: 210mm; min-height: auto; }
+  .hoja { box-sizing: border-box; width: 210mm; min-height: auto; padding: 19.1mm 17.8mm; }
 
   /* Resumen principal */
   .resumen-print { display: flex; gap: 8px; margin: 8px 0 2px; page-break-inside: avoid; }
@@ -59,11 +59,19 @@
   .tipo-head.tipo-oc { border-left-color: var(--azul); }
   .tipo-head.tipo-os { border-left-color: var(--oro); }
   .tipo-head.tipo-os .tipo-tag { background: var(--oro); }
+  .tipo-head.tipo-plla { border-left-color: #7c3aed; }
+  .tipo-head.tipo-plla .tipo-tag { background: #7c3aed; }
   .tipo-empty {
     border: 1px dashed var(--borde); border-radius: 5px;
     padding: 8px 12px; margin: 4px 0 10px;
     font-size: 7.8pt; color: var(--texto2); text-align: center;
   }
+
+  /* Tabla principal: anchos fijos por columna (evita que "Proveedor" se
+     aplaste y parta el nombre letra por letra) */
+  table.tabla { table-layout: fixed; }
+  table.tabla th, table.tabla td { vertical-align: top; }
+  table.tabla thead th { font-size: 6.3pt; letter-spacing: 0; }
 
   /* Fila de orden (cabecera del comprobante) */
   tr.fila-orden td {
@@ -71,6 +79,7 @@
     border-top: 2px solid var(--azul-claro); color: var(--texto);
   }
   tr.fila-orden td.doc b { color: var(--azul-osc); font-size: 8.2pt; letter-spacing: .2px; }
+  tr.fila-orden td.ctr { white-space: nowrap; }
   tr.fila-orden td.dev-si { text-align: center; color: #166534; font-weight: 800; font-size: 8.2pt; }
   tr.fila-orden td.dev-no { text-align: center; color: #B45309; font-weight: 800; font-size: 8.2pt; }
   tr.fila-orden td.np-mini { font-size: 6.2pt; font-weight: 600; color: var(--texto2); }
@@ -110,7 +119,8 @@
 
   /* Impresión: tamaño A4 en sentido vertical */
   @media print {
-    @page { size: A4 portrait; margin: 9mm 8mm 10mm; }
+    @page { size: A4 portrait; margin: 19.1mm 17.8mm; }
+    .hoja { width: auto; min-height: auto; height: auto; margin: 0; box-shadow: none; padding: 0; }
   }
 </style>
 </head>
@@ -129,7 +139,7 @@
     <div class="enc-cen">
       <div class="entidad">{{ p.entidad or '' }}</div>
       <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
-      <div class="titulo">Reporte General de Órdenes de Compra y Servicio</div>
+      <div class="titulo">Informe General de Órdenes de Compra y Servicio</div>
       <div class="subtitulo">TODOS LOS PERIODOS REGISTRADOS</div>
     </div>
   </div>
@@ -139,6 +149,7 @@
     <div class="rb rb-total"><div class="rb-val">{{ "{:,}".format(resumen.total_ordenes) }}</div><div class="rb-lbl">Órdenes</div></div>
     <div class="rb"><div class="rb-val">{{ "{:,}".format(resumen.total_oc) }}</div><div class="rb-lbl">O/C</div></div>
     <div class="rb"><div class="rb-val">{{ "{:,}".format(resumen.total_os) }}</div><div class="rb-lbl">O/S</div></div>
+    <div class="rb"><div class="rb-val">{{ "{:,}".format(resumen.total_plla) }}</div><div class="rb-lbl">Planilla</div></div>
     <div class="rb rb-total"><div class="rb-val">S/ {{ "{:,.2f}".format(resumen.total_general) }}</div><div class="rb-lbl">Total General</div></div>
     <div class="rb"><div class="rb-val">S/ {{ "{:,.2f}".format(resumen.total_devengado) }}</div><div class="rb-lbl">Devengado</div></div>
     <div class="rb"><div class="rb-val">S/ {{ "{:,.2f}".format(resumen.total_pendiente) }}</div><div class="rb-lbl">Pendiente</div></div>
@@ -148,16 +159,16 @@
   <table class="tabla">
     <thead>
       <tr>
-        <th style="width:24px">#</th>
-        <th style="width:58px">Fecha</th>
-        <th style="width:94px">Documento</th>
-        <th style="width:58px">SIAF</th>
-        <th>Proveedor</th>
-        <th style="width:112px">Clasificador</th>
-        <th style="width:76px">Componente</th>
-        <th style="width:54px">Pecosa</th>
-        <th style="width:58px">Devengado</th>
-        <th class="num" style="width:84px">Total S/</th>
+        <th style="width:4%">#</th>
+        <th style="width:9%">Fecha</th>
+        <th style="width:13%">Documento</th>
+        <th style="width:6%">SIAF</th>
+        <th style="width:18%">Proveedor</th>
+        <th style="width:11%">Clasificador</th>
+        <th style="width:11%">Componente</th>
+        <th style="width:7%">Pecosa</th>
+        <th style="width:10%">Devengado</th>
+        <th class="num" style="width:11%">Total S/</th>
       </tr>
     </thead>
     <tbody>
@@ -206,7 +217,7 @@
               {% else %}
               <tr>
                 <td colspan="6" class="ctr">
-                  {{ 'Sin servicios registrados.' if o.g.tipo_doc == 'O/S' else 'Sin materiales registrados.' }}
+                  {{ 'Sin servicios registrados.' if o.g.tipo_doc == 'O/S' else ('Sin conceptos registrados.' if o.g.tipo_doc == 'PLLA' else 'Sin materiales registrados.') }}
                 </td>
               </tr>
               {% endfor %}
@@ -229,7 +240,7 @@
   <div class="periodo-head">
     <span class="ph-periodo">PERIODO: {{ periodo.nombre }}</span>
     <span class="ph-spacer"></span>
-    <span class="ph-meta">{{ periodo.cant }} ÓRDENES · {{ periodo.cant_oc }} O/C · {{ periodo.cant_os }} O/S · SUBTOTAL S/ {{ "{:,.2f}".format(periodo.subtotal) }}</span>
+    <span class="ph-meta">{{ periodo.cant }} DOCUMENTOS · {{ periodo.cant_oc }} O/C · {{ periodo.cant_os }} O/S · {{ periodo.cant_plla }} PLANILLA · SUBTOTAL S/ {{ "{:,.2f}".format(periodo.subtotal) }}</span>
   </div>
 
   <div class="tipo-head tipo-oc">
@@ -258,6 +269,19 @@
   <div class="tipo-empty">No hay órdenes de servicio (O/S) registradas en este periodo.</div>
   {% endif %}
 
+  <div class="tipo-head tipo-plla">
+    <span class="tipo-tag">PLANILLA</span>
+    <span class="tipo-txt">Planillas de Pago (PLLA)</span>
+    <span class="tipo-sub">{{ periodo.cant_plla }} PLANILLAS · S/ {{ "{:,.2f}".format(periodo.subtotal_plla) }}</span>
+  </div>
+  {% if periodo.plla_ordenes %}
+  {{ tabla_ordenes(periodo.plla_ordenes,
+                   "SUBTOTAL PLANILLA · " ~ periodo.nombre ~ " · " ~ periodo.cant_plla ~ " PLANILLAS",
+                   periodo.subtotal_plla) }}
+  {% else %}
+  <div class="tipo-empty">No hay planillas de pago (PLLA) registradas en este periodo.</div>
+  {% endif %}
+
   {% else %}
   <p class="empty-print">
     No hay órdenes registradas en el aplicativo.
@@ -270,7 +294,7 @@
     <span class="st-val">S/ {{ "{:,.2f}".format(resumen.total_general) }}</span>
   </div>
   <div class="nota-final">
-    Comprende {{ "{:,}".format(resumen.total_oc) }} órdenes de compra (O/C) y {{ "{:,}".format(resumen.total_os) }} órdenes de servicio (O/S).
+    Comprende {{ "{:,}".format(resumen.total_oc) }} órdenes de compra (O/C), {{ "{:,}".format(resumen.total_os) }} órdenes de servicio (O/S) y {{ "{:,}".format(resumen.total_plla) }} planilla(s) de pago (PLLA).
     Monto devengado: S/ {{ "{:,.2f}".format(resumen.total_devengado) }} · Pendiente de devengar: S/ {{ "{:,.2f}".format(resumen.total_pendiente) }}.
   </div>
   {% endif %}

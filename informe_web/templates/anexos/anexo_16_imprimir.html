@@ -1,0 +1,51 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Sustento del mayor gasto general</div>
+<p class="sec-parrafo">Como consecuencia de la ampliación de plazo de {{ p.dias_ampliacion or 0 }} días calendario,
+se generaron mayores gastos generales variables durante el periodo ampliado. El reconocimiento se efectúa conforme
+al artículo 34 de la Ley N° 30225, acreditado con la documentación sustentatoria.</p>
+
+<div class="sec-titulo">III. Cálculo de los mayores gastos generales</div>
+<table class="tabla">
+  <thead>
+    <tr><th>Concepto</th><th class="num">Monto / valor</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Gastos generales del presupuesto de obra (S/)</td><td class="num">{{ "{:,.2f}".format(p.gastos_generales or 0) }}</td></tr>
+    <tr><td>Plazo original de ejecución (días)</td><td class="num">{{ p.dias_ejecucion or 0 }}</td></tr>
+    <tr><td>Días de ampliación (días)</td><td class="num">{{ p.dias_ampliacion or 0 }}</td></tr>
+    <tr><td>Gasto general diario (S/)</td><td class="num">
+      {% if p.dias_ejecucion %}{{ "{:,.2f}".format((p.gastos_generales or 0) / p.dias_ejecucion) }}{% else %}0.00{% endif %}
+    </td></tr>
+    <tr class="fila-total"><td>MAYOR GASTO GENERAL RECONOCIDO (S/)</td><td class="num">
+      {% if p.dias_ejecucion %}{{ "{:,.2f}".format((p.gastos_generales or 0) / p.dias_ejecucion * (p.dias_ampliacion or 0)) }}{% else %}0.00{% endif %}
+    </td></tr>
+  </tbody>
+</table>
+
+<div class="sec-titulo">IV. Documentación sustentatoria</div>
+{{ parrafo(av.get('docs_sustento'), '(Detalle la documentación que sustenta los mayores gastos generales.)') }}
+
+<div class="sec-titulo">V. Conclusiones y recomendaciones</div>
+{{ parrafo(av.get('analisis'), '(Registre el análisis de la verificación.)') }}
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones y recomendaciones.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.residente or '' }}</div>
+    <div class="cargo">Residente de Obra</div>
+    {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

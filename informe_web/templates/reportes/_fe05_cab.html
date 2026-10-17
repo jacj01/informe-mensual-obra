@@ -1,0 +1,26 @@
+  <div class="encabezado">
+    <div class="logo-box">
+      {% if p.logo_path %}<img src="{{ url_for('static', filename=p.logo_path) }}" alt="Escudo de la entidad">{% else %}<span class="sin-logo">[ESCUDO /<br>LOGO DE LA<br>ENTIDAD]</span>{% endif %}
+    </div>
+    <div class="enc-cen">
+      <div class="entidad">{{ p.entidad or '' }}</div>
+      <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
+      <div class="titulo">Ejecución Presupuestal Mensual</div>
+      <div class="subtitulo">TOTAL COSTO DE CONSTRUCCION POR ADM. DIRECTA</div>
+    </div>
+    <div class="enc-der">
+      <div class="periodo">PERIODO: {% if periodo_txt is defined %}{{ periodo_txt }}{% else %}{{ MESES[mes-1] }} - {{ anio }}{% endif %}</div>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Código Único</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Correlativo Meta</span><span class="info-val">{{ p.meta or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Fuente Financ.</span><span class="info-val">{{ p.fuente or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Modalidad</span><span class="info-val">ADMINISTRACION DIRECTA</span></div>
+  </div>
+  <div class="responsables">
+    <div class="resp-item"><div class="resp-label">Supervisor de Obra</div><div class="resp-val">{{ p.supervisor or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Residente de Obra</div><div class="resp-val">{{ p.residente or '' }}</div></div>
+    <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
+  </div>

@@ -1,17 +1,43 @@
 {% extends "base.html" %}
 {% block title %}Liquidación Financiera de Obra{% endblock %}
 {% block og_title %}Liquidación Financiera de Obra{% endblock %}
-{% block meta_description %}Liquidación financiera de obra por administración directa: expediente, acta de recepción, comisión de liquidación y cuadro comparativo presupuesto vs. ejecutado.{% endblock %}
+{% block meta_description %}Anexo N° 03 - Informe de Liquidación Técnica Financiera (Directiva N° 017-2023-CG/GMPL): memoria descriptiva, evaluación de la liquidación técnica-financiera y de la ejecución presupuestal.{% endblock %}
 {% block heading %}Liquidación Financiera de Obra{% endblock %}
-{% block subheading %}Expediente de liquidación y cuadro comparativo de la ejecución{% endblock %}
+{% block subheading %}Anexo N° 03 - Informe de Liquidación Técnica Financiera{% endblock %}
 
 {% block content %}
 {% set tot = resumen.totales %}
-{% set costo_final = costo_final %}
+
+{# Mismos cuadros que el Anexo N° 03 imprimible #}
+{% set ZERO = {'et': 0.0, 'acum_total': 0.0, 'saldo_et': 0.0, 'porc_et': 0.0} %}
+{% set comp_map = {} %}
+{% for r in resumen.por_componente %}{% set _ = comp_map.update({r.componente: r}) %}{% endfor %}
+{% set clas_map = {} %}
+{% for r in resumen.por_clasificador %}{% set _ = clas_map.update({r.componente ~ '|' ~ r.detalle: r}) %}{% endfor %}
+{% set cd  = comp_map.get('Costo Directo', ZERO) %}
+{% set gg  = comp_map.get('Gastos Generales', ZERO) %}
+{% set sup = comp_map.get('Gastos de Supervisión', ZERO) %}
+{% set exp = comp_map.get('Elaboración de Expediente Técnico', ZERO) %}
+{% set liq = comp_map.get('Liquidación de Obra', ZERO) %}
+{% set pcd = clas_map.get('Costo Directo|PERSONAL', ZERO) %}
+{% set pbi = clas_map.get('Costo Directo|BIENES', ZERO) %}
+{% set pse = clas_map.get('Costo Directo|SERVICIOS', ZERO) %}
+{% set pact = clas_map.get('Costo Directo|ACTIVOS NO FINANCIEROS', ZERO) %}
+{% set ind_total = (gg.acum_total or 0) + (sup.acum_total or 0) + (exp.acum_total or 0) + (liq.acum_total or 0) %}
+
+<style>
+.tab-datos{width:100%;border-collapse:collapse;margin:0 0 4px}
+.tab-datos td{border:1px solid var(--borde);padding:7px 10px;font-size:13px;vertical-align:top}
+.tab-datos td.k{background:var(--bg);font-weight:600;color:var(--texto2);width:24%}
+.tab-datos td.v{width:26%}
+.sec-bloque{margin:18px 0 6px;font-size:12px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.03em}
+.sub-bloque{margin:12px 0 4px;font-size:12.5px;font-weight:700;color:var(--texto2)}
+.sec-texto{font-size:13.5px;line-height:1.6;color:var(--texto);white-space:pre-wrap;margin:2px 0 6px;text-align:justify}
+</style>
 
 <div class="card">
   <div class="card-head between">
-    <h3><i class="bi bi-cash-stack"></i> Hoja de resumen de la liquidación</h3>
+    <h2><i class="bi bi-cash-stack"></i> Anexo N° 03 - Informe de Liquidación Técnica Financiera</h2>
     <a class="btn btn-primary" href="{{ url_for('liquidacion_imprimir') }}" target="_blank">
       <i class="bi bi-printer"></i> Imprimir Liquidación Financiera</a>
   </div>
@@ -64,7 +90,7 @@
 <form method="post">
   <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-journal-text"></i> Datos del expediente de liquidación</h3></div>
+    <div class="card-head"><h2><i class="bi bi-journal-text"></i> Expediente de liquidación (datos editables)</h2></div>
     <div class="form-grid">
       <div class="field">
         <label for="liq-n-exp">N.° expediente de liquidación</label>
@@ -115,120 +141,334 @@
         <input type="number" step="0.01" inputmode="decimal" id="liq-saldo" name="saldo_por_pagar" value="{{ L.saldo_por_pagar or 0 }}">
       </div>
       <div class="field full">
-        <label for="liq-notas">Observaciones</label>
+        <label for="liq-notas">Observaciones / comentarios generales (VI.C)</label>
         <textarea id="liq-notas" name="notas" rows="2">{{ L.notas or '' }}</textarea>
+      </div>
+      <div class="field full"><span class="sub-bloque" style="margin:6px 0 0">E. Responsables, F. Descripción del Proyecto y G. Antecedentes</span></div>
+      <div class="field full">
+        <label for="liq-resp-exp">Elaboración del Expediente Técnico de Obra</label>
+        <input type="text" id="liq-resp-exp" name="responsable_exp_tecnico" value="{{ L.responsable_exp_tecnico or '' }}" placeholder="Nombre y cargo">
+      </div>
+      <div class="field full">
+        <label for="liq-aprob-exp">Responsable de la aprobación del Exp. Técnico</label>
+        <input type="text" id="liq-aprob-exp" name="aprobador_exp_tecnico" value="{{ L.aprobador_exp_tecnico or '' }}" placeholder="Nombre y cargo">
+      </div>
+      <div class="field full">
+        <label for="liq-oad">Oficina de Obras por Administración Directa - OAD</label>
+        <input type="text" id="liq-oad" name="responsable_oad" value="{{ L.responsable_oad or '' }}" placeholder="Nombre y cargo">
+      </div>
+      <div class="field full">
+        <label for="liq-descripcion">F. Descripción del Proyecto</label>
+        <textarea id="liq-descripcion" name="descripcion_proyecto" rows="3" placeholder="Ejecución del Proyecto de Inversión por componentes y presupuesto, y avances físicos logrados">{{ L.descripcion_proyecto or '' }}</textarea>
+      </div>
+      <div class="field full">
+        <label for="liq-antecedentes">G. Antecedentes</label>
+        <textarea id="liq-antecedentes" name="antecedentes" rows="3" placeholder="Proyecto nuevo o continuación de años anteriores, metas obtenidas por ejercicio, saldo de materiales u órdenes pendientes">{{ L.antecedentes or '' }}</textarea>
       </div>
     </div>
     <div class="note">
       <i class="bi bi-info-circle"></i>
       Los montos del expediente técnico y de la ejecución se calculan automáticamente desde la
-      Configuración Presupuestal y el Manifiesto de Gasto. Aquí solo se registran los datos propios
-      de la liquidación (expediente, acta, comisión y adendas).
+      Configuración Presupuestal y el Manifiesto de Gasto. Los datos generales (sector, pliego, UEI,
+      categoría y programa presupuestal, ubicación, etc.) se editan en
+      <a href="{{ url_for('cabecera') }}">Datos del Proyecto</a>; los objetivos, especificaciones y
+      demás secciones se editan en el <a href="{{ url_for('informe_final') }}">Informe Final de Obra</a>.
+      Los responsables (E) y la descripción y antecedentes (F y G) se ingresan aquí.
     </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h3><i class="bi bi-table"></i> Cuadro comparativo por componente</h3></div>
-    <div class="table-scroll">
-      <table class="table table-compact">
-        <thead>
-          <tr>
-            <th>Componente</th>
-            <th class="num">Exp. Técnico (S/)</th>
-            <th class="num">Ejecutado acumulado (S/)</th>
-            <th class="num">%</th>
-            <th class="num">Saldo (S/)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for cr in resumen.por_componente %}
-          <tr>
-            <td>{{ cr.componente }}</td>
-            <td class="num">{{ "{:,.2f}".format(cr.et) }}</td>
-            <td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td>
-            <td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td>
-            <td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-        <tfoot>
-          <tr class="totales">
-            <td><strong>TOTAL</strong></td>
-            <td class="num strong">{{ "{:,.2f}".format(tot.et) }}</td>
-            <td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td>
-            <td class="num strong">{{ "{:.2f}".format(tot.porc) }}%</td>
-            <td class="num strong">{{ "{:,.2f}".format(tot.saldo) }}</td>
-          </tr>
-        </tfoot>
-      </table>
+    <div class="form-actions" style="margin-top:12px">
+      <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar liquidación</button>
+      <a class="btn btn-outline" href="{{ url_for('liquidacion_imprimir') }}" target="_blank"><i class="bi bi-printer"></i> Ver/imprimir Anexo N° 03</a>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h3><i class="bi bi-list-ul"></i> Ejecución por clasificador (partidas)</h3></div>
-    <div class="table-scroll">
-      <table class="table table-compact">
-        <thead>
-          <tr>
-            <th>Componente</th><th>Partida</th>
-            <th class="num">Exp. Técnico (S/)</th>
-            <th class="num">Ejecutado (S/)</th>
-            <th class="num">%</th>
-            <th class="num">Saldo (S/)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for cr in resumen.por_clasificador %}
-          <tr>
-            <td>{{ cr.componente }}</td>
-            <td>{{ cr.detalle }}</td>
-            <td class="num">{{ "{:,.2f}".format(cr.et) }}</td>
-            <td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td>
-            <td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td>
-            <td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h3><i class="bi bi-hourglass-split"></i> Compromisos pendientes de devengar</h3></div>
-    {% if pendientes %}
-    <div class="table-scroll">
-      <table class="table table-compact">
-        <thead>
-          <tr>
-            <th>Fecha</th><th>N.°</th><th>Tipo</th><th>Proveedor</th>
-            <th>Componente</th><th>Clasificador</th><th class="num">Importe (S/)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for g in pendientes %}
-          <tr>
-            <td>{{ g.fecha.strftime('%d/%m/%Y') if g.fecha else '' }}</td>
-            <td>{{ '{:04d}'.format(g.num_doc or 0) }}</td>
-            <td>{{ g.tipo_doc or '' }}</td>
-            <td class="wrap">{{ g.proveedor or '' }}</td>
-            <td>{{ g.componente or '' }}</td>
-            <td>{{ CLASIFICADORES.get(g.clasificador or '', g.clasificador or '') }}</td>
-            <td class="num">{{ "{:,.2f}".format(g.importe) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="note"><i class="bi bi-check2-circle"></i> No hay gastos sin devengar en el año {{ p.anio }}.</div>
-    {% endif %}
-  </div>
-
-  <div class="form-actions">
-    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar liquidación</button>
-    <a class="btn btn-outline" href="{{ url_for('liquidacion_imprimir') }}" target="_blank"><i class="bi bi-printer"></i> Ver/imprimir hoja</a>
   </div>
 </form>
 
-{% include '_formatos_consolidados_pantalla.html' %}
+{# ===================== I. MEMORIA DESCRIPTIVA ===================== #}
+<div class="card">
+  <div class="card-head"><h2><i class="bi bi-journal-text"></i> I. Memoria Descriptiva</h2></div>
+
+  <div class="sub-bloque">Datos Generales</div>
+  <table class="tab-datos">
+    <tr><td class="k">Declaratoria de viabilidad del Proyecto de Inversión</td><td class="v">{{ p.viabilidad or '' }}</td><td class="k">Horizonte del Proyecto de Inversión</td><td class="v">{{ p.horizonte or '' }}</td></tr>
+    <tr><td class="k">Código Único de Inversiones - CUI</td><td class="v">{{ p.cui or '' }}</td><td class="k">N° de Resolución que aprueba el Exp. Técnico</td><td class="v">{{ p.aprobacion or '' }}</td></tr>
+  </table>
+
+  <div class="sub-bloque">A. Datos Presupuestales</div>
+  <table class="tab-datos">
+    <tr><td class="k">Sector</td><td class="v">{{ p.sector or '' }}</td><td class="k">Pliego</td><td class="v">{{ p.pliego or p.entidad or '' }}</td></tr>
+    <tr><td class="k">Unidad Ejecutora de Inversiones - UEI</td><td class="v">{{ p.unidad_ejecutora or '' }}</td><td class="k">Categoría presupuestal</td><td class="v">{{ p.categoria_presupuestal or '' }}</td></tr>
+    <tr><td class="k">Programa presupuestal</td><td class="v">{{ p.programa_presupuestal or '' }}</td><td class="k">Proyecto</td><td class="v">{{ p.nombre or '' }}</td></tr>
+    <tr><td class="k">Meta</td><td class="v">{{ p.meta or '' }}</td><td class="k">Fuente de financiamiento</td><td class="v">{{ p.fuente or '' }}</td></tr>
+    <tr><td class="k">Presupuesto asignado</td><td class="v">S/ {{ "{:,.2f}".format(tot.et) }}</td><td class="k">Rubro</td><td class="v">{{ p.rubro or '' }}</td></tr>
+    <tr><td class="k">Categoría de gasto</td><td class="v">{{ p.categoria_gasto or '' }}</td><td class="k">Grupo genérico de gasto</td><td class="v">{{ p.grupo_generico or '' }}</td></tr>
+  </table>
+
+  <div class="sub-bloque">B. Ubicación Física</div>
+  <table class="tab-datos">
+    <tr><td class="k">Localidad</td><td class="v">{{ p.localidad or p.distrito or '' }}</td><td class="k">Distrito</td><td class="v">{{ p.distrito or '' }}</td></tr>
+    <tr><td class="k">Provincia</td><td class="v">{{ p.provincia or '' }}</td><td class="k">Región</td><td class="v">{{ p.departamento or '' }}</td></tr>
+  </table>
+
+  <div class="sub-bloque">C. Ejecución de Presupuesto</div>
+  <table class="tab-datos">
+    <tr><td class="k">Presupuesto aprobado (E.T.)</td><td class="v">S/ {{ "{:,.2f}".format(tot.et) }}</td><td class="k">Ejecutado acumulado</td><td class="v">S/ {{ "{:,.2f}".format(tot.ejecutado) }}</td></tr>
+    <tr><td class="k">Diferencia (saldo)</td><td class="v">S/ {{ "{:,.2f}".format(tot.saldo) }}</td><td class="k">% Ejecutado</td><td class="v">{{ "{:.2f}".format(tot.porc) }}%</td></tr>
+  </table>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead>
+        <tr>
+          <th>Componente</th>
+          <th class="num">{{ p.anio - 3 }}</th>
+          <th class="num">{{ p.anio - 2 }}</th>
+          <th class="num">{{ p.anio - 1 }}</th>
+          <th class="num">{{ p.anio }}</th>
+          <th class="num">Acumulado (S/)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for comp in ['Costo Directo', 'Gastos Generales', 'Gastos de Supervisión', 'Elaboración de Expediente Técnico', 'Liquidación de Obra'] %}
+        {% set r = consolidado.fe06.resumen[comp] %}
+        <tr>
+          <td>{{ comp }}</td>
+          <td class="num">{{ "{:,.2f}".format(r.e2023) }}</td>
+          <td class="num">{{ "{:,.2f}".format(r.e2024) }}</td>
+          <td class="num">{{ "{:,.2f}".format(r.e2025) }}</td>
+          <td class="num">{{ "{:,.2f}".format(r.total_anio) }}</td>
+          <td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="totales">
+          <td><strong>TOTAL</strong></td>
+          <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2023')) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2024')) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2025')) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='total_anio')) }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='acum_total')) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="sub-bloque">D. Tiempo de Ejecución del Proyecto de Inversión</div>
+  <table class="tab-datos">
+    <tr><td class="k">Fecha de inicio</td><td class="v">{{ p.fecha_inicio.strftime('%d/%m/%Y') if p.fecha_inicio else '' }}</td><td class="k">Fecha de conclusión</td><td class="v">{{ p.fecha_fin.strftime('%d/%m/%Y') if p.fecha_fin else '' }}</td></tr>
+    <tr><td class="k">Paralizaciones</td><td class="v">{{ L.notas and '' or 'No se registraron paralizaciones.' }}</td><td class="k">Ejecución total (días)</td><td class="v">{{ p.dias_ejecucion or '' }}</td></tr>
+  </table>
+
+  <div class="sub-bloque">E. Responsables (*)</div>
+  <table class="tab-datos">
+    <tr><td class="k">Elaboración del Expediente Técnico de Obra</td><td class="v">{{ L.responsable_exp_tecnico or '' }}</td><td class="k">Responsable de la aprobación del Exp. Técnico</td><td class="v">{{ L.aprobador_exp_tecnico or '' }}</td></tr>
+    <tr><td class="k">N° de resolución de aprobación del Exp. Técnico</td><td class="v">{{ p.aprobacion or '' }}</td><td class="k">Oficina de Obras por Administración Directa - OAD</td><td class="v">{{ L.responsable_oad or '' }}</td></tr>
+    <tr><td class="k">Residente de Obra</td><td class="v">{{ p.residente or '' }}</td><td class="k">Responsable de la Supervisión o Inspección</td><td class="v">{{ p.supervisor or '' }}</td></tr>
+  </table>
+  <div class="note"><i class="bi bi-info-circle"></i> (*) Adjuntar documentos de designación.</div>
+
+  <div class="sub-bloque">F. Descripción del Proyecto</div>
+  {% if L.descripcion_proyecto %}<div class="sec-texto">{{ L.descripcion_proyecto }}</div>{% elif I and I.memoria %}<div class="sec-texto">{{ I.memoria }}</div>{% else %}<div class="sec-texto">(Describir la ejecución del Proyecto de Inversión por componentes y presupuesto, así como los avances físicos logrados. Se ingresa en la sección F del expediente de liquidación.)</div>{% endif %}
+
+  <div class="sub-bloque">G. Antecedentes</div>
+  {% if L.antecedentes %}<div class="sec-texto">{{ L.antecedentes }}</div>{% elif I and I.marco_normativo %}<div class="sec-texto">{{ I.marco_normativo }}</div>{% else %}<div class="sec-texto">(Señalar si el Proyecto es nuevo o su ejecución es continuación de años anteriores según el Horizonte del Proyecto, precisando metas obtenidas por cada ejercicio presupuestal, saldo de materiales u órdenes de servicio pendientes de ejecución. Se ingresa en la sección G del expediente de liquidación.)</div>{% endif %}
+
+  <div class="sub-bloque">H. Objetivos Logrados</div>
+  {% if I and I.desarrollo %}<div class="sec-texto">{{ I.desarrollo }}</div>{% else %}<div class="sec-texto">Al cierre de la liquidación se alcanzó un avance financiero del {{ "{:.2f}".format(tot.porc) }}% respecto del presupuesto aprobado, ejecutándose S/ {{ "{:,.2f}".format(tot.ejecutado) }} de S/ {{ "{:,.2f}".format(tot.et) }}.</div>{% endif %}
+</div>
+
+{# ===================== II. ESPECIFICACIONES TÉCNICAS ===================== #}
+<div class="card">
+  <div class="card-head"><h2><i class="bi bi-list-check"></i> II. Especificaciones Técnicas</h2></div>
+  {% if I and I.desarrollo %}<div class="sec-texto">{{ I.desarrollo }}</div>{% else %}<div class="sec-texto">(Descripción real de las partidas ejecutadas. Se edita en el Informe Final de Obra.)</div>{% endif %}
+</div>
+
+{# ===================== III. EVALUACIÓN DE LIQUIDACIÓN ===================== #}
+<div class="card">
+  <div class="card-head"><h2><i class="bi bi-clipboard-data"></i> III. Evaluación de Liquidación Técnica - Financiera</h2></div>
+
+  <div class="sub-bloque">3.1 Grado de Cumplimiento de Metas</div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th>Partida / Componente</th><th class="num">Unidad</th><th class="num">Programado</th><th class="num">Ejecutado</th><th class="num">%</th><th class="num">Saldo</th></tr></thead>
+      <tbody>
+        {% for cr in resumen.por_componente %}
+        <tr><td>{{ cr.componente }}</td><td class="num">S/</td><td class="num">{{ "{:,.2f}".format(cr.et) }}</td><td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td><td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td><td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="totales"><td><strong>TOTAL</strong></td><td></td><td class="num strong">{{ "{:,.2f}".format(tot.et) }}</td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td><td class="num strong">{{ "{:.2f}".format(tot.porc) }}%</td><td class="num strong">{{ "{:,.2f}".format(tot.saldo) }}</td></tr></tfoot>
+    </table>
+  </div>
+
+  <div class="sub-bloque">3.2 Metrados Finales de Obra (desglose por partida / específica de gasto)</div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th class="num">N.°</th><th>Partida / específica de gasto</th><th>Componente</th><th class="num">Exp. Técnico (S/)</th><th class="num">Metrado final (S/)</th><th class="num">Saldo (S/)</th></tr></thead>
+      <tbody>
+        {% for cr in resumen.por_clasificador %}
+        <tr><td class="num">{{ loop.index }}</td><td>{{ cr.detalle }}</td><td>{{ cr.componente }}</td><td class="num">{{ "{:,.2f}".format(cr.et) }}</td><td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="totales"><td colspan="3"><strong>TOTAL METRADO EJECUTADO</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.et) }}</td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td><td class="num strong">{{ "{:,.2f}".format(tot.saldo) }}</td></tr></tfoot>
+    </table>
+  </div>
+
+  <div class="sub-bloque">3.3 Valorización Final del Proyecto Ejecutado</div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th>Componente</th><th class="num">Exp. Técnico (S/)</th><th class="num">Ejecutado (S/)</th><th class="num">%</th><th class="num">Saldo (S/)</th></tr></thead>
+      <tbody>
+        {% for cr in resumen.por_componente %}
+        <tr><td>{{ cr.componente }}</td><td class="num">{{ "{:,.2f}".format(cr.et) }}</td><td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td><td class="num">{{ "{:.2f}".format(cr.porc_et) }}%</td><td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="totales"><td><strong>TOTAL VALORIZADO</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.et) }}</td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td><td class="num strong">{{ "{:.2f}".format(tot.porc) }}%</td><td class="num strong">{{ "{:,.2f}".format(tot.saldo) }}</td></tr></tfoot>
+    </table>
+  </div>
+
+  <div class="sub-bloque">3.4 Resumen de Valorización</div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Importe (S/)</th></tr></thead>
+      <tbody>
+        <tr><td><strong>A</strong></td><td>Sub total Costo Directo</td><td class="num">{{ "{:,.2f}".format(cd.acum_total) }}</td></tr>
+        <tr><td><strong>B</strong></td><td>Sub total Costo Indirecto</td><td class="num">{{ "{:,.2f}".format(ind_total) }}</td></tr>
+        <tr><td></td><td>Gastos Generales</td><td class="num">{{ "{:,.2f}".format(gg.acum_total) }}</td></tr>
+        <tr><td></td><td>Gastos de Supervisión</td><td class="num">{{ "{:,.2f}".format(sup.acum_total) }}</td></tr>
+        <tr><td></td><td>Gastos de Liquidación</td><td class="num">{{ "{:,.2f}".format(liq.acum_total) }}</td></tr>
+        <tr><td></td><td>Gastos de Expediente Técnico</td><td class="num">{{ "{:,.2f}".format(exp.acum_total) }}</td></tr>
+      </tbody>
+      <tfoot><tr class="totales"><td colspan="2"><strong>TOTAL VALORIZADO</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td></tr></tfoot>
+    </table>
+  </div>
+</div>
+
+{# ===================== IV. EVALUACIÓN DE EJECUCIÓN PRESUPUESTAL ===================== #}
+<div class="card">
+  <div class="card-head"><h2><i class="bi bi-clipboard-check"></i> IV. Evaluación de Ejecución Presupuestal</h2></div>
+
+  <div class="sub-bloque">4.1 Resumen de Ejecución de Presupuesto Analítico</div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th>Componente</th><th>Descripción / Denominación</th><th class="num">Costo (S/)</th></tr></thead>
+      <tbody>
+        {% for cr in resumen.por_clasificador %}
+        <tr><td>{{ cr.componente }}</td><td>{{ cr.detalle }}</td><td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="totales"><td colspan="2"><strong>TOTAL EJECUTADO</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td></tr></tfoot>
+    </table>
+  </div>
+
+  <div class="sub-bloque">4.4 Relación Valorizada de Insumos Utilizados / Adquiridos</div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th class="num">N.°</th><th>Específica de gasto / recurso</th><th>Componente</th><th class="num">Ejecutado (S/)</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4" style="background:var(--bg);font-weight:700;text-transform:uppercase">COSTOS DIRECTOS</td></tr>
+        {% for cr in resumen.por_clasificador if cr.componente == 'Costo Directo' %}
+        <tr><td class="num">{{ loop.index }}</td><td>{{ cr.detalle }}</td><td>{{ cr.componente }}</td><td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td></tr>
+        {% endfor %}
+        <tr><td colspan="4" style="background:var(--bg);font-weight:700;text-transform:uppercase">COSTOS INDIRECTOS (*)</td></tr>
+        {% for cr in resumen.por_clasificador if cr.componente != 'Costo Directo' %}
+        <tr><td class="num">{{ loop.index }}</td><td>{{ cr.detalle }}</td><td>{{ cr.componente }}</td><td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="totales"><td colspan="3"><strong>TOTAL COSTOS EJECUTADOS</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td></tr></tfoot>
+    </table>
+  </div>
+  <div class="note"><i class="bi bi-info-circle"></i> (*) Opcional de acuerdo al tipo de proyecto.</div>
+
+  <div class="sub-bloque">4.5 Balance de la Ejecución Presupuestal por Tipo de Costo</div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th>Costo</th><th>Detalle</th><th class="num">Presupuesto (S/)</th><th class="num">Ejecutado (S/)</th><th class="num">Diferencia (S/)</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="4"><strong>DIRECTOS</strong></td><td>Personal</td><td class="num">{{ "{:,.2f}".format(pcd.et) }}</td><td class="num">{{ "{:,.2f}".format(pcd.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(pcd.saldo_et) }}</td></tr>
+        <tr><td>Bienes</td><td class="num">{{ "{:,.2f}".format(pbi.et) }}</td><td class="num">{{ "{:,.2f}".format(pbi.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(pbi.saldo_et) }}</td></tr>
+        <tr><td>Servicios</td><td class="num">{{ "{:,.2f}".format(pse.et) }}</td><td class="num">{{ "{:,.2f}".format(pse.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(pse.saldo_et) }}</td></tr>
+        <tr><td>Adquisición de Activos No Financieros</td><td class="num">{{ "{:,.2f}".format(pact.et) }}</td><td class="num">{{ "{:,.2f}".format(pact.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(pact.saldo_et) }}</td></tr>
+        <tr><td rowspan="4"><strong>INDIRECTOS</strong></td><td>Gastos Generales</td><td class="num">{{ "{:,.2f}".format(gg.et) }}</td><td class="num">{{ "{:,.2f}".format(gg.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(gg.saldo_et) }}</td></tr>
+        <tr><td>Gastos de Supervisión</td><td class="num">{{ "{:,.2f}".format(sup.et) }}</td><td class="num">{{ "{:,.2f}".format(sup.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(sup.saldo_et) }}</td></tr>
+        <tr><td>Gastos de Expediente Técnico</td><td class="num">{{ "{:,.2f}".format(exp.et) }}</td><td class="num">{{ "{:,.2f}".format(exp.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(exp.saldo_et) }}</td></tr>
+        <tr><td>Gastos de Liquidación</td><td class="num">{{ "{:,.2f}".format(liq.et) }}</td><td class="num">{{ "{:,.2f}".format(liq.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(liq.saldo_et) }}</td></tr>
+      </tbody>
+      <tfoot><tr class="totales"><td colspan="2"><strong>TOTAL (S/)</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.et) }}</td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td><td class="num strong">{{ "{:,.2f}".format(tot.saldo) }}</td></tr></tfoot>
+    </table>
+  </div>
+
+  <div class="sub-bloque">4.6 Conciliación de Ejecución Presupuestal y Patrimonial (*)</div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th>Partida</th><th>Descripción</th><th class="num">Importe (S/)</th><th>Cuenta contable</th><th>Descripción</th><th class="num">Importe (S/)</th></tr></thead>
+      <tbody>
+        <tr><td>2.6.2</td><td>Construcción de edificios y estructuras</td><td class="num">{{ "{:,.2f}".format(tot.ejecutado) }}</td><td>1501</td><td>Edificios y estructuras</td><td class="num">{{ "{:,.2f}".format(tot.ejecutado) }}</td></tr>
+      </tbody>
+      <tfoot><tr class="totales"><td colspan="2"><strong>TOTAL (S/)</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td><td colspan="2"><strong>TOTAL (S/)</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td></tr></tfoot>
+    </table>
+  </div>
+  <div class="note"><i class="bi bi-info-circle"></i> (*) Opcional de acuerdo al tipo de proyecto.</div>
+
+  <div class="sub-bloque">4.7 Cuadro entre Partidas</div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th>Partidas</th><th>Concepto</th><th class="num">Ejecución aprobada (S/)</th><th class="num">Ejecución ejecutada (S/)</th><th class="num">Diferencia (S/)</th></tr></thead>
+      <tbody>
+        {% for cr in resumen.por_componente %}
+        <tr><td class="num">{{ loop.index }}</td><td>{{ cr.componente }}</td><td class="num">{{ "{:,.2f}".format(cr.et) }}</td><td class="num">{{ "{:,.2f}".format(cr.acum_total) }}</td><td class="num">{{ "{:,.2f}".format(cr.saldo_et) }}</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="totales"><td colspan="2"><strong>TOTAL (S/)</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.et) }}</td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td><td class="num strong">{{ "{:,.2f}".format(tot.saldo) }}</td></tr></tfoot>
+    </table>
+  </div>
+
+  <div class="sub-bloque">4.8 Costo de Inversión</div>
+  <table class="tab-datos">
+    <tr><td class="k">Presupuesto Analítico Aprobado</td><td class="v">S/ {{ "{:,.2f}".format(tot.et) }}</td></tr>
+    <tr><td class="k">Transferencia a otras obras</td><td class="v">S/ {{ "{:,.2f}".format(L.deducciones or 0) }}</td></tr>
+    <tr><td class="k">Presupuesto Analítico que no corresponde</td><td class="v">S/ 0.00</td></tr>
+    <tr><td class="k">Saldo de materiales</td><td class="v">S/ {{ "{:,.2f}".format(saldo_materiales or 0) }}</td></tr>
+    <tr><td class="k">Costo de Inversión</td><td class="v">S/ {{ "{:,.2f}".format(tot.ejecutado) }}</td></tr>
+  </table>
+</div>
+
+{# ===================== V. CONCILIACIÓN TÉCNICA - FINANCIERA ===================== #}
+<div class="card">
+  <div class="card-head"><h2><i class="bi bi-arrow-left-right"></i> V. Conciliación Técnica - Financiera</h2></div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead><tr><th>Descripción</th><th class="num">Liquidación Financiera (S/)</th><th class="num">%</th><th class="num">Liquidación Técnica (S/)</th><th class="num">%</th><th class="num">Diferencia</th></tr></thead>
+      <tbody>
+        <tr><td>Costos Directos</td><td class="num">{{ "{:,.2f}".format(cd.acum_total) }}</td><td class="num">{{ "{:.2f}".format(cd.porc_et) }}%</td><td class="num">{{ "{:,.2f}".format(cd.acum_total) }}</td><td class="num">{{ "{:.2f}".format(cd.porc_et) }}%</td><td class="num">0.00</td></tr>
+        <tr><td>Costos Indirectos</td><td class="num">{{ "{:,.2f}".format(ind_total) }}</td><td class="num">{{ "{:.2f}".format((ind_total / tot.ejecutado * 100) if tot.ejecutado else 0) }}%</td><td class="num">{{ "{:,.2f}".format(ind_total) }}</td><td class="num">{{ "{:.2f}".format((ind_total / tot.ejecutado * 100) if tot.ejecutado else 0) }}%</td><td class="num">0.00</td></tr>
+      </tbody>
+      <tfoot><tr class="totales"><td><strong>TOTAL (S/)</strong></td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td><td class="num strong">100.00%</td><td class="num strong">{{ "{:,.2f}".format(tot.ejecutado) }}</td><td class="num strong">100.00%</td><td class="num strong">0.00</td></tr></tfoot>
+    </table>
+  </div>
+</div>
+
+{# ===================== VI. COMENTARIOS, CONCLUSIONES Y RECOMENDACIONES ===================== #}
+<div class="card">
+  <div class="card-head"><h2><i class="bi bi-chat-square-text"></i> VI. Comentarios, Conclusiones y Recomendaciones o Sugerencias</h2></div>
+
+  <div class="sub-bloque">A. Liquidación Técnica</div>
+  <div class="sec-texto"><b>a.1 Comentarios:</b> Las partidas ejecutadas alcanzaron un avance financiero del {{ "{:.2f}".format(tot.porc) }}% respecto del presupuesto aprobado en el expediente técnico.</div>
+  <div class="sec-texto"><b>a.2 Conclusiones:</b> La ejecución física y financiera es concordante con la valorización final; el saldo no ejecutado asciende a S/ {{ "{:,.2f}".format(tot.saldo) }}.</div>
+  <div class="sec-texto"><b>a.3 Recomendaciones o Sugerencias:</b></div>
+
+  <div class="sub-bloque">B. Liquidación Financiera</div>
+  <div class="sec-texto"><b>b.1 Comentarios:</b></div>
+  <div class="sec-texto"><b>b.2 Conclusiones:</b></div>
+  <div class="sec-texto"><b>b.3 Recomendaciones o Sugerencias:</b></div>
+
+  <div class="sub-bloque">C. Comentarios, Conclusiones y Recomendaciones Generales del Proyecto de Inversión</div>
+  {% if L.notas %}<div class="sec-texto">{{ L.notas }}</div>{% else %}<div class="sec-texto">(Indicar el importe que se está liquidando para ser insertado en la parte resolutiva de la Resolución de Liquidación Técnica - Financiera y, de existir deductivos, consignarlos. Se edita en "Observaciones" del expediente de liquidación.)</div>{% endif %}
+
+  <table class="tab-datos" style="margin-top:10px">
+    <tr><td class="k">Presupuesto según expediente técnico</td><td class="v">S/ {{ "{:,.2f}".format(tot.et) }}</td></tr>
+    <tr><td class="k">Adicionales / mayores gastos</td><td class="v">S/ {{ "{:,.2f}".format(L.adicionales or 0) }}</td></tr>
+    <tr><td class="k">Deducciones / deductivos</td><td class="v">S/ {{ "{:,.2f}".format(L.deducciones or 0) }}</td></tr>
+    <tr><td class="k"><strong>COSTO FINAL LIQUIDADO</strong></td><td class="v"><strong>S/ {{ "{:,.2f}".format(costo_final) }}</strong></td></tr>
+  </table>
+  <div class="note"><i class="bi bi-info-circle"></i> Son: {{ monto_letras(costo_final) }}.</div>
+</div>
+
 {% endblock %}

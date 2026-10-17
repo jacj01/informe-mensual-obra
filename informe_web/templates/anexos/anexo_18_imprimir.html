@@ -1,0 +1,50 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Prestaciones adicionales de obra</div>
+<p class="sec-parrafo">
+  Presencia de prestaciones adicionales: <b>{{ 'Sí' if p.adicional_obra else 'No' }}</b>.
+  Resolución / documento de aprobación: {{ p.n_resolucion_adicional or '__________' }}.
+  Monto de la ampliación presupuestal (S/): {{ "{:,.2f}".format(p.monto_ampliacion or 0) }}.
+</p>
+<p class="sec-parrafo">{{ p.adicionales or '(Descripción de las prestaciones adicionales de obra aprobadas.)' }}</p>
+
+<div class="sec-titulo">III. Sustento técnico y legal</div>
+{{ parrafo(av.get('sustento'), '(Registre el sustento técnico y legal de las prestaciones adicionales.)') }}
+
+<div class="sec-titulo">IV. Verificación de la procedencia</div>
+<table class="tabla">
+  <thead>
+    <tr><th>N°</th><th>Aspecto a verificar</th><th>Cumple</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>Imprevisibilidad de las prestaciones adicionales</td><td>____</td></tr>
+    <tr><td>2</td><td>Necesidad de ejecutar la prestación para cumplir la finalidad de la obra</td><td>____</td></tr>
+    <tr><td>3</td><td>Sustento en cuaderno de obra y con conformidad del supervisor</td><td>____</td></tr>
+    <tr><td>4</td><td>Presupuesto debidamente aprobado dentro del límite legal</td><td>____</td></tr>
+    <tr><td>5</td><td>Disponibilidad presupuestal y de recursos</td><td>____</td></tr>
+  </tbody>
+</table>
+{{ parrafo(av.get('verificacion'), '(Detalle de la verificación de la procedencia.)') }}
+
+<div class="sec-titulo">V. Conclusiones y recomendaciones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones y recomendaciones.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.residente or '' }}</div>
+    <div class="cargo">Residente de Obra</div>
+    {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

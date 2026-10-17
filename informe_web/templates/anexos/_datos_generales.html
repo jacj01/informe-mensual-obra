@@ -1,0 +1,60 @@
+{% set ubic = [p.distrito, p.provincia, p.departamento] | select | join(' - ') %}
+<h2 class="sec-titulo">I. Datos generales</h2>
+<div class="info-grid">
+  <div class="info-item">
+    <div class="info-label">Entidad</div>
+    <div class="info-val">{{ p.entidad or '' }}</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Unidad ejecutora</div>
+    <div class="info-val">{{ p.unidad_ejecutora or '' }}</div>
+  </div>
+  <div class="info-item info-ancho">
+    <div class="info-label">Proyecto / Obra</div>
+    <div class="info-val">{{ p.nombre or '' }}</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Código único (CUI)</div>
+    <div class="info-val">{{ p.cui or '' }}</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Meta presupuestal</div>
+    <div class="info-val">{{ p.meta or '' }}</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Fuente de financiamiento</div>
+    <div class="info-val">{{ p.fuente or '' }}</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Rubro</div>
+    <div class="info-val">{{ p.rubro or '' }}</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Modalidad de ejecución</div>
+    <div class="info-val">Administración Directa</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Resolución de aprobación del Expediente Técnico</div>
+    <div class="info-val">{{ p.aprobacion or '' }}{% if p.aprobacion and p.fecha_aprobacion %},{% endif %} {% if p.fecha_aprobacion %}de fecha {{ p.fecha_aprobacion.strftime('%d/%m/%Y') }}{% endif %}</div>
+  </div>
+  <div class="info-item info-ancho">
+    <div class="info-label">Ubicación</div>
+    <div class="info-val">{{ ubic }}</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Periodo</div>
+    <div class="info-val">{{ MESES[mes-1] }} {{ anio }}</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Monto del Expediente Técnico</div>
+    <div class="info-val">S/ {{ "{:,.2f}".format(resumen.totales.et) }}</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Plazo de ejecución</div>
+    <div class="info-val">
+      {{ p.dias_ejecucion or '____' }} días calendario
+      {% if p.fecha_inicio %}({{ p.fecha_inicio.strftime('%d/%m/%Y') }} al
+      {% if p.fecha_fin %}{{ p.fecha_fin.strftime('%d/%m/%Y') }}{% else %}____{% endif %}){% endif %}
+    </div>
+  </div>
+</div>

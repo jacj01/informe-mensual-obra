@@ -1,0 +1,78 @@
+  {# Unión de clasificadores: todas las tablas usan las mismas columnas (alineadas). #}
+  {% set ns = namespace(cols=[]) %}
+  {% for b in bloques %}{% for c in b.clasif_cols %}{% if c not in ns.cols %}{% set ns.cols = ns.cols + [c] %}{% endif %}{% endfor %}{% endfor %}
+  {% set clasif_cols = ns.cols|sort %}
+  {% set ncols = 11 + clasif_cols|length + 4 %}
+  {% set fijos_fe05 = 18 + 36 + 62 + 28 + 26 + 138 + 192 + 26 + 32 + 52 + 62 + 56 + 52 + 48 + 60 %}
+  {% set ancho_clasif = ((1123 - fijos_fe05) / clasif_cols|length) | int if clasif_cols else 58 %}
+  {% for b in bloques %}
+  {% if b.titulo %}<div class="fe05-mes-tit">{{ b.titulo }}</div>{% endif %}
+  <table class="tabla">
+    <colgroup>
+      <col style="width:18px"><col style="width:36px"><col style="width:62px"><col style="width:28px"><col style="width:26px">
+      <col style="width:138px"><col style="width:192px"><col style="width:26px"><col style="width:32px">
+      <col style="width:52px"><col style="width:62px">
+      {% for c in clasif_cols %}<col style="width:{{ ancho_clasif }}px">{% endfor %}
+      <col style="width:56px"><col style="width:52px"><col style="width:48px"><col style="width:60px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>N°</th><th>SIAF</th><th>Fecha</th><th>Tipo</th><th>N°</th>
+        <th>Proveedor</th><th>Detalle</th><th>Und</th><th class="num">Cant</th>
+        <th class="num">P.U</th><th class="num">Importe</th>
+        {% for c in clasif_cols %}<th class="num clasif">{{ c }}</th>{% endfor %}
+        <th class="num">Directos</th><th class="num">Grales</th>
+        <th class="num">Superv.</th><th class="num">Total</th>
+      </tr>
+    </thead>
+    {% for sec in b.secciones %}
+    <tbody>
+      <tr class="fila-rubro"><td colspan="{{ ncols }}">{{ sec.label }}</td></tr>
+      {% for f in sec.filas %}
+      <tr>
+        <td class="ctr">{{ f.prov_num if f.prov_first else '' }}</td>
+        <td>{{ f.g.siaf if f.prov_first else '' }}</td>
+        <td class="ctr">{{ f.g.fecha.strftime("%d/%m/%Y") if f.prov_first and f.g.fecha else '' }}</td>
+        <td class="ctr">{{ f.g.tipo_doc if f.prov_first else '' }}</td>
+        <td class="ctr">{{ f.g.num_doc if f.prov_first else '' }}</td>
+        <td class="txt">{{ f.g.proveedor if f.prov_first else '' }}</td>
+        <td class="txt">{{ f.d.detalle }}</td>
+        <td class="ctr">{{ f.d.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.d.cantidad) if f.d.cantidad else '' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.d.precio_unitario) }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.d.importe) }}</td>
+        {% for c in clasif_cols %}<td class="num">{{ "{:,.2f}".format(f.clasif.get(c, 0)) }}</td>{% endfor %}
+        <td class="num">{{ "{:,.2f}".format(f.directos) }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.generales) }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.supervision) }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.d.importe) }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fila-sub">
+        <td colspan="10" style="text-align:right">SUBTOTAL {{ sec.label }}</td>
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.total) }}</b></td>
+        {% for c in clasif_cols %}<td class="num"><b>{{ "{:,.2f}".format(sec.totales.clasif.get(c, 0)) }}</b></td>{% endfor %}
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.directos) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.generales) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.supervision) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(sec.totales.total) }}</b></td>
+      </tr>
+    </tbody>
+    {% else %}
+    <tbody>
+      <tr class="fila-rubro"><td colspan="{{ ncols }}">SIN GASTOS DEVENGADOS PARA EL PERÍODO</td></tr>
+    </tbody>
+    {% endfor %}
+    <tbody>
+      <tr class="fila-total">
+        <td colspan="10" style="text-align:right">TOTAL GASTO EJECUTADO</td>
+        <td class="num"><b>{{ "{:,.2f}".format(b.total.total) }}</b></td>
+        {% for c in clasif_cols %}<td class="num"><b>{{ "{:,.2f}".format(b.total.clasif.get(c, 0)) }}</b></td>{% endfor %}
+        <td class="num"><b>{{ "{:,.2f}".format(b.total.directos) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(b.total.generales) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(b.total.supervision) }}</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(b.total.total) }}</b></td>
+      </tr>
+    </tbody>
+  </table>
+  {% endfor %}

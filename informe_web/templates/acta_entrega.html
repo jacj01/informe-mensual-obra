@@ -41,7 +41,7 @@
   .acta-tabla .fila-total td{background:var(--azul-osc,#1e3a5f);color:#fff;font-weight:800;border:none}
   .acta-nota{display:flex;align-items:center;gap:8px;font-size:.82em;color:var(--texto2,#666);margin:14px 0 0;padding:10px 14px;background:var(--bg2,#f0f4f8);border-radius:10px}
   .acta-prel{margin:4px 0 16px;padding:14px 16px;background:var(--bg2,#f8fafc);border-left:4px solid var(--azul,#2c527a);border-radius:8px}
-  .acta-prel h4{margin:0 0 8px;font-size:.8em;text-transform:uppercase;letter-spacing:.6px;color:var(--azul-osc,#1e3a5f)}
+  .acta-prel h3, .acta-prel h4{margin:0 0 8px;font-size:.8em;text-transform:uppercase;letter-spacing:.6px;color:var(--azul-osc,#1e3a5f)}
   .acta-prel p{margin:0;font-size:.92em;line-height:1.65;color:var(--texto,#334155);text-align:justify}
   .acta-titulo-tabla{display:flex;align-items:center;gap:8px;margin:4px 0 10px;font-size:.82em;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--azul-osc,#1e3a5f)}
   .estado-select{width:100%;padding:6px 8px;font-size:.85em;font-weight:600;color:var(--texto,#1e293b);background:var(--bg2,#f0f4f8);border:1px solid var(--borde,#e2e8f0);border-radius:8px;cursor:pointer}
@@ -55,7 +55,7 @@
 <div class="acta-doc">
   <div class="card" style="margin-bottom:14px">
     <div class="card-head between">
-      <h3><i class="bi bi-file-earmark-diff"></i> Acta de entrega</h3>
+      <h2><i class="bi bi-file-earmark-diff"></i> Acta de entrega</h2>
       <div style="display:flex;gap:8px;align-items:center">
         <a class="btn btn-print" id="btn-hoja-impresion" href="{{ url_for('acta_entrega_imprimir', fecha=fecha_iso, hora=hora, entrega=entrega, recibe=recibe, cargo_entrega=cargo_entrega, cargo_recibe=cargo_recibe, n_acta=n_acta) }}" target="_blank"><i class="bi bi-printer"></i> Hoja de impresión</a>
         <a class="btn btn-outline" href="{{ url_for('almacen') }}"><i class="bi bi-arrow-left"></i> Volver al almacén</a>
@@ -97,8 +97,8 @@
     </div>
 
     <div class="acta-prel">
-      <h4><i class="bi bi-card-checklist"></i> CONSIDERANDO</h4>
-      <p>En las instalaciones del Almacén de Obra del distrito de Toraya, siendo el día
+      <h3><i class="bi bi-card-checklist"></i> CONSIDERANDO</h3>
+      <p>En las instalaciones del Almacén de Obra del distrito de {{ p.distrito|title }}, siendo el día
       {{ fecha }} a la hora {{ hora }}, se reúnen los abajo firmantes con la finalidad de
       suscribir la presente <b>ACTA DE ENTREGA Y RECEPCIÓN DE MATERIALES SOBRANTES</b>,
       correspondientes a la ejecución de la obra por Administración Directa indicada,
@@ -188,7 +188,7 @@
     {% endif %}
 
     <div class="acta-prel acta-declaracion">
-      <h4><i class="bi bi-pencil-square"></i> DECLARACIÓN</h4>
+      <h3><i class="bi bi-pencil-square"></i> DECLARACIÓN</h3>
       <p>Con el llenado y suscripción de la presente acta, el personal que entrega declara
       haber verificado físicamente los materiales indicados y entrega los mismos en las
       condiciones descritas, y el personal que recibe declara conformidad con su recepción,

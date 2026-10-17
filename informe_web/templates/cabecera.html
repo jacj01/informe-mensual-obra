@@ -20,7 +20,7 @@
 </style>
 <form method="post" class="form-panel form-panel-cabecera" enctype="multipart/form-data" data-no-validar novalidate>
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-image"></i> Logo / Escudo de la Entidad</h3></div>
+    <div class="card-head"><h2><i class="bi bi-image"></i> Logo / Escudo de la Entidad</h2></div>
     <div style="display:flex;align-items:center;gap:24px;padding:16px 20px">
       <div style="flex:0 0 auto">
         <div id="logo-preview" style="width:120px;height:120px;border:2px dashed var(--borde);border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fafbfc;overflow:hidden">
@@ -41,7 +41,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-1-circle"></i> Período del informe</h3></div>
+    <div class="card-head"><h2><i class="bi bi-1-circle"></i> Período del informe</h2></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field span2">
         <label for="f-anio">Año</label>
@@ -59,7 +59,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-2-circle"></i> Datos del proyecto</h3></div>
+    <div class="card-head"><h2><i class="bi bi-2-circle"></i> Datos del proyecto</h2></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field full">
         <label for="f-nombre">Nombre del proyecto</label>
@@ -86,12 +86,48 @@
         <input type="text" name="departamento" id="f-departamento" value="{{ p.departamento }}">
       </div>
       <div class="field">
+        <label for="f-localidad">Localidad</label>
+        <input type="text" name="localidad" id="f-localidad" value="{{ p.localidad or '' }}">
+      </div>
+      <div class="field">
         <label for="f-entidad">Entidad ejecutora</label>
         <input type="text" name="entidad" id="f-entidad" value="{{ p.entidad }}">
       </div>
       <div class="field span2">
         <label for="f-unidad_ejecutora">Unidad ejecutora</label>
         <input type="text" name="unidad_ejecutora" id="f-unidad_ejecutora" value="{{ p.unidad_ejecutora }}">
+      </div>
+      <div class="field">
+        <label for="f-viabilidad">Declaratoria de viabilidad</label>
+        <input type="text" name="viabilidad" id="f-viabilidad" value="{{ p.viabilidad or '' }}" placeholder="Ej.: VIABLE - Informe N° 123-2023">
+      </div>
+      <div class="field">
+        <label for="f-horizonte">Horizonte del proyecto</label>
+        <input type="text" name="horizonte" id="f-horizonte" value="{{ p.horizonte or '' }}" placeholder="Ej.: 2023 - 2026">
+      </div>
+      <div class="field">
+        <label for="f-sector">Sector</label>
+        <input type="text" name="sector" id="f-sector" value="{{ p.sector or '' }}" placeholder="Ej.: VIVIENDA, CONSTRUCCION Y SANEAMIENTO">
+      </div>
+      <div class="field">
+        <label for="f-pliego">Pliego</label>
+        <input type="text" name="pliego" id="f-pliego" value="{{ p.pliego or '' }}" placeholder="Ej.: MUNICIPALIDAD DISTRITAL ...">
+      </div>
+      <div class="field span2">
+        <label for="f-categoria_presupuestal">Categoría presupuestal</label>
+        <input type="text" name="categoria_presupuestal" id="f-categoria_presupuestal" value="{{ p.categoria_presupuestal or '' }}" placeholder="Ej.: 0068 - REDUCCION DE VULNERABILIDAD Y ATENCION DE EMERGENCIAS">
+      </div>
+      <div class="field span2">
+        <label for="f-programa_presupuestal">Programa presupuestal</label>
+        <input type="text" name="programa_presupuestal" id="f-programa_presupuestal" value="{{ p.programa_presupuestal or '' }}" placeholder="Ej.: 0068 - REDUCCION DE VULNERABILIDAD Y ATENCION DE EMERGENCIAS">
+      </div>
+      <div class="field span2">
+        <label for="f-categoria_gasto">Categoría de gasto</label>
+        <input type="text" name="categoria_gasto" id="f-categoria_gasto" value="{{ p.categoria_gasto or '' }}" placeholder="Ej.: GASTOS DE CAPITAL">
+      </div>
+      <div class="field span2">
+        <label for="f-grupo_generico">Grupo genérico de gasto</label>
+        <input type="text" name="grupo_generico" id="f-grupo_generico" value="{{ p.grupo_generico or '' }}" placeholder="Ej.: 6.2.3 CONSTRUCCION DE EDIFICIOS Y ESTRUCTURAS">
       </div>
       <div class="field span2">
         <label for="f-rubro">Rubro</label>
@@ -127,7 +163,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-3-circle"></i> Equipo de gestión</h3></div>
+    <div class="card-head"><h2><i class="bi bi-3-circle"></i> Equipo de gestión</h2></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field">
         <label for="f-residente">Residente de obra</label>
@@ -173,7 +209,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-4-circle"></i> Cronograma y adicional de obra</h3></div>
+    <div class="card-head"><h2><i class="bi bi-4-circle"></i> Cronograma y adicional de obra</h2></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field">
         <label>Fecha de inicio de obra</label>
@@ -209,7 +245,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-5-circle"></i> Clasificadores de gasto</h3></div>
+    <div class="card-head"><h2><i class="bi bi-5-circle"></i> Clasificadores de gasto</h2></div>
     <div class="form-grid form-grid-cabecera">
       <div class="field">
         <label for="f-clasificador_personal">Clasificador para PERSONAL</label>
@@ -271,7 +307,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h3><i class="bi bi-6-circle"></i> Presupuesto (S/.)</h3></div>
+    <div class="card-head"><h2><i class="bi bi-6-circle"></i> Presupuesto (S/.)</h2></div>
     <div class="presup-grid">
        {% set componentes = presupuesto|map(attribute='componente')|unique|list %}
        <!-- EXPEDIENTE TÉCNICO -->

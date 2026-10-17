@@ -1,13 +1,13 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="Reporte de inventario imprimible de almacén de obra: inventario completo por material del período. Stock mínimo, stock máximo, reabastecimiento, ajustes y saldo final. Clasificado por rubro con códigos SIAF. Imprimir con firma del administrador de almacén y totales por categoría.">
-<title>Reporte de Inventario - {{ MESES[mes-1] }} {{ anio }}</title>
+<meta name="description" content="Informe de inventario imprimible de almacén de obra: inventario completo por material del período. Stock mínimo, stock máximo, reabastecimiento, ajustes y saldo final. Clasificado por rubro con códigos SIAF. Imprimir con firma del administrador de almacén y totales por categoría.">
+<title>Informe de Inventario - {{ MESES[mes-1] }} {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=1) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
 <style>
   .fila-total td { font-size: 8.5pt; padding: 5px 5px; }
   .saldo-pos { color: #16a34a; font-weight: 700; }
@@ -23,7 +23,7 @@
 </head>
 <body>
 <div class="toolbar">
-  <h2>REPORTE DE INVENTARIO</h2>
+  <h2>INFORME DE INVENTARIO</h2>
   <div class="spacer"></div>
   <button type="button" onclick="window.print()">Imprimir</button>
   <a class="volver" href="{{ url_for('almacen', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
@@ -36,7 +36,7 @@
     <div class="enc-cen">
       <div class="entidad">{{ p.entidad or '' }}</div>
       <div class="entidad-sub">{{ p.unidad_ejecutora or '' }}</div>
-      <div class="titulo">Reporte de Inventario</div>
+      <div class="titulo">Informe de Inventario</div>
       <div class="subtitulo">PERIODO: {{ MESES[mes-1] }} - {{ anio }}</div>
     </div>
     <div class="enc-der">
@@ -45,7 +45,7 @@
   </div>
   <div class="info-grid">
     <div class="info-item info-ancho"><span class="info-label">Proyecto</span><span class="info-val">{{ p.nombre or '' }}</span></div>
-    <div class="info-item"><span class="info-label">Codigo Unico</span><span class="info-val">{{ p.cui or '' }}</span></div>
+    <div class="info-item"><span class="info-label">Código Único</span><span class="info-val">{{ p.cui or '' }}</span></div>
     <div class="info-item"><span class="info-label">Responsable Almacen</span><span class="info-val">{{ p.responsable_almacen or '' }}</span></div>
   </div>
   <div class="responsables">
@@ -72,7 +72,7 @@
     </colgroup>
     <thead>
       <tr>
-        <th>#</th><th>Descripcion del Material</th><th class="und-col">Und</th>
+        <th>#</th><th>Descripción del Material</th><th class="und-col">Und</th>
         <th class="num">Cant. Ingreso</th><th class="num">Cant. Egreso</th><th class="num">Saldo</th>
         <th class="num">P.U.</th><th class="num">Valor Ingreso</th><th class="num">Valor Egreso</th>
         <th class="num">Valor Saldo</th><th>Ult. Ingreso</th>

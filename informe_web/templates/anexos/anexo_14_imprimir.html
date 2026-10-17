@@ -1,0 +1,77 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Ampliaciones de plazo</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>N°</th>
+      <th>Resolución / documento</th>
+      <th class="num">Días otorgados</th>
+      <th>Fecha de aprobación</th>
+      <th>Nueva fecha de término</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>{{ p.n_resolucion_adicional or '__________' }}</td>
+      <td class="num">{{ p.dias_ampliacion or 0 }}</td>
+      <td>__________</td>
+      <td>{% if p.nuevo_final_obra %}{{ p.nuevo_final_obra.strftime('%d/%m/%Y') }}{% else %}__________{% endif %}</td>
+    </tr>
+    <tr><td>2</td><td>__________</td><td class="num">____</td><td>__________</td><td>__________</td></tr>
+  </tbody>
+</table>
+<p class="sec-parrafo">Plazo de ejecución original:
+{% if p.fecha_inicio %}{{ p.fecha_inicio.strftime('%d/%m/%Y') }}{% else %}____{% endif %}
+al {% if p.fecha_fin %}{{ p.fecha_fin.strftime('%d/%m/%Y') }}{% else %}____{% endif %}.</p>
+
+<div class="sec-titulo">III. Anotaciones en el cuaderno de obra</div>
+<table class="tabla">
+  <thead>
+    <tr><th>Asiento N°</th><th>Fecha</th><th>Descripción</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>__________</td><td>{{ av.get('asiento1') or '__________' }}</td></tr>
+    <tr><td>2</td><td>__________</td><td>{{ av.get('asiento2') or '__________' }}</td></tr>
+  </tbody>
+</table>
+
+<div class="sec-titulo">IV. Causales invocadas</div>
+{{ parrafo(av.get('causa'), '(Detalle las causales de la ampliación de plazo.)') }}
+
+<div class="sec-titulo">V. Análisis y verificación</div>
+<table class="tabla">
+  <thead>
+    <tr><th>Aspecto</th><th>Sustento</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Causal de ampliación acreditada</td><td>Cuaderno de obra / informes</td></tr>
+    <tr><td>Ruta crítica afectada</td><td>Cronograma CPM</td></tr>
+    <tr><td>Días de ampliación justificados</td><td>Análisis de plazo</td></tr>
+  </tbody>
+</table>
+{{ parrafo(av.get('analisis'), '(Registre el análisis y verificación de la ampliación.)') }}
+
+<div class="sec-titulo">VI. Conclusiones y recomendaciones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones y recomendaciones.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.residente or '' }}</div>
+    <div class="cargo">Residente de Obra</div>
+    {% if p.cip_residente %}<div class="reg">CIP N° {{ p.cip_residente }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

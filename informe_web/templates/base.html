@@ -161,20 +161,20 @@
       _updBtn('updBtnConfirmarNo', false);
       _updShow('updEstadoProgreso');
       _updBtn('updBtnCerrar', false);
-      _updFill(0, 'Iniciando actualizacion...');
+      _updFill(0, 'Iniciando actualización...');
       var body = _updDownloadUrl ? JSON.stringify({ download_url: _updDownloadUrl }) : '{}';
       fetch('/actualizar', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window._csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
         body: body
       })
-      .then(function(r) { if (r.status===403) throw new Error('CSRF/Autorizacion fallida'); return r.json().catch(function(){return {};}); })
+      .then(function(r) { if (r.status===403) throw new Error('CSRF/Autorización fallida'); return r.json().catch(function(){return {};}); })
       .then(function(d) {
         if (d.ok) {
           _pollTimer = setTimeout(_pollUpdProgreso, 2000);
         } else {
           _updShow('updEstadoError');
-          document.getElementById('updErrorMsg').textContent = d.error || 'No se pudo iniciar la actualizacion';
+          document.getElementById('updErrorMsg').textContent = d.error || 'No se pudo iniciar la actualización';
           _updBtn('updBtnCerrar', true);
         }
       })
@@ -203,7 +203,7 @@
             if (window._updIntentos > 25) {
               clearTimeout(_pollTimer);
               _updShow('updEstadoError');
-              document.getElementById('updErrorMsg').textContent = 'El proceso de actualizacion no respondio. Intente de nuevo.';
+              document.getElementById('updErrorMsg').textContent = 'El proceso de actualización no respondió. Intente de nuevo.';
               _updBtn('updBtnCerrar', true);
               return;
             }
@@ -221,7 +221,7 @@
           } else if (d.fase === 'rollback' || d.fase === 'error') {
             clearTimeout(_pollTimer);
             _updShow('updEstadoError');
-            document.getElementById('updErrorMsg').textContent = d.mensaje || 'Error durante la actualizacion. Se restauro la version anterior.';
+            document.getElementById('updErrorMsg').textContent = d.mensaje || 'Error durante la actualización. Se restauró la versión anterior.';
             _updBtn('updBtnCerrar', true);
           } else {
             _pollTimer = setTimeout(_pollUpdProgreso, 1200);
@@ -264,13 +264,13 @@
         .then(function(d) {
           sessionStorage.setItem(_CLAVE_CACHE, JSON.stringify(d));
           if (d.error) return;
-          if (d.disponible) mostrarToast('info', 'Hay una actualizacion disponible (v' + window._tagLimpio(d.tag) + ').');
+          if (d.disponible) mostrarToast('info', 'Hay una actualización disponible (v' + window._tagLimpio(d.tag) + ').');
         })
         .catch(function(){});
     };
     document.addEventListener('DOMContentLoaded', function () { window._checkAuto(); });
 
-    // --- Publicar nueva version (Super Usuario) ---
+    // --- Publicar nueva versión (Super Usuario) ---
     window._verActual = '{{ version_actual }}';
     window._proximaVersion = function (v) {
       var m = String(v || '').match(/(\d+)\.(\d+)\.(\d+)/);
@@ -310,13 +310,13 @@
     window.publicarNuevaVersion = function () { window.abrirModalPublicar(); };
     window._enviarPublicar = function () {
       var ver = (document.getElementById('pubVer').value || "").trim();
-      if (!ver) { mostrarToast('error', 'Ingrese la nueva version (ej 1.0.2).'); return; }
-      if (!/^\d+\.\d+\.\d+$/.test(ver)) { mostrarToast('error', 'Formato invalido. Use X.Y.Z (ej 1.0.2).'); return; }
+      if (!ver) { mostrarToast('error', 'Ingrese la nueva versión (ej 1.0.2).'); return; }
+      if (!/^\d+\.\d+\.\d+$/.test(ver)) { mostrarToast('error', 'Formato inválido. Use X.Y.Z (ej 1.0.2).'); return; }
       var msj = (document.getElementById('pubMsj').value || "").trim();
       window.cerrarModalPublicar();
       confirmarPopup({
-        titulo: 'Publicar nueva version ' + ver,
-        mensaje: 'Se creara el release v' + ver + ' en GitHub: commit + push y disparo del workflow de build. <strong>Estas de acuerdo?</strong>',
+        titulo: 'Publicar nueva versión ' + ver,
+        mensaje: 'Se creará el release v' + ver + ' en GitHub: commit + push y disparo del workflow de build. <strong>¿Está de acuerdo?</strong>',
         colorOk: 'btn-upd', icono: 'info'
       }).then(function (acepto) {
         if (!acepto) return;
@@ -331,16 +331,16 @@
         .then(function(r) { return r.json().catch(function(){return {};}); })
         .then(function(d) {
           if (d.ok) {
-            mostrarToast('info', 'Publicacion de v' + ver + ' en curso...');
+            mostrarToast('info', 'Publicación de v' + ver + ' en curso...');
             clearTimeout(_pubTimer);
             _pubTimer = setTimeout(_pollPublicar, 1000);
           } else {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva versión'; }
             mostrarToast('error', d.error || 'No se pudo publicar');
           }
         })
         .catch(function(e) {
-          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva versión'; }
           mostrarToast('error', 'Error publicando: ' + e.message);
         });
       });
@@ -351,15 +351,15 @@
         .then(function(d) {
           if (d.fase === 'listo') {
             clearTimeout(_pubTimer);
-            mostrarToast('success', d.mensaje || 'Version publicada.');
+            mostrarToast('success', d.mensaje || 'Versión publicada.');
             sessionStorage.removeItem(_CLAVE_CACHE);
             var btn = document.getElementById('btnPub');
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva versión'; }
           } else if (d.fase === 'error') {
             clearTimeout(_pubTimer);
             mostrarToast('error', 'Error: ' + (d.mensaje || ''));
             var btn2 = document.getElementById('btnPub');
-            if (btn2) { btn2.disabled = false; btn2.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva version'; }
+            if (btn2) { btn2.disabled = false; btn2.innerHTML = '<i class="bi bi-upload"></i> Publicar nueva versión'; }
           } else {
             _pubTimer = setTimeout(_pollPublicar, 1200);
           }
@@ -438,6 +438,11 @@
       {% if not usuario or usuario.rol == 'Administrador' or 'informe_final' in permisos_usuario %}
       <a class="nav-link nav-sub {{ 'active' if active == 'informe_final' }}" href="{{ url_for('informe_final') }}">
         <i class="bi bi-file-earmark-text"></i> <span>Informe Financiero Final de Obra</span>
+      </a>
+      {% endif %}
+      {% if not usuario or usuario.rol == 'Administrador' or 'formatos' in permisos_usuario %}
+      <a class="nav-link {{ 'active' if active == 'anexos' }}" href="{{ url_for('anexos') }}">
+        <i class="bi bi-journal-check"></i> <span>Anexos Directiva 017</span>
       </a>
       {% endif %}
       {% if not usuario or usuario.rol == 'Administrador' or 'configuracion' in permisos_usuario %}
@@ -1017,9 +1022,10 @@
       reiniciar();
     })();
   </script>
+  <script src="{{ url_for('static', filename='js/tabs.js') }}"></script>
   {% block scripts %}{% endblock %}
 
-  <!-- Modal: Publicar nueva version (inputs + confirmacion SI/NO) -->
+  <!-- Modal: Publicar nueva versión (inputs + confirmacion SI/NO) -->
   <div id="modalPub" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalPubTitle">
     <div class="modal-pub" role="document">
       <div class="modal-head">
@@ -1033,7 +1039,7 @@
         </div>
         <div class="form-group">
           <label for="pubMsj">Mensaje opcional <small>(para el tag de release)</small></label>
-          <input id="pubMsj" type="text" placeholder="Ej: correccion de reportes" maxlength="200">
+          <input id="pubMsj" type="text" placeholder="Ej.: corrección de informes" maxlength="200">
         </div>
         <p class="modal-help">Al confirmar se har&aacute; <strong>git commit + push</strong> y se disparar&aacute; el workflow de GitHub que construye y publica el release. Otras instalaciones podr&aacute;n instalar esta versi&oacute;n; el avance se mostrar&aacute; en la barra de progreso.</p>
       </div>
@@ -1060,7 +1066,7 @@
         <!-- Estado: Sin actualizacion -->
         <div id="updEstadoNoHay" class="upd-estado" style="display:none;">
           <div class="upd-ok-icon"><i class="bi bi-check-circle-fill"></i></div>
-          <p class="upd-ok-msg">Tu versi&oacute;n est&aacute; actualizada</p>
+          <p class="upd-ok-msg">Su versi&oacute;n est&aacute; actualizada</p>
           <p class="upd-ok-ver" id="updVerLocal"></p>
         </div>
         <!-- Estado: Hay actualizacion disponible -->
@@ -1272,14 +1278,14 @@
           btn.classList.remove('bug-sending');
           if (res.d.ok) {
             cerrarModalBug();
-            mostrarToast('success', res.d.msg || 'Reporte enviado correctamente.');
+            mostrarToast('success', res.d.msg || 'Informe enviado correctamente.');
           } else {
-            fallo(res.d.error || 'No se pudo enviar el reporte.');
+            fallo(res.d.error || 'No se pudo enviar el informe.');
           }
         })
         .catch(function (e) {
           btn.classList.remove('bug-sending');
-          fallo('Error de conexion al enviar el reporte.');
+          fallo('Error de conexión al enviar el informe.');
         });
     };
   </script>

@@ -11,7 +11,7 @@
   {% endif %}
   <div class="card">
     <div class="card-head">
-      <h3><i class="bi bi-currency-dollar"></i> {{ 'Editar devengado' if es_devengado else 'Devengar planilla' }} - {{ 'Personal Obrero' if tipo == 'OBRERO' else 'Personal Técnico' }}</h3>
+      <h2><i class="bi bi-currency-dollar"></i> {{ 'Editar devengado' if es_devengado else 'Devengar planilla' }} - {{ 'Personal Obrero' if tipo == 'OBRERO' else 'Personal Técnico' }}</h2>
     </div>
     <div class="form-grid form-grid-devengo">
       <div class="field">
@@ -24,7 +24,7 @@
       </div>
       <div class="field">
         <label for="f-td-num_doc">Nº Nota de Pago</label>
-        <input type="number" name="num_doc" id="f-td-num_doc" value="{{ g.num_doc if g and g.num_doc else '' }}" min="0" step="1" placeholder="Nº de la nota de pago">
+        <input type="text" name="num_doc" id="f-td-num_doc" value="{{ g.num_doc if g and g.num_doc else '' }}" maxlength="40" placeholder="Ej. NP-555.55555.0001" autocomplete="off">
       </div>
       <div class="field">
         <label for="f-td-monto">Monto de Planilla (S/)</label>

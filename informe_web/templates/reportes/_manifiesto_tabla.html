@@ -1,0 +1,55 @@
+  <!-- ===================== TABLA FINANCIERA ===================== -->
+  <table class="tabla">
+    <colgroup>
+      <col style="min-width:20px"><col style="min-width:55px"><col style="min-width:48px"><col style="min-width:40px"><col style="min-width:38px">
+      <col style="min-width:130px"><col style="min-width:200px"><col style="min-width:28px"><col style="min-width:42px"><col style="min-width:55px"><col style="min-width:60px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>N°</th><th>Fecha</th><th>SIAF</th><th>Tipo Doc</th><th>N°</th>
+        <th>Nombre / Proveedor</th><th>Detalle del Gasto</th><th>Und.</th>
+        <th>Cant.</th><th>P. Unitario</th><th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in bloques %}
+      {% if b.titulo %}<tr class="fila-mes"><td colspan="11">{{ b.titulo }}</td></tr>{% endif %}
+      {% for s in b.secciones %}
+      <tr class="fila-rubro"><td colspan="11">{{ s.label }}</td></tr>
+      {% for f in s.filas %}
+      <tr>
+        <td class="ctr">{{ f.prov_num if f.prov_first else '' }}</td>
+        <td>{{ f.fecha if f.prov_first else '' }}</td>
+        <td>{{ f.siaf if f.prov_first else '' }}</td>
+        <td class="ctr">{{ f.tipo_doc if f.prov_first else '' }}</td>
+        <td class="ctr">{{ f.num_doc if f.prov_first else '' }}</td>
+        <td>{{ f.proveedor if f.prov_first else '' }}</td>
+        <td>{{ f.detalle }}</td>
+        <td class="ctr">{{ f.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.cantidad) if f.cantidad else '' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.pu) if f.pu else '' }}</td>
+        <td class="num">{{ "{:,.2f}".format(f.importe) }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fila-sub">
+        <td colspan="10" style="text-align:right">SUBTOTAL {{ s.label }} S/.</td>
+        <td class="num">{{ "{:,.2f}".format(s.subtotal) }}</td>
+      </tr>
+      {% else %}
+      <tr class="fila-rubro"><td colspan="11">SIN GASTOS DEVENGADOS PARA EL PERÍODO</td></tr>
+      {% endfor %}
+      {% if b.subtotal_label %}
+      <tr class="fila-sub">
+        <td colspan="10" style="text-align:right"><b>{{ b.subtotal_label }} S/.</b></td>
+        <td class="num"><b>{{ "{:,.2f}".format(b.subtotal) }}</b></td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+
+      <!-- ============ TOTAL GENERAL ============ -->
+      <tr class="fila-total">
+        <td colspan="10" style="text-align:right">{{ total_label|default('TOTAL GENERAL') }} S/.</td>
+        <td class="num">{{ "{:,.2f}".format(total_gral) }}</td>
+      </tr>
+    </tbody>
+  </table>

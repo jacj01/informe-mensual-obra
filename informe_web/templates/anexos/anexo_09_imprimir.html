@@ -1,0 +1,80 @@
+{% extends "anexos/_base_anexo.html" %}
+{% from "anexos/_macros.html" import campo, num, parrafo with context %}
+{% block contenido %}
+{% include "anexos/_datos_generales.html" %}
+
+<div class="sec-titulo">II. Base legal</div>
+<ul class="lista-num">
+  <li>1. Ley N° 28411, Ley General del Sistema Nacional de Presupuesto.</li>
+  <li>2. Ley N° 31365, Ley de Presupuesto del Sector Público del ejercicio vigente.</li>
+  <li>3. Directiva N° 017-2023-CG/GMPL.</li>
+</ul>
+
+<div class="sec-titulo">III. Presupuesto de obra y previsión presupuestal</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Componente / Genérica</th>
+      <th class="num">Monto del Expediente Técnico (S/)</th>
+      <th class="num">PIM (S/)</th>
+      <th class="num">Ejecutado (S/)</th>
+      <th class="num">Saldo (S/)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in fe06_rows %}
+    <tr>
+      <td>{{ r.componente }}{% if r.detalle %} — {{ r.detalle }}{% endif %}</td>
+      <td class="num">{{ "{:,.2f}".format(r.et) }}</td>
+      <td class="num">{{ "{:,.2f}".format(r.pim) }}</td>
+      <td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td>
+      <td class="num">{{ "{:,.2f}".format(r.saldo_et) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="fila-total">
+      <td>TOTAL</td>
+      <td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td>
+      <td class="num">{{ "{:,.2f}".format(fe06_sintesis.pim) }}</td>
+      <td class="num">{{ "{:,.2f}".format(resumen.totales.ejecutado) }}</td>
+      <td class="num">{{ "{:,.2f}".format(resumen.totales.saldo) }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="sec-titulo">IV. Certificaciones y notas de modificación</div>
+<table class="tabla">
+  <thead>
+    <tr><th>Tipo de documento</th><th>N° / fecha</th><th class="num">Monto (S/)</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Certificación de crédito presupuestario</td><td>{{ av.get('cert_credito') or '__________' }}</td><td class="num">{{ num(av.get('cert_monto')) }}</td></tr>
+    <tr><td>Nota de modificación presupuestal</td><td>{{ av.get('nota_modificacion') or '__________' }}</td><td class="num">{{ num(av.get('nota_monto')) }}</td></tr>
+    <tr><td>Previsión anual de compromisos</td><td>{{ av.get('prevision') or '__________' }}</td><td class="num">{{ num(av.get('prevision_monto')) }}</td></tr>
+  </tbody>
+</table>
+
+<div class="sec-titulo">V. Análisis</div>
+<p class="sec-parrafo">El saldo disponible a nivel de ejecución asciende a S/ {{ "{:,.2f}".format(fe06_sintesis.saldo_pim) }}
+frente al PIM de S/ {{ "{:,.2f}".format(fe06_sintesis.pim) }}.</p>
+{{ parrafo(av.get('analisis'), '(Registre el análisis presupuestal.)') }}
+
+<div class="sec-titulo">VI. Conclusiones y recomendaciones</div>
+{{ parrafo(av.get('conclusiones'), '(Registre las conclusiones y recomendaciones.)') }}
+{% endblock %}
+{% block firmas %}
+<div class="firmas">
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.supervisor or '' }}</div>
+    <div class="cargo">Supervisor / Inspector de Obra</div>
+    {% if p.cip_supervisor %}<div class="reg">CIP N° {{ p.cip_supervisor }}</div>{% endif %}
+  </div>
+  <div class="firma">
+    <div class="linea"></div>
+    <div class="nombres">{{ p.administrador_obra or '' }}</div>
+    <div class="cargo">Jefe de Presupuesto / Administración</div>
+  </div>
+</div>
+{% endblock %}

@@ -47,10 +47,21 @@ class Proyecto(db.Model):
     distrito = db.Column(db.String(100), default="")
     provincia = db.Column(db.String(100), default="")
     departamento = db.Column(db.String(100), default="")
+    localidad = db.Column(db.String(200), default="")
     entidad = db.Column(db.String(300), default="")
     unidad_ejecutora = db.Column(db.String(400), default="")
     aprobacion = db.Column(db.String(300), default="")
     fecha_aprobacion = db.Column(db.Date)
+    # Datos adicionales exigidos por el Anexo N° 03 (Liquidación Técnica
+    # Financiera) de la Directiva N° 017-2023-CG/GMPL.
+    viabilidad = db.Column(db.String(300), default="")
+    horizonte = db.Column(db.String(100), default="")
+    sector = db.Column(db.String(300), default="")
+    pliego = db.Column(db.String(300), default="")
+    categoria_presupuestal = db.Column(db.String(300), default="")
+    programa_presupuestal = db.Column(db.String(300), default="")
+    categoria_gasto = db.Column(db.String(200), default="")
+    grupo_generico = db.Column(db.String(200), default="")
     rubro = db.Column(db.String(300), default="")
     fuente = db.Column(db.String(200), default="")
     presupuesto_total = db.Column(db.Float, default=0)
@@ -117,7 +128,7 @@ class Gasto(db.Model):
     fecha = db.Column(db.Date)
     siaf = db.Column(db.Integer, default=0)
     tipo_doc = db.Column(db.String(10), default="O/C")  # O/C | O/S
-    num_doc = db.Column(db.Integer, default=0)
+    num_doc = db.Column(db.String(40), default="0")
     proveedor = db.Column(db.String(300), default="")
     clasificador = db.Column(db.String(20), default="2.6.2.3.99.4")
     componente = db.Column(db.String(100), default="Costo Directo")
@@ -339,6 +350,11 @@ class Liquidacion(db.Model):
     fecha_acta_recepcion = db.Column(db.Date)
     comision_presidente = db.Column(db.String(300), default="")
     comision_integrantes = db.Column(db.Text, default="")
+    responsable_exp_tecnico = db.Column(db.String(300), default="")
+    aprobador_exp_tecnico = db.Column(db.String(300), default="")
+    responsable_oad = db.Column(db.String(300), default="")
+    descripcion_proyecto = db.Column(db.Text, default="")
+    antecedentes = db.Column(db.Text, default="")
     adicionales = db.Column(db.Float, default=0)   # mayores gastos / adicionales liquidados
     deducciones = db.Column(db.Float, default=0)   # deductivos / menores
     saldo_por_pagar = db.Column(db.Float, default=0)  # obligaciones pendientes de pago
@@ -361,3 +377,17 @@ class InformeFinal(db.Model):
     conclusiones = db.Column(db.Text, default="")
     recomendaciones = db.Column(db.Text, default="")
     anexos = db.Column(db.Text, default="")
+
+
+class Anexo(db.Model):
+    """Datos editables de los anexos de la Directiva N° 017-2023-CG/GMPL.
+
+    Una fila por anexo (codigo "07".."19"). Los campos variables de cada
+    anexo se guardan serializados como JSON en ``datos`` para no atar el
+    esquema de la base de datos a un anexo concreto.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(4), default="", unique=True)
+    n_doc = db.Column(db.String(60), default="")
+    fecha = db.Column(db.Date)
+    datos = db.Column(db.Text, default="{}")
