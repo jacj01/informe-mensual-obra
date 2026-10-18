@@ -25,21 +25,6 @@
 
   <div style="overflow-x:auto">
   <table class="tabla" id="tabla_fe06">
-    <colgroup>
-      <col class="c-spec">
-      <col class="c-dt">
-      <col class="c-num-corto">
-      {% if p.incluir_anios_anteriores %}
-      <col class="c-year"><col class="c-year"><col class="c-year">
-      {% endif %}
-      <col class="c-pim">
-      {% for m in meses_vis %}<col class="c-mes">{% endfor %}
-      <col class="c-ejec"><col class="c-porc">
-      <col class="c-saldo"><col class="c-porc">
-      {% if p.incluir_anios_anteriores %}
-      <col class="c-salproy">
-      {% endif %}
-      </colgroup>
     <thead>
       <tr>
         <th rowspan="2" style="min-width:48px">Especif. de gasto</th>

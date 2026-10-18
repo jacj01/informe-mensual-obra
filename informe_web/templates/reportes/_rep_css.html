@@ -58,6 +58,7 @@
 .r-fe06 .responsables { gap: 3px; margin: 2px 0; }
 .r-fe06 .resp-label { flex: 0 0 34%; padding: 3px 8px; }
 .r-fe06 .resp-val { min-height: 11px; padding: 3px 8px; }
+.r-fe06 table.tabla { margin-top: 3px; table-layout: auto; }
 .r-fe06 table.tabla td, .r-fe06 table.tabla th { padding: 1px 3px; }
 .r-fe06 #tabla_fe06 tr.row-total td {
   background: #DCE6F1; color: var(--azul-osc); font-weight: 800;
@@ -67,7 +68,7 @@
 .r-fe06 #tabla_fe06 tr.row-total td:first-child { border-left: 3px solid var(--azul); padding-left: 6px; }
 .r-fe06 table.tabla thead th { padding: 2px 3px; }
 .r-fe06 table.tabla td, .r-fe06 table.tabla th { line-height: 1.25; }
-.r-fe06 table.tabla th.dt, .r-fe06 table.tabla td.dt { max-width: 155px; width: 155px; }
+.r-fe06 table.tabla th.dt, .r-fe06 table.tabla td.dt { max-width: 160px; word-break: break-word; overflow-wrap: anywhere; }
 .r-fe06 .resumen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 3px; }
 .r-fe06 .resumen-box { border: .6px solid var(--borde); overflow: hidden; }
 .r-fe06 .resumen-box h3, .r-fe06 .resumen-box h4 { background: var(--azul); color: #fff; font-size: 7.5pt; font-weight: 700; padding: 2px 8px; margin: 0; text-transform: uppercase; letter-spacing: .3px; }
@@ -86,21 +87,12 @@
   .r-fe06 .entidad-sub { font-size: 7.2pt; }
   .r-fe06 .titulo { font-size: 12pt; margin-top: 2px; }
   .r-fe06 .subtitulo { font-size: 7.6pt; }
-  .r-fe06 table.tabla { table-layout: fixed; font-size: 6.4pt; }
+  .r-fe06 table.tabla { table-layout: auto; font-size: 6.4pt; }
   .r-fe06 table.tabla td, .r-fe06 table.tabla th { font-size: 6.4pt; line-height: 1.12; padding: 1px 1.5px; }
-  .r-fe06 table.tabla thead th { font-size: 6.0pt; padding: 1px 1.5px; }
-  .r-fe06 table.tabla td.dt, .r-fe06 table.tabla th.dt { max-width: 90px; width: 90px; word-break: break-word; overflow-wrap: break-word; }
-  .r-fe06 #tabla_fe06 { table-layout: fixed; }
-  .r-fe06 #tabla_fe06 col.c-spec { width: 34px; }
-  .r-fe06 #tabla_fe06 col.c-dt { width: 90px; }
-  .r-fe06 #tabla_fe06 col.c-num-corto { width: 32px; }
-  .r-fe06 #tabla_fe06 col.c-year { width: 30px; }
-  .r-fe06 #tabla_fe06 col.c-pim { width: 34px; }
-  .r-fe06 #tabla_fe06 col.c-mes { width: 26px; }
-  .r-fe06 #tabla_fe06 col.c-ejec { width: 34px; }
-  .r-fe06 #tabla_fe06 col.c-porc { width: 24px; }
-  .r-fe06 #tabla_fe06 col.c-saldo { width: 34px; }
-  .r-fe06 #tabla_fe06 col.c-salproy { width: 36px; }
+  .r-fe06 table.tabla thead th { font-size: 6.0pt; padding: 1px 1.5px; white-space: normal; }
+  .r-fe06 table.tabla td.dt, .r-fe06 table.tabla th.dt { max-width: 110px; word-break: break-word; overflow-wrap: break-word; }
+  .r-fe06 #tabla_fe06 { table-layout: auto; }
+  .r-fe06 #tabla_fe06 td.num, .r-fe06 #tabla_fe06 th.num { white-space: nowrap; }
   .r-fe06 .encabezado, .r-fe06 .info-grid, .r-fe06 .responsables, .r-fe06 .fila-total, .r-fe06 .row-total, .r-fe06 .resumen-grid { page-break-inside: avoid; }
   .r-fe06 table.tabla { page-break-inside: avoid; }
 }
