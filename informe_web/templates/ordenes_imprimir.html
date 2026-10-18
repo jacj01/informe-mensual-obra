@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,8 @@
 <meta name="description" content="Informe general de órdenes de compra y servicio (O/C y O/S) del informe financiero mensual de obra: todas las órdenes registradas sin excepción, agrupadas por periodo y separadas por tipo de documento (O/C y O/S). Hoja continua tamaño A4 horizontal.">
 <title>Informe General de Órdenes (O/C y O/S)</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=15) }}">
+{{ tema_css|safe }}
 <style>
   .strong { font-weight: 700; }
   .right { text-align: right; }
@@ -75,7 +76,7 @@
 
   /* Fila de orden (cabecera del comprobante) */
   tr.fila-orden td {
-    background: #EAF0F7; font-size: 7.8pt; font-weight: 600;
+    background: rgba(var(--azul-rgb), .10); font-size: 7.8pt; font-weight: 600;
     border-top: 2px solid var(--azul-claro); color: var(--texto);
   }
   tr.fila-orden td.doc b { color: var(--azul-osc); font-size: 8.2pt; letter-spacing: .2px; }
@@ -98,7 +99,7 @@
   table.det-materiales td.num { text-align: right; }
   table.det-materiales td.ctr { text-align: center; }
   table.det-materiales td.det-txt { font-weight: 600; }
-  table.det-materiales tbody tr:nth-child(even) td { background: #F6F9FC; }
+  table.det-materiales tbody tr:nth-child(even) td { background: var(--bg); }
 
   /* Subtotal por tipo de documento */
   tr.fila-sub td {

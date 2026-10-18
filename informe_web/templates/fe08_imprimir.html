@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,8 @@
 <meta name="description" content="Informe imprimible FE-08 Almacén Valorizado: inventario completo por material del almacén de obra. Stock actualizado, valorizado en moneda local, saldos por insumo e informe de movimientos del período. Imprimir con totales y firma del responsable de almacén.">
 <title>FE-08 Almacén Valorizado - {{ MESES[mes-1] }} {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=15) }}">
+{{ tema_css|safe }}
 <style>
   table.tabla { margin-top: 4px; }
   .fila-total td { font-size: 8.5pt; padding: 5px 5px; }

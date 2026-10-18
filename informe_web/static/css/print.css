@@ -101,7 +101,7 @@ table.tabla thead th {
 }
 table.tabla td.num, table.tabla th.num { text-align: right; white-space: nowrap; }
 table.tabla td.ctr { text-align: center; }
-.fila-rubro td { background: #E3EAF2; color: var(--azul-osc); font-weight: 800; font-size: 8pt; text-transform: uppercase; letter-spacing: .3px; padding: 4px 5px; }
+.fila-rubro td { background: rgba(var(--azul-rgb), .12); color: var(--azul-osc); font-weight: 800; font-size: 8pt; text-transform: uppercase; letter-spacing: .3px; padding: 4px 5px; }
 .fila-sub td { background: var(--bg); font-weight: 700; font-size: 8pt; color: var(--azul-osc); }
 .fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 9pt; }
 

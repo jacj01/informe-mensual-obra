@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,8 @@
 <meta name="description" content="Tareo mensual de personal de obra en administración directa. Lista de obreros y técnicos con días trabajados, domingos, feriados y total de días por período. Incluye resumen por cargo y estado de devengado. Imprimir planilla de pagos con firma del supervisor.">
 <title>TAREO MENSUAL - {{ MESES[mes-1] }} {{ anio }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=15) }}">
+{{ tema_css|safe }}
 <style>
   .panel-titulo { font-size: 9.5pt; font-weight: 800; color: var(--azul-osc); text-transform: uppercase;
                   letter-spacing: .4px; margin: 5px 0 3px; }
@@ -25,7 +26,7 @@
   .sum { text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
   td.dia-val { text-align: center; font-size: 6.6pt; font-weight: 800; }
   .t-nombre { text-align: left; padding: 1.5px 3px !important; }
-  .fila-resumen td { background: #F8FAFC; font-weight: 700; border-top: 1.4px solid var(--borde); font-size: 6.6pt; }
+  .fila-resumen td { background: var(--bg); font-weight: 700; border-top: 1.4px solid var(--borde); font-size: 6.6pt; }
   .fila-total td { background: var(--azul-osc); color: #fff; font-weight: 800; font-size: 6.6pt; }
   .fila-total td.rs, .fila-resumen td.rs { text-align: center; font-variant-numeric: tabular-nums; }
 
@@ -35,7 +36,7 @@
   .firma .reg { font-size: 6.5pt; }
 
   .vacio-planilla { margin: 18px 0 6px; padding: 16px 18px; border: 1px dashed var(--borde);
-                    border-radius: 6px; background: #F8FAFC; color: var(--texto2);
+                    border-radius: 6px; background: var(--bg); color: var(--texto2);
                     font-size: 9pt; line-height: 1.5; text-align: center; }
 </style>
 </head>

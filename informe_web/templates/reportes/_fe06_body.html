@@ -42,26 +42,26 @@
       </colgroup>
     <thead>
       <tr>
-        <th rowspan="2" style="min-width:62px">Especif. de gasto</th>
-        <th rowspan="2" class="dt" style="min-width:110px">Detalle</th>
-        <th rowspan="2" class="num" style="min-width:55px">Exp. Tecnico</th>
+        <th rowspan="2" style="min-width:48px">Especif. de gasto</th>
+        <th rowspan="2" class="dt" style="min-width:90px">Detalle</th>
+        <th rowspan="2" class="num" style="min-width:44px">Exp. Tecnico</th>
         {% if p.incluir_anios_anteriores %}
-        <th rowspan="2" class="num" style="min-width:48px">2023</th>
-        <th rowspan="2" class="num" style="min-width:48px">2024</th>
-        <th rowspan="2" class="num" style="min-width:48px">2025</th>
+        <th rowspan="2" class="num" style="min-width:40px">2023</th>
+        <th rowspan="2" class="num" style="min-width:40px">2024</th>
+        <th rowspan="2" class="num" style="min-width:40px">2025</th>
         {% endif %}
-        <th rowspan="2" class="num" style="min-width:60px">PIM {{ anio }}</th>
-        <th colspan="{{ meses_vis|length }}" class="num">AVANCE FINANCIERO A NIVEL DEVENGADO</th>
-        <th rowspan="2" class="num" style="min-width:55px">Ejec. {{ anio }}</th>
-        <th rowspan="2" class="num" style="min-width:30px">%</th>
-        <th colspan="2" class="num">SALDO POR EJECUTAR AÑO {{ anio }}</th>
+        <th rowspan="2" class="num" style="min-width:48px">PIM {{ anio }}</th>
+        <th colspan="{{ meses_vis|length }}" class="ctr">AVANCE FINANCIERO A NIVEL DEVENGADO</th>
+        <th rowspan="2" class="num" style="min-width:48px">Ejec. {{ anio }}</th>
+        <th rowspan="2" class="num" style="min-width:28px">%</th>
+        <th colspan="2" class="ctr">SALDO POR EJECUTAR<br>AÑO {{ anio }}</th>
         {% if p.incluir_anios_anteriores %}
-        <th rowspan="2" class="num" style="min-width:52px">Saldo proyecto</th>
+        <th rowspan="2" class="num" style="min-width:48px">Saldo proyecto</th>
         {% endif %}
       </tr>
       <tr>
-        {% for m in meses_vis %}<th class="num" style="min-width:42px">{{ MESES[m-1][:3] }}</th>{% endfor %}
-        <th class="num" style="min-width:55px">S/.</th><th class="num" style="min-width:30px">%</th>
+        {% for m in meses_vis %}<th class="num" style="min-width:36px">{{ MESES[m-1][:3] }}</th>{% endfor %}
+        <th class="num" style="min-width:48px">S/.</th><th class="num" style="min-width:28px">%</th>
       </tr>
     </thead>
     <tbody>

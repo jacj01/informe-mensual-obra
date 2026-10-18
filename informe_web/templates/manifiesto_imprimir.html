@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,8 @@
 <meta name="description" content="Manifiesto de gasto de obra en administración directa con detalle por gasto, clasificadores, cuentas por pagar y firmas. Imprimible en formato A4 con encabezado de proyecto, tabla de gastos y sección de legal representación. Informe financiero oficial.">
 <title>MANIFIESTO DE GASTO - {{ hdr.periodo if hdr else '' }}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=15) }}">
+{{ tema_css|safe }}
 <style>
 {% include 'reportes/_rep_css.html' %}
 </style>

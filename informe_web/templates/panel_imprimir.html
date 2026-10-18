@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,8 @@
 <meta name="description" content="Resumen financiero imprimible del informe mensual de obra - {{ d.mes_nombre }} {{ d.anio }}.">
 <title>Informe Mensual {{ d.mes_nombre }} {{ d.anio }} - Resumen Financiero</title>
 <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=15) }}">
+{{ tema_css|safe }}
 <style>
   .hoja { box-sizing: border-box; width: 210mm; min-height: 297mm; padding: 19.1mm 17.8mm; margin: 0 auto; background: #fff; }
   table.tabla { width: 100%; margin: 3px 0 5px; table-layout: fixed; font-size: 8.2pt; border-collapse: collapse; }
@@ -18,8 +19,8 @@
   table.tabla.tabla-ancha { width: 100%; }
   table.tabla th, table.tabla td { padding: 1px 3px; line-height: 1.18; border: .5px solid #ccc; height: auto; }
   table.tabla th { background: var(--azul); color: #fff; font-weight: 700; font-size: 7.4pt; text-transform: uppercase; text-align: center; }
-  tr.fila-sub td { background: #E8EEF5; color: var(--azul-osc); font-weight: 700; font-size: 8.4pt; text-transform: uppercase; }
-  tr.fila-total td { background: #D9E1E8; color: var(--azul-osc); font-weight: 800; font-size: 8.8pt; }
+  tr.fila-sub td { background: rgba(var(--azul-rgb), .10); color: var(--azul-osc); font-weight: 700; font-size: 8.4pt; text-transform: uppercase; }
+  tr.fila-total td { background: rgba(var(--azul-rgb), .18); color: var(--azul-osc); font-weight: 800; font-size: 8.8pt; }
   table.tabla td.num { text-align: right; }
   table.tabla th.num { text-align: right; white-space: normal; }
   table.tabla td.ctr { text-align: center; }
@@ -538,13 +539,17 @@
     var el = document.getElementById('chartComponentes');
     if (!el || typeof Chart === 'undefined') return;
     var porComp = {{ d.graf_circular | tojson }};
+    var TEMA_ACTUAL = {{ tema_actual | tojson }};
+    var TEMAS_GRAF = {{ temas_json | tojson }};
+    var _tema = TEMAS_GRAF[TEMA_ACTUAL] || {};
+    var _paleta = _tema.grafico || ['#1F4E79', '#C9A227', '#2E8B57', '#8E44AD', '#E67E22'];
     new Chart(el, {
       type: 'doughnut',
       data: {
         labels: Object.keys(porComp),
         datasets: [{
           data: Object.values(porComp),
-          backgroundColor: ['#1F4E79', '#C9A227', '#2E8B57', '#8E44AD', '#E67E22'],
+          backgroundColor: _paleta,
           borderColor: '#ffffff',
           borderWidth: 2
         }]
