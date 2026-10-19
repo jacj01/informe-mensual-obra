@@ -72,22 +72,22 @@
     <line x1="{{ ns.L }}" y1="{{ ns.T + ya }}" x2="{{ ns.W - ns.R }}" y2="{{ ns.T + ya }}" stroke="#333" stroke-width="1"/>
     <line x1="{{ ns.L }}" y1="{{ ns.T }}" x2="{{ ns.L }}" y2="{{ ns.T + ya }}" stroke="#333" stroke-width="1"/>
     {% if ns.pr_any %}
-    <polyline points="{{ ns.pr_pts|join(' ') }}" fill="none" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="5 4"/>
+    <polyline points="{{ ns.pr_pts|join(' ') }}" style="fill:none;stroke:var(--azul-claro);stroke-width:1.6;stroke-dasharray:5 4"/>
     {% endif %}
-    <polyline points="{{ ns.ej_pts|join(' ') }}" fill="none" stroke="#1f6fb2" stroke-width="2"/>
+    <polyline points="{{ ns.ej_pts|join(' ') }}" style="fill:none;stroke:var(--azul);stroke-width:2"/>
     {% for pt in curva_s %}
     {% set x = ns.L + pl * (pt.mes - 1) / 11 %}
     {% set ye = ns.T + ya * (1 - pt.ej / 100) %}
-    <circle cx="{{ x|round(1) }}" cy="{{ ye|round(1) }}" r="2.2" fill="#1f6fb2"/>
+    <circle cx="{{ x|round(1) }}" cy="{{ ye|round(1) }}" r="2.2" style="fill:var(--azul)"/>
     {% if pt.prog is not none %}
     {% set yp = ns.T + ya * (1 - pt.prog / 100) %}
-    <circle cx="{{ x|round(1) }}" cy="{{ yp|round(1) }}" r="2" fill="#c0392b"/>
+    <circle cx="{{ x|round(1) }}" cy="{{ yp|round(1) }}" r="2" style="fill:var(--azul-claro)"/>
     {% endif %}
     {% endfor %}
   </svg>
   <div style="display:flex;gap:18px;justify-content:center;font-size:9pt;margin-top:2px">
-    <span><span style="display:inline-block;width:14px;height:2px;background:#1f6fb2;vertical-align:middle"></span> Ejecutado real</span>
-    <span><span style="display:inline-block;width:14px;height:2px;background:#c0392b;vertical-align:middle;border-top:1px dashed #c0392b;background:none"></span> Programado</span>
+    <span><span style="display:inline-block;width:14px;height:2px;background:var(--azul);vertical-align:middle"></span> Ejecutado real</span>
+    <span><span style="display:inline-block;width:14px;height:2px;vertical-align:middle;border-top:1px dashed var(--azul-claro)"></span> Programado</span>
   </div>
 </div>
 

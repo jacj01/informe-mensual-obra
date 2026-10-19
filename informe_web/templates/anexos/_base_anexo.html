@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -6,7 +6,8 @@
   <meta name="robots" content="noindex">
   <title>Anexo N° {{ ax.codigo }} - {{ ax.titulo }} | {{ MESES[mes-1] }} {{ anio }}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/Logo.png') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=13) }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css', v=16) }}">
+  {{ tema_css|safe }}
   <style>
     @page { size: A4 portrait; margin: 10mm 13mm; }
     .hoja { box-sizing: border-box; width: 210mm; min-height: 297mm; padding: 10mm 13mm; }

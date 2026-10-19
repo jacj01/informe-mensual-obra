@@ -17,11 +17,35 @@
 .adic-pill{display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;color:var(--texto,#1e293b);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap}
 .adic-pill-pim{background:#ecfdf5;color:#065f46}
 .adic-card-footer{margin-top:8px;font-size:12px;color:var(--texto2,#64748b);border-top:1px solid var(--borde,#e2e8f0);padding-top:6px}
+.cabecera-logo-row{display:flex;flex-wrap:wrap;align-items:center;gap:24px;padding:16px 20px}
+.cabecera-tema{flex:0 1 240px;min-width:220px;border-left:1px solid var(--borde);padding-left:22px}
+.cabecera-tema-head{font-size:13px;font-weight:700;color:var(--texto);margin-bottom:4px}
+.cabecera-tema-hint{margin:0 0 8px;font-size:12px;color:var(--texto2)}
+.tema-dots{display:inline-flex;flex:0 0 auto}
+.tema-dot{width:16px;height:16px;border-radius:50%;border:1px solid rgba(0,0,0,.12);display:inline-block}
+.tema-nombre{font-size:12px;font-weight:600;color:var(--texto);white-space:nowrap}
+.tema-combo{position:relative}
+.tema-combo-btn{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--borde);border-radius:8px;background:var(--card,#fff);padding:8px 12px;cursor:pointer;font:inherit;color:var(--texto);transition:border-color .15s,box-shadow .15s}
+.tema-combo-btn:hover{border-color:var(--azul)}
+.tema-combo-btn .bi-chevron-down{margin-left:auto;font-size:12px;color:var(--texto2);transition:transform .15s}
+.tema-combo.abierto .tema-combo-btn{border-color:var(--azul);box-shadow:0 0 0 2px rgba(var(--azul-rgb),.18)}
+.tema-combo.abierto .bi-chevron-down{transform:rotate(180deg)}
+.tema-combo-menu{display:none;position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;background:var(--card,#fff);border:1px solid var(--borde);border-radius:8px;box-shadow:var(--sombra);padding:4px;max-height:280px;overflow:auto}
+.tema-combo.abierto .tema-combo-menu{display:block}
+.tema-combo-opt{display:flex;align-items:center;gap:8px;width:100%;border:none;background:none;padding:8px 10px;border-radius:6px;cursor:pointer;font:inherit;color:var(--texto);text-align:left}
+.tema-combo-opt:hover{background:var(--bg)}
+.tema-combo-opt.activo{background:rgba(var(--azul-rgb),.10)}
+.tema-combo-opt .bi-check{margin-left:auto;color:var(--azul);opacity:0;font-size:13px}
+.tema-combo-opt.activo .bi-check{opacity:1}
+@media (max-width:1150px){
+  .cabecera-tema{flex:1 1 100%;border-left:none;border-top:1px solid var(--borde);padding-left:0;padding-top:14px}
+}
+
 </style>
 <form method="post" class="form-panel form-panel-cabecera" enctype="multipart/form-data" data-no-validar novalidate>
   <div class="card">
     <div class="card-head"><h2><i class="bi bi-image"></i> Logo / Escudo de la Entidad</h2></div>
-    <div style="display:flex;align-items:center;gap:24px;padding:16px 20px">
+    <div class="cabecera-logo-row">
       <div style="flex:0 0 auto">
         <div id="logo-preview" style="width:120px;height:120px;border:2px dashed var(--borde);border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fafbfc;overflow:hidden">
           {% if p.logo_path %}
@@ -36,6 +60,30 @@
         <input type="file" name="logo" id="logo-input" accept="image/png,image/jpeg,image/jpg,image/gif,image/svg+xml,image/webp" style="display:none" onchange="subirLogo(this)">
         <button type="button" class="btn btn-primary" onclick="document.getElementById('logo-input').click()"><i class="bi bi-upload"></i> Seleccionar imagen</button>
         <span id="logo-status" style="margin-left:8px;font-size:12px;color:var(--verde);display:none"><i class="bi bi-check-circle"></i> Guardado</span>
+      </div>
+      <div class="cabecera-tema">
+        <div class="cabecera-tema-head"><i class="bi bi-palette"></i> Color del aplicativo</div>
+        <p class="cabecera-tema-hint">Elija la paleta. Se aplica a toda la interfaz y a las hojas de impresión.</p>
+        {% set t_act = (temas_disponibles | selectattr('clave', 'equalto', tema_actual) | list | first) %}
+        <div id="tema-picker" class="tema-combo">
+          <button type="button" class="tema-combo-btn" id="tema-combo-btn" aria-haspopup="listbox" aria-expanded="false" onclick="toggleTemaCombo()">
+            <span id="tema-combo-valor" style="display:flex;align-items:center;gap:8px">
+              <span class="tema-dots">{% for c in t_act.swatches %}<span class="tema-dot" style="background:{{ c }};margin-left:{{ '-6px' if not loop.first else '0' }}"></span>{% endfor %}</span>
+              <span class="tema-nombre">{{ t_act.nombre }}</span>
+            </span>
+            <i class="bi bi-chevron-down"></i>
+          </button>
+          <div class="tema-combo-menu" role="listbox">
+            {% for t in temas_disponibles %}
+            <button type="button" class="tema-combo-opt{{ ' activo' if t.clave == tema_actual }}" role="option" data-tema="{{ t.clave }}" onclick="elegirTema('{{ t.clave }}', this)">
+              <span class="tema-dots">{% for c in t.swatches %}<span class="tema-dot" style="background:{{ c }};margin-left:{{ '-6px' if not loop.first else '0' }}"></span>{% endfor %}</span>
+              <span class="tema-nombre">{{ t.nombre }}</span>
+              <i class="bi bi-check"></i>
+            </button>
+            {% endfor %}
+          </div>
+        </div>
+        <span id="tema-status" style="display:none;margin-top:6px;font-size:12px;color:var(--verde)"><i class="bi bi-check-circle"></i> Guardado</span>
       </div>
     </div>
   </div>
@@ -468,6 +516,93 @@
 
 {% block scripts %}
 <script>
+  var TEMAS_APP = {{ temas_json|tojson }};
+  function aplicarTemaVisual(clave) {
+    var t = TEMAS_APP[clave];
+    if (!t) return;
+    var r = document.documentElement.style;
+    r.setProperty('--azul', t.azul);
+    r.setProperty('--azul-osc', t.azul_osc);
+    r.setProperty('--azul-claro', t.azul_claro);
+    r.setProperty('--super-azul', t.azul_claro);
+    r.setProperty('--oro', t.oro);
+    r.setProperty('--bg', t.bg);
+    r.setProperty('--azul-rgb', t.azul_rgb);
+    r.setProperty('--oro-rgb', t.oro_rgb);
+  }
+  function marcarTemaActivo(clave) {
+    document.querySelectorAll('#tema-picker .tema-combo-opt').forEach(function(b){
+      b.classList.toggle('activo', b.getAttribute('data-tema') === clave);
+    });
+    var t = TEMAS_APP[clave];
+    var val = document.getElementById('tema-combo-valor');
+    if (t && val) {
+      var dots = t.swatches.map(function(c, i){
+        return '<span class="tema-dot" style="background:' + c + ';margin-left:' + (i ? '-6px' : '0') + '"></span>';
+      }).join('');
+      val.innerHTML = '<span class="tema-dots">' + dots + '</span>' +
+                      '<span class="tema-nombre">' + t.nombre + '</span>';
+    }
+  }
+  function toggleTemaCombo() {
+    var c = document.getElementById('tema-picker');
+    if (!c) return;
+    var abrir = !c.classList.contains('abierto');
+    c.classList.toggle('abierto', abrir);
+    var b = document.getElementById('tema-combo-btn');
+    if (b) b.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+  }
+  function cerrarTemaCombo() {
+    var c = document.getElementById('tema-picker');
+    if (!c) return;
+    c.classList.remove('abierto');
+    var b = document.getElementById('tema-combo-btn');
+    if (b) b.setAttribute('aria-expanded', 'false');
+  }
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('#tema-picker')) cerrarTemaCombo();
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') cerrarTemaCombo(); });
+
+  var csrfValor = (function () {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    if (m) return m.getAttribute('content');
+    var inp = document.querySelector('input[name="_csrf"]');
+    if (inp) return inp.value;
+    return '';
+  })();
+  if (!csrfValor) {
+    var inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = '_csrf'; inp.value = csrfValor;
+    document.body.appendChild(inp);
+  }
+
+  function elegirTema(clave, btn) {
+    cerrarTemaCombo();
+    aplicarTemaVisual(clave);
+    marcarTemaActivo(clave);
+    var fd = new FormData();
+    fd.append('tema', clave);
+    fd.append('_csrf', csrfValor);
+    fetch('{{ url_for("guardar_tema") }}', {
+      method: 'POST',
+      headers: {'X-Requested-With': 'XMLHttpRequest'},
+      body: fd
+    }).then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) {
+          aplicarTemaVisual(d.tema);
+          marcarTemaActivo(d.tema);
+          var s = document.getElementById('tema-status');
+          if (s) { s.style.display = 'inline'; setTimeout(function(){ s.style.display = 'none'; }, 2500); }
+          mostrarToast('success', 'Color del aplicativo actualizado.');
+        } else {
+          mostrarToast('error', d.error || 'No se pudo guardar el color.');
+        }
+      })
+      .catch(function(){ mostrarToast('error', 'Error de red al guardar el color.'); });
+  }
+
   function subirLogo(input) {
     if (!input.files || !input.files[0]) return;
     var file = input.files[0];

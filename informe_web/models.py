@@ -102,6 +102,7 @@ class Proyecto(db.Model):
     clasificador_liquidacion = db.Column(db.String(20), default="LIQUIDACION")
     clasificadores_extra = db.Column(db.Text, default="")
     logo_path = db.Column(db.String(500), default="")
+    tema = db.Column(db.String(30), default="")
     cip_supervisor = db.Column(db.String(50), default="")
     cip_residente = db.Column(db.String(50), default="")
     colegiatura_admin = db.Column(db.String(50), default="")

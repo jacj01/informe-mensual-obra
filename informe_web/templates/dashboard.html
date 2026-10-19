@@ -222,6 +222,12 @@
   const porComp = {{ por_comp | tojson }};
   const meses = {{ MESES | tojson }};
 
+  const TEMA_ACTUAL = {{ tema_actual | tojson }};
+  const TEMAS_GRAF = {{ temas_json | tojson }};
+  const _tema = TEMAS_GRAF[TEMA_ACTUAL] || {};
+  const _paleta = _tema.grafico || ['#1F4E79', '#C9A227', '#2E8B57', '#8E44AD', '#E67E22'];
+  const _azulRgb = _tema.azul_rgb || '31, 78, 121';
+
   new Chart(document.getElementById('chartMensual'), {
     type: 'bar',
     data: {
@@ -229,7 +235,7 @@
       datasets: [{
         label: 'S/ ejecutado',
         data: porMes,
-        backgroundColor: 'rgba(31, 78, 121, 0.75)',
+        backgroundColor: 'rgba(' + _azulRgb + ', 0.75)',
         borderRadius: 6,
         maxBarThickness: 34
       }]
@@ -249,7 +255,7 @@
       labels: Object.keys(porComp),
       datasets: [{
         data: Object.values(porComp),
-        backgroundColor: ['#1F4E79', '#C9A227', '#2E8B57', '#8E44AD', '#E67E22'],
+        backgroundColor: _paleta,
         borderWidth: 2
       }]
     },

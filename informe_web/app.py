@@ -21,7 +21,7 @@ from email.utils import formataddr
 from functools import wraps
 
 from flask import (Flask, render_template, request, redirect, url_for,
-                   flash, jsonify, session, abort, Response, send_file)
+                   flash, jsonify, session, abort, Response, send_file, g)
 import io
 from sqlalchemy import and_, event, or_, text
 from sqlalchemy.engine import Engine
@@ -43,6 +43,7 @@ from models import (db, Proyecto, Presupuesto, Gasto, GastoDetalle,
                     SuscripcionHistorial, LicenciaUtilizada, LicenciaEmitida,
                     PLANES_SUSCRIPCION, sumar_meses, Anexo)
 import version as _app_version
+import temas as _temas
 from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      suscripcion_vigente, suscripcion_usuario, gastos_mes,
                      total_gastos_mes, kpis,
@@ -145,6 +146,9 @@ def migrar_schema():
         if "logo_path" not in cols:
             conn.execute(text(
                 "ALTER TABLE proyecto ADD COLUMN logo_path VARCHAR(500) DEFAULT ''"))
+        if "tema" not in cols:
+            conn.execute(text(
+                "ALTER TABLE proyecto ADD COLUMN tema VARCHAR(30) DEFAULT ''"))
         for cip_col in ["cip_supervisor", "cip_residente"]:
             if cip_col not in cols:
                 conn.execute(text(
@@ -2608,6 +2612,25 @@ def registrar_rutas(app):
         return {"active": active, "usuario": u, "permisos_usuario": pset,
                 "susc": susc}
 
+    @app.context_processor
+    def inyectar_tema():
+        """Expone el tema de color elegido y el <style> con sus variables,
+        para que se aplique tanto en la interfaz como en las hojas de impresion."""
+        try:
+            p = getattr(g, "_proyecto", None)
+            if p is None:
+                p = Proyecto.query.first()
+        except Exception:
+            p = None
+        clave = getattr(p, "tema", "") or ""
+        if clave not in _temas.TEMAS:
+            clave = ""
+        return {"tema_actual": clave,
+                "tema_color": _temas.variables(clave)["--azul"],
+                "temas_disponibles": _temas.ui(),
+                "temas_json": _temas.datos_js(),
+                "tema_css": _temas.css(clave)}
+
     @app.template_filter("moneda")
     def moneda(n):
         return f"S/ {n:,.2f}"
@@ -3668,6 +3691,17 @@ def registrar_rutas(app):
                 return jsonify({"ok": False, "error": "Seleccione un archivo"}), 400
             flash("Seleccione un archivo de imagen.", "error")
         return redirect(url_for("cabecera"))
+
+    @app.route("/cabecera/tema", methods=["POST"])
+    def guardar_tema():
+        """Guarda la paleta de color elegida por el usuario del proyecto."""
+        clave = (request.form.get("tema") or "").strip()
+        if clave not in _temas.TEMAS:
+            return jsonify({"ok": False, "error": "Tema no valido"}), 400
+        p = get_proyecto()
+        p.tema = clave
+        db.session.commit()
+        return jsonify({"ok": True, "tema": clave})
 
     # ------------------------- GASTOS --------------------------------
     @app.route("/gastos")
@@ -5102,8 +5136,9 @@ def registrar_rutas(app):
         from openpyxl.utils import get_column_letter
 
         FN = "Calibri"
-        AZUL = "1E3A5F"; AZUL_OSC = "162D45"; BG = "F8FAFC"; TEXTO2 = "64748B"
-        BLANCO = "FFFFFF"; BORDE = "CBD5E1"
+        PE = _temas.paleta_excel(get_proyecto().tema or "")
+        AZUL = PE["AZUL"]; AZUL_OSC = PE["AZUL_OSC"]; BG = PE["BG"]; TEXTO2 = PE["TEXTO2"]
+        BLANCO = "FFFFFF"; BORDE = PE["BORDE"]
 
         thin_o = Side(style="thin", color=AZUL_OSC)
         border_all = Border(left=thin_o, right=thin_o, top=thin_o, bottom=thin_o)
@@ -5112,7 +5147,7 @@ def registrar_rutas(app):
 
         fill_azul = PatternFill("solid", fgColor=AZUL)
         fill_bg = PatternFill("solid", fgColor=BG)
-        fill_resp = PatternFill("solid", fgColor="E8EDF3")
+        fill_resp = PatternFill("solid", fgColor=PE["TINTE"])
 
         font_entity = Font(name=FN, size=11, bold=True, color=AZUL_OSC)
         font_sub = Font(name=FN, size=9, color=TEXTO2)
@@ -5390,25 +5425,26 @@ def registrar_rutas(app):
             secciones.append(gr)
 
         total_gral = round(total_gastos_mes(mes, anio, devengado=True), 2)
-
-        # ── Colores fieles al print.css ──
-        AZUL = "1E3A5F"
-        AZUL_OSC = "162D45"
-        AZUL_CLARO = "2C527A"
-        BG = "F8FAFC"
-        TEXTO2 = "64748B"
-        BLANCO = "FFFFFF"
-        BORDE = "CBD5E1"
+        # ── Colores fieles al print.css (segun el tema elegido) ──
+        PE = _temas.paleta_excel(p.tema or "")
+        AZUL = PE["AZUL"]
+        AZUL_OSC = PE["AZUL_OSC"]
+        AZUL_CLARO = PE["AZUL_CLARO"]
+        BG = PE["BG"]
+        TEXTO2 = PE["TEXTO2"]
+        BLANCO = PE["BLANCO"]
+        BORDE = PE["BORDE"]
 
         thin = Side(style="thin", color=AZUL_OSC)
         border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
         thin_gray = Side(style="thin", color=BORDE)
-        border_grid = Border(left=thin_gray, right=thin_gray, top=thin_gray, bottom=thin_gray)
+        border_grid = Border(left=thin_gray, right=thin_gray, top=thin_gray,
+                             bottom=thin_gray)
 
         fill_azul = PatternFill("solid", fgColor=AZUL)
         fill_azul_osc = PatternFill("solid", fgColor=AZUL_OSC)
         fill_bg = PatternFill("solid", fgColor=BG)
-        fill_rubro = PatternFill("solid", fgColor="E3EAF2")
+        fill_rubro = PatternFill("solid", fgColor=PE["TINTE"])
         fill_white = PatternFill("solid", fgColor=BLANCO)
 
         FN = "Calibri"
@@ -5884,14 +5920,15 @@ def registrar_rutas(app):
         anio = p.anio
         secciones, total, clasif_cols = f05_datos(mes, anio)
 
-        # ── Colores fieles al print.css ──
-        AZUL = "1E3A5F"
-        AZUL_OSC = "162D45"
-        AZUL_CLARO = "2C527A"
-        BG = "F8FAFC"
-        TEXTO2 = "64748B"
-        BLANCO = "FFFFFF"
-        BORDE = "CBD5E1"
+        # ── Colores fieles al print.css (segun el tema elegido) ──
+        PE = _temas.paleta_excel(p.tema or "")
+        AZUL = PE["AZUL"]
+        AZUL_OSC = PE["AZUL_OSC"]
+        AZUL_CLARO = PE["AZUL_CLARO"]
+        BG = PE["BG"]
+        TEXTO2 = PE["TEXTO2"]
+        BLANCO = PE["BLANCO"]
+        BORDE = PE["BORDE"]
 
         thin = Side(style="thin", color=AZUL_OSC)
         border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -5902,7 +5939,7 @@ def registrar_rutas(app):
         fill_azul = PatternFill("solid", fgColor=AZUL)
         fill_azul_osc = PatternFill("solid", fgColor=AZUL_OSC)
         fill_bg = PatternFill("solid", fgColor=BG)
-        fill_rubro = PatternFill("solid", fgColor="E3EAF2")
+        fill_rubro = PatternFill("solid", fgColor=PE["TINTE"])
 
         FN = "Calibri"
         font_entity = Font(name=FN, size=11, bold=True, color=AZUL_OSC)
@@ -6229,14 +6266,15 @@ def registrar_rutas(app):
         anios_excel = [anio - i for i in range(_num_ant, 0, -1)]
         incluir_anios = bool(anios_excel)
 
-        # ── Colores fieles al print.css ──
-        AZUL = "1E3A5F"
-        AZUL_OSC = "162D45"
-        AZUL_CLARO = "2C527A"
-        BG = "F8FAFC"
-        TEXTO2 = "64748B"
-        BLANCO = "FFFFFF"
-        BORDE = "CBD5E1"
+        # ── Colores fieles al print.css (segun el tema elegido) ──
+        PE = _temas.paleta_excel(p.tema or "")
+        AZUL = PE["AZUL"]
+        AZUL_OSC = PE["AZUL_OSC"]
+        AZUL_CLARO = PE["AZUL_CLARO"]
+        BG = PE["BG"]
+        TEXTO2 = PE["TEXTO2"]
+        BLANCO = PE["BLANCO"]
+        BORDE = PE["BORDE"]
 
         thin = Side(style="thin", color=AZUL_OSC)
         border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -6247,8 +6285,8 @@ def registrar_rutas(app):
         fill_azul = PatternFill("solid", fgColor=AZUL)
         fill_azul_osc = PatternFill("solid", fgColor=AZUL_OSC)
         fill_bg = PatternFill("solid", fgColor=BG)
-        fill_rubro = PatternFill("solid", fgColor="E3EAF2")
-        fill_resp = PatternFill("solid", fgColor="E8EDF3")
+        fill_rubro = PatternFill("solid", fgColor=PE["TINTE"])
+        fill_resp = PatternFill("solid", fgColor=PE["TINTE"])
 
         FN = "Calibri"
         font_entity = Font(name=FN, size=11, bold=True, color=AZUL_OSC)
@@ -6734,8 +6772,9 @@ def registrar_rutas(app):
         anio = p.anio
         d = panel_datos(mes, anio)
 
-        AZUL = "1E3A5F"; AZUL_OSC = "162D45"; AZUL_CLARO = "2C527A"
-        BG = "F8FAFC"; BLANCO = "FFFFFF"; BORDE = "CBD5E1"
+        PE = _temas.paleta_excel(p.tema or "")
+        AZUL = PE["AZUL"]; AZUL_OSC = PE["AZUL_OSC"]; AZUL_CLARO = PE["AZUL_CLARO"]
+        BG = PE["BG"]; BLANCO = PE["BLANCO"]; BORDE = PE["BORDE"]
 
         FN = "Calibri"
         thin_o = Side(style="thin", color=AZUL_OSC)
@@ -6747,8 +6786,8 @@ def registrar_rutas(app):
         fill_azul_osc = PatternFill("solid", fgColor=AZUL_OSC)
         fill_claro = PatternFill("solid", fgColor=AZUL_CLARO)
         fill_bg = PatternFill("solid", fgColor=BG)
-        fill_sub = PatternFill("solid", fgColor="E8EEF5")
-        fill_total = PatternFill("solid", fgColor="D9E1E8")
+        fill_sub = PatternFill("solid", fgColor=PE["TINTE"])
+        fill_total = PatternFill("solid", fgColor=PE["TINTE_FUERTE"])
 
         font_band = Font(name=FN, size=10, bold=True, color=BLANCO)
         font_band2 = Font(name=FN, size=9.5, bold=True, color=BLANCO)

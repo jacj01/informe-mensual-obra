@@ -9,7 +9,7 @@
   <meta name="description" content="{{ _pag_desc or 'Sistema para el registro y control del informe financiero mensual de obra en administración directa de la Municipalidad Distrital de Toraya.' }}">
   <meta name="author" content="INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C.">
   <meta name="application-name" content="Informe Mensual de Obra">
-  <meta name="theme-color" content="#1b3a6b">
+  <meta name="theme-color" content="{{ tema_color or '#1b3a6b' }}">
   <link rel="canonical" href="{{ request.base_url }}">
   <link rel="icon" href="{{ url_for('static', filename='img/Logo.png', v=4) }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/Logo.png', v=4) }}">
@@ -369,6 +369,7 @@
   </script>{% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version_actual }}.10">
+  {{ tema_css|safe }}
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
