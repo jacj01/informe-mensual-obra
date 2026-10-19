@@ -1,0 +1,43 @@
+<form method="post" class="form-panel" action="{{ url_for('caja_chica_editar', rendicion_id=r.id) if r.id else url_for('caja_chica_nuevo') }}">
+  <input type="hidden" name="modal" value="1">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  {% if error %}
+  <div class="alert alert-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div>
+  {% endif %}
+  <div class="card">
+    <div class="card-head between">
+      <h2><i class="bi bi-wallet2"></i> {{ 'Editar rendición' if r.id else 'Nueva rendición' }}</h2>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="cc-fecha">Fecha</label>
+        <input type="date" name="fecha" id="cc-fecha" value="{{ r.fecha.strftime('%Y-%m-%d') if r.fecha else '' }}" required>
+      </div>
+      <div class="field">
+        <label for="cc-n">N.° de rendición</label>
+        <input type="text" name="n_rendicion" id="cc-n" value="{{ r.n_rendicion }}" placeholder="Ej.: R-001">
+      </div>
+      <div class="field full">
+        <label for="cc-concepto">Concepto</label>
+        <input type="text" name="concepto" id="cc-concepto" value="{{ r.concepto }}" placeholder="Detalle de los pagos en efectivo rendidos" required>
+      </div>
+      <div class="field">
+        <label for="cc-importe">Importe (S/)</label>
+        <input type="text" inputmode="decimal" class="monto" name="importe" id="cc-importe" value="{{ r.importe or '' }}" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="cc-comprobantes">N.° de comprobantes</label>
+        <input type="number" min="0" step="1" name="n_comprobantes" id="cc-comprobantes" value="{{ r.n_comprobantes or 0 }}">
+        <div class="field-hint">Cantidad de comprobantes de pago que sustentan la rendición.</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <i class="bi bi-info-circle"></i>
+    Los textos (N.° de rendición y concepto) se guardan automáticamente en MAYÚSCULAS. El saldo de cada fila se calcula restando del fondo asignado el importe rendido acumulado.
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar</button>
+    <button type="button" class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</form>

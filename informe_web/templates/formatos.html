@@ -111,13 +111,16 @@
         <a class="btn btn-primary" href="{{ url_for('imprimir_fe06', mes=mes, anio=anio) }}" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
       </div>
     </div>
+    {% set _num_ant = p.num_anios_anteriores if p.num_anios_anteriores is not none else 3 %}
+    {% set anios_ant = [] %}
+    {% for _i in range(_num_ant, 0, -1) %}{% if anios_ant.append(p.anio - _i) %}{% endif %}{% endfor %}
     <div class="table-scroll">
     <table class="table table-compact">
       <thead>
         <tr>
           <th>Especif. de gasto</th><th>Detalle</th>
           <th class="num">Exp. Técnico</th>
-          {% if p.incluir_anios_anteriores %}<th class="num">2023</th><th class="num">2024</th><th class="num">2025</th>{% endif %}
+          {% if p.incluir_anios_anteriores %}{% for yr in anios_ant %}<th class="num">{{ yr }}</th>{% endfor %}{% endif %}
           <th class="num">PIM 2026</th>
           {% for m in meses_vis %}<th class="num">{{ MESES[m-1][:3] }}</th>{% endfor %}
           <th class="num">Ejec. {{ anio }}</th><th class="num">%</th>
@@ -132,9 +135,9 @@
           <td colspan="2"><strong>{{ comp }}</strong></td>
           <td class="num strong">{{ "{:,.2f}".format(r.et) }}</td>
           {% if p.incluir_anios_anteriores %}
-          <td class="num">{{ "{:,.2f}".format(r.e2023) }}</td>
-          <td class="num">{{ "{:,.2f}".format(r.e2024) }}</td>
-          <td class="num">{{ "{:,.2f}".format(r.e2025) }}</td>
+          {% for yr in anios_ant %}
+          <td class="num">{{ "{:,.2f}".format(r["e" ~ yr]) }}</td>
+          {% endfor %}
           {% endif %}
           <td class="num strong">{{ "{:,.2f}".format(r.pim) }}</td>
           {% for m in meses_vis %}<td class="num">{{ "{:,.2f}".format(r.mensual[m-1]) }}</td>{% endfor %}
@@ -152,9 +155,9 @@
           <td>{{ sub.detalle }}</td>
           <td class="num">{{ "{:,.2f}".format(sub.et) }}</td>
           {% if p.incluir_anios_anteriores %}
-          <td class="num">{{ "{:,.2f}".format(sub.e2023) }}</td>
-          <td class="num">{{ "{:,.2f}".format(sub.e2024) }}</td>
-          <td class="num">{{ "{:,.2f}".format(sub.e2025) }}</td>
+          {% for yr in anios_ant %}
+          <td class="num">{{ "{:,.2f}".format(sub["e" ~ yr]) }}</td>
+          {% endfor %}
           {% endif %}
           <td class="num">{{ "{:,.2f}".format(sub.pim) }}</td>
           {% for m in meses_vis %}<td class="num">{{ "{:,.2f}".format(sub.mensual[m-1]) }}</td>{% endfor %}
@@ -174,9 +177,9 @@
           <td colspan="2"><strong>TOTAL RUBRO 18</strong></td>
           <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='et')) }}</td>
           {% if p.incluir_anios_anteriores %}
-          <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='e2023')) }}</td>
-          <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='e2024')) }}</td>
-          <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='e2025')) }}</td>
+          {% for yr in anios_ant %}
+          <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute="e" ~ yr)) }}</td>
+          {% endfor %}
           {% endif %}
           <td class="num strong">{{ "{:,.2f}".format(fe06_resumen.values() | sum(attribute='pim') + fe06_sintesis.ampliacion) }}</td>
           {% for m in meses_vis %}

@@ -23,6 +23,9 @@
     <div class="resp-item"><div class="resp-label">Admin. de Obra</div><div class="resp-val">{{ p.asistente or '' }}</div></div>
   </div>
 
+  {% set _num_ant = p.num_anios_anteriores if p.num_anios_anteriores is not none else 3 %}
+  {% set anios_ant = [] %}
+  {% for _i in range(_num_ant, 0, -1) %}{% if anios_ant.append(p.anio - _i) %}{% endif %}{% endfor %}
   <div style="overflow-x:auto">
   <table class="tabla" id="tabla_fe06">
     <thead>
@@ -31,9 +34,9 @@
         <th rowspan="2" class="dt" style="min-width:90px">Detalle</th>
         <th rowspan="2" class="num" style="min-width:44px">Exp. Tecnico</th>
         {% if p.incluir_anios_anteriores %}
-        <th rowspan="2" class="num" style="min-width:40px">2023</th>
-        <th rowspan="2" class="num" style="min-width:40px">2024</th>
-        <th rowspan="2" class="num" style="min-width:40px">2025</th>
+        {% for yr in anios_ant %}
+        <th rowspan="2" class="num" style="min-width:40px">{{ yr }}</th>
+        {% endfor %}
         {% endif %}
         <th rowspan="2" class="num" style="min-width:48px">PIM {{ anio }}</th>
         <th colspan="{{ meses_vis|length }}" class="ctr">AVANCE FINANCIERO A NIVEL DEVENGADO</th>
@@ -56,9 +59,9 @@
         <td colspan="2"><strong>{{ comp }}</strong></td>
         <td class="num strong">{{ "{:,.2f}".format(r.et) }}</td>
         {% if p.incluir_anios_anteriores %}
-        <td class="num">{{ "{:,.2f}".format(r.e2023) }}</td>
-        <td class="num">{{ "{:,.2f}".format(r.e2024) }}</td>
-        <td class="num">{{ "{:,.2f}".format(r.e2025) }}</td>
+        {% for yr in anios_ant %}
+        <td class="num">{{ "{:,.2f}".format(r["e" ~ yr]) }}</td>
+        {% endfor %}
         {% endif %}
         <td class="num strong">{{ "{:,.2f}".format(r.pim) }}</td>
         {% for m in meses_vis %}<td class="num">{{ "{:,.2f}".format(r.mensual[m-1]) }}</td>{% endfor %}
@@ -76,9 +79,9 @@
         <td class="dt">{{ sub.detalle }}</td>
         <td class="num">{{ "{:,.2f}".format(sub.et) }}</td>
         {% if p.incluir_anios_anteriores %}
-        <td class="num">{{ "{:,.2f}".format(sub.e2023) }}</td>
-        <td class="num">{{ "{:,.2f}".format(sub.e2024) }}</td>
-        <td class="num">{{ "{:,.2f}".format(sub.e2025) }}</td>
+        {% for yr in anios_ant %}
+        <td class="num">{{ "{:,.2f}".format(sub["e" ~ yr]) }}</td>
+        {% endfor %}
         {% endif %}
         <td class="num">{{ "{:,.2f}".format(sub.pim) }}</td>
         {% for m in meses_vis %}<td class="num">{{ "{:,.2f}".format(sub.mensual[m-1]) }}</td>{% endfor %}
@@ -98,9 +101,9 @@
         <td colspan="2">TOTAL RUBRO 18</td>
         <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='et')) }}</td>
         {% if p.incluir_anios_anteriores %}
-        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='e2023')) }}</td>
-        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='e2024')) }}</td>
-        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='e2025')) }}</td>
+        {% for yr in anios_ant %}
+        <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute="e" ~ yr)) }}</td>
+        {% endfor %}
         {% endif %}
         <td class="num">{{ "{:,.2f}".format(fe06_resumen.values()|sum(attribute='pim') + fe06_sintesis.ampliacion) }}</td>
         {% for m in meses_vis %}<td class="num">{{ "{:,.2f}".format(fe06_totales_mensual[m-1]) }}</td>{% endfor %}
@@ -138,9 +141,9 @@
         <tbody>
           <tr><td><strong>PRESUPUESTO TOTAL DE OBRA</strong></td><td class="num strong">{{ "{:,.2f}".format(fe06_sintesis.et) }}</td></tr>
           {% if p.incluir_anios_anteriores %}
-          <tr><td>GASTO EJECUTADO 2023</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.e2023) }}</td></tr>
-          <tr><td>GASTO EJECUTADO 2024</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.e2024) }}</td></tr>
-          <tr><td>GASTO EJECUTADO 2025</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.e2025) }}</td></tr>
+          {% for yr in anios_ant %}
+          <tr><td>GASTO EJECUTADO {{ yr }}</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis["e" ~ yr]) }}</td></tr>
+          {% endfor %}
           {% endif %}
           <tr><td>GASTO EJECUTADO {% if p.incluir_anios_anteriores %}AL MES DE {{ MESES[mes-1] }} {{ anio }}{% else %}{{ anio }}{% endif %}</td><td class="num">{{ "{:,.2f}".format(fe06_sintesis.ejec_anio) }}</td></tr>
           <tr><td><strong>{% if p.incluir_anios_anteriores %}SALDO {{ anio }}{% else %}SALDO A NIVEL DE EXPEDIENTE TECNICO{% endif %}</strong></td><td class="num strong">{{ "{:,.2f}".format(fe06_sintesis.saldo_proyecto) }}</td></tr>

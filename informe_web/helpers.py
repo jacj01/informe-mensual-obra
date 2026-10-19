@@ -6,8 +6,8 @@ from datetime import date, timedelta
 
 from flask import g
 from models import (Proyecto, Presupuesto, Gasto, GastoDetalle,
-                    AlmacenMovimiento, ActividadEjecutada, Trabajador,
-                    Suscripcion, Liquidacion, InformeFinal, db)
+                    AlmacenMovimiento, CajaChicaRendicion, ActividadEjecutada,
+                    Trabajador, Suscripcion, Liquidacion, InformeFinal, db)
 import databases as _bd
 
 MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
@@ -1511,6 +1511,44 @@ def almacen_consolidado():
             "filas": it["filas"],
         })
     return result
+
+
+def caja_chica_filas(p=None):
+    """Rendiciones de caja chica con el saldo corrido, para el Cuadro N° 10.
+
+    El saldo de cada rendicion es el fondo asignado (Proyecto.fondo_caja_chica)
+    menos el importe rendido acumulado hasta esa fila. Devuelve tambien los
+    totales (importe rendido, comprobantes y saldo final del fondo).
+    """
+    if p is None:
+        p = Proyecto.query.first()
+    fondo = round(getattr(p, "fondo_caja_chica", 0) or 0, 2)
+    rendiciones = (CajaChicaRendicion.query
+                   .order_by(CajaChicaRendicion.orden,
+                             CajaChicaRendicion.fecha,
+                             CajaChicaRendicion.id).all())
+    filas = []
+    acumulado = 0.0
+    total_comprobantes = 0
+    for r in rendiciones:
+        acumulado = round(acumulado + (r.importe or 0), 2)
+        total_comprobantes += r.n_comprobantes or 0
+        filas.append({
+            "id": r.id,
+            "fecha": r.fecha,
+            "n_rendicion": r.n_rendicion or "",
+            "concepto": r.concepto or "",
+            "importe": round(r.importe or 0, 2),
+            "n_comprobantes": r.n_comprobantes or 0,
+            "saldo": round(fondo - acumulado, 2),
+        })
+    return {
+        "fondo": fondo,
+        "filas": filas,
+        "total_importe": round(acumulado, 2),
+        "total_comprobantes": total_comprobantes,
+        "saldo_final": round(fondo - acumulado, 2),
+    }
 
 
 def materiales_sobrantes_acta():

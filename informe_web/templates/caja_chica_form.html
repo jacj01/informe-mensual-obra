@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Caja Chica (Rendiciones){% endblock %}
+{% block heading %}{{ 'Editar rendición' if r.id else 'Nueva rendición' }}{% endblock %}
+{% block subheading %}Rendiciones de fondos para pagos en efectivo (caja chica){% endblock %}
+
+{% block content %}
+{% include "_caja_chica_form.html" %}
+{% endblock %}

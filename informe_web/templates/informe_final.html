@@ -166,10 +166,13 @@
   </div>
 
   <div class="sub-bloque">3. Valorización final de la obra por años</div>
+  {% set _num_ant = p.num_anios_anteriores if p.num_anios_anteriores is not none else 3 %}
+  {% set anios_ant = [] %}
+  {% for _i in range(_num_ant, 0, -1) %}{% if anios_ant.append(p.anio - _i) %}{% endif %}{% endfor %}
   <div class="table-scroll">
     <table class="table table-compact">
       <thead>
-        <tr><th>Componente</th><th class="num">Exp. Técnico</th>{% if p.incluir_anios_anteriores %}<th class="num">{{ p.anio - 3 }}</th><th class="num">{{ p.anio - 2 }}</th><th class="num">{{ p.anio - 1 }}</th>{% endif %}<th class="num">Ejec. {{ p.anio }}</th>{% if p.incluir_anios_anteriores %}<th class="num">Acum. total</th>{% endif %}</tr>
+        <tr><th>Componente</th><th class="num">Exp. Técnico</th>{% for yr in anios_ant %}<th class="num">{{ yr }}</th>{% endfor %}<th class="num">Ejec. {{ p.anio }}</th>{% if anios_ant %}<th class="num">Acum. total</th>{% endif %}</tr>
       </thead>
       <tbody>
         {% for comp in ['Costo Directo', 'Gastos Generales', 'Gastos de Supervisión', 'Elaboración de Expediente Técnico', 'Liquidación de Obra'] %}
@@ -177,26 +180,22 @@
         <tr>
           <td>{{ comp }}</td>
           <td class="num">{{ "{:,.2f}".format(r.et) }}</td>
-          {% if p.incluir_anios_anteriores %}
-          <td class="num">{{ "{:,.2f}".format(r.e2023) }}</td>
-          <td class="num">{{ "{:,.2f}".format(r.e2024) }}</td>
-          <td class="num">{{ "{:,.2f}".format(r.e2025) }}</td>
-          {% endif %}
+          {% for yr in anios_ant %}
+          <td class="num">{{ "{:,.2f}".format(r['e' ~ yr]) }}</td>
+          {% endfor %}
           <td class="num">{{ "{:,.2f}".format(r.total_anio) }}</td>
-          {% if p.incluir_anios_anteriores %}<td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td>{% endif %}
+          {% if anios_ant %}<td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td>{% endif %}
         </tr>
         {% endfor %}
       </tbody>
       <tfoot><tr class="totales">
         <td><strong>TOTAL</strong></td>
         <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='et')) }}</td>
-        {% if p.incluir_anios_anteriores %}
-        <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2023')) }}</td>
-        <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2024')) }}</td>
-        <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2025')) }}</td>
-        {% endif %}
+        {% for yr in anios_ant %}
+        <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute="e" ~ yr)) }}</td>
+        {% endfor %}
         <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='total_anio')) }}</td>
-        {% if p.incluir_anios_anteriores %}<td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='acum_total')) }}</td>{% endif %}
+        {% if anios_ant %}<td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='acum_total')) }}</td>{% endif %}
       </tr></tfoot>
     </table>
   </div>
@@ -355,11 +354,23 @@
     <table class="table table-compact">
       <thead><tr><th class="num">N.°</th><th>Fecha</th><th>N.° de rendición</th><th>Concepto</th><th class="num">Importe (S/)</th><th class="num">N.° de comprobantes</th><th class="num">Saldo (S/)</th></tr></thead>
       <tbody>
-        <tr><td class="num">1</td><td></td><td></td><td></td><td class="num"></td><td class="num"></td><td class="num"></td></tr>
-        <tr><td class="num">2</td><td></td><td></td><td></td><td class="num"></td><td class="num"></td><td class="num"></td></tr>
-        <tr><td class="num">3</td><td></td><td></td><td></td><td class="num"></td><td class="num"></td><td class="num"></td></tr>
+        {% for it in caja_chica.filas %}
+        <tr>
+          <td class="num">{{ loop.index }}</td>
+          <td class="num">{{ it.fecha.strftime("%d/%m/%Y") if it.fecha else '' }}</td>
+          <td>{{ it.n_rendicion }}</td>
+          <td>{{ it.concepto }}</td>
+          <td class="num">{{ "{:,.2f}".format(it.importe) }}</td>
+          <td class="num">{{ it.n_comprobantes }}</td>
+          <td class="num">{{ "{:,.2f}".format(it.saldo) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center">Sin rendiciones de caja chica registradas.</td></tr>
+        {% endfor %}
       </tbody>
-      <tfoot><tr class="totales"><td colspan="4"><strong>TOTAL</strong></td><td class="num strong">0.00</td><td></td><td class="num strong">0.00</td></tr></tfoot>
+      {% if caja_chica.filas %}
+      <tfoot><tr class="totales"><td colspan="4"><strong>TOTAL</strong></td><td class="num strong">{{ "{:,.2f}".format(caja_chica.total_importe) }}</td><td class="num strong">{{ caja_chica.total_comprobantes }}</td><td class="num strong">{{ "{:,.2f}".format(caja_chica.saldo_final) }}</td></tr></tfoot>
+      {% endif %}
     </table>
   </div>
   <div class="note"><i class="bi bi-info-circle"></i> Se adjunta el cuadro de utilización de rendiciones de fondos para pagos en efectivo (caja chica) con los comprobantes sustentatorios.</div>

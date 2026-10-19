@@ -37,6 +37,7 @@ def _activar_foreign_keys(dbapi_conn, _record):
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from models import (db, Proyecto, Presupuesto, Gasto, GastoDetalle,
+                    CajaChicaRendicion,
                     AlmacenMovimiento, ActividadEjecutada, Trabajador, Usuario,
                     CLASIFICADORES, COMPONENTES, Suscripcion,
                     SuscripcionHistorial, LicenciaUtilizada, LicenciaEmitida,
@@ -49,6 +50,7 @@ from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      fe06_resumen, fe06_sintesis, f05_datos, almacen_items, almacen_diario,
                      saldo_insumo, almacen_valorizado, oc_para_material,
                      materiales_sobrantes_acta, almacen_consolidado,
+                     caja_chica_filas,
                      meses_con_ejecucion, meses_visibles, ampliacion_presupuestal,
                      mes_inicio_manifiesto, clasificadores_proyecto,
                      calendario_mes, resumen_tareo, panel_cuadro1, panel_datos,
@@ -965,6 +967,7 @@ PERMISOS_SECCIONES = [
     ("gastos", "Manifiesto de Gastos"),
     ("formatos", "Formatos Financiero"),
     ("almacen", "Almacén de Obra"),
+    ("caja_chica", "Caja Chica (Rendiciones de Fondos)"),
     ("tareo", "Tareo y Planilla"),
     ("liquidacion", "Liquidación Financiera de Obra"),
     ("informe_final", "Informe Financiero Final de Obra"),
@@ -1553,6 +1556,8 @@ def permiso_requerido(ep):
         return "gastos"
     if ep.startswith("almacen"):
         return "almacen"
+    if ep.startswith("caja_chica"):
+        return "caja_chica"
     if ep.startswith("tareo"):
         return "tareo"
     if ep in ("planilla_opciones", "planilla_imprimir"):
@@ -2565,6 +2570,9 @@ def registrar_rutas(app):
         elif ep in ("almacen", "almacen_nuevo", "almacen_editar",
                     "almacen_eliminar", "almacen_oc", "almacen_agregar_oc"):
             active = "almacen"
+        elif ep in ("caja_chica", "caja_chica_nuevo", "caja_chica_editar",
+                    "caja_chica_eliminar", "caja_chica_fondo"):
+            active = "caja_chica"
         elif ep in ("tareo", "tareo_guardar", "tareo_imprimir",
                     "trabajador_nuevo",
                     "trabajador_editar", "trabajador_eliminar"):
@@ -4408,6 +4416,76 @@ def registrar_rutas(app):
             flash("No se pudo agregar: O/C no encontrada o sin materiales.", "error")
         return redirect(url_for("almacen", mes=mes, anio=anio))
 
+    # ------------------- CAJA CHICA (RENDICIONES) ------------------------
+    @app.route("/caja-chica")
+    def caja_chica():
+        """Cuadro de utilización de rendiciones de fondos para pagos en
+        efectivo (caja chica): lista única del proyecto con el saldo corrido
+        respecto del fondo asignado."""
+        p = get_proyecto()
+        resumen = caja_chica_filas(p)
+        return render_template("caja_chica.html", p=p, resumen=resumen,
+                               MESES=MESES)
+
+    @app.route("/caja-chica/fondo", methods=["POST"])
+    def caja_chica_fondo():
+        p = get_proyecto()
+        monto = monto_form(request.form.get("fondo_caja_chica"), por_defecto=None)
+        if monto is not None:
+            p.fondo_caja_chica = monto
+        p.responsable_caja_chica = (request.form.get("responsable_caja_chica", "")
+                                    or "").strip().upper()
+        db.session.commit()
+        flash("Datos del fondo de caja chica actualizados.", "success")
+        return redirect(url_for("caja_chica"))
+
+    @app.route("/caja-chica/nuevo", methods=["GET", "POST"])
+    def caja_chica_nuevo():
+        return caja_chica_form(None)
+
+    @app.route("/caja-chica/editar/<int:rendicion_id>", methods=["GET", "POST"])
+    def caja_chica_editar(rendicion_id):
+        return caja_chica_form(rendicion_id)
+
+    @app.route("/caja-chica/eliminar/<int:rendicion_id>", methods=["POST"])
+    def caja_chica_eliminar(rendicion_id):
+        r = db.session.get(CajaChicaRendicion, rendicion_id)
+        if r is not None:
+            db.session.delete(r)
+            db.session.commit()
+            flash("Rendición de caja chica eliminada.", "info")
+        return redirect(url_for("caja_chica"))
+
+    def caja_chica_form(rendicion_id):
+        p = get_proyecto()
+        r = (db.session.get(CajaChicaRendicion, rendicion_id) if rendicion_id
+             else CajaChicaRendicion(fecha=fecha_defecto(p),
+                                     orden=CajaChicaRendicion.query.count() + 1))
+        if rendicion_id and r is None:
+            abort(404)
+        es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
+        error = None
+        if request.method == "POST":
+            r.fecha = parse_fecha(request.form.get("fecha")) or r.fecha
+            r.n_rendicion = (request.form.get("n_rendicion", "") or "").strip().upper()
+            r.concepto = (request.form.get("concepto", "") or "").strip().upper()
+            monto = monto_form(request.form.get("importe"), por_defecto=0.0)
+            r.importe = monto if monto is not None else 0.0
+            try:
+                r.n_comprobantes = int(request.form.get("n_comprobantes", 0) or 0)
+            except (TypeError, ValueError):
+                r.n_comprobantes = 0
+            if r.fecha is None:
+                error = "Ingrese una fecha válida para la rendición."
+            if error is None:
+                if not rendicion_id:
+                    db.session.add(r)
+                db.session.commit()
+                flash("Rendición de caja chica guardada correctamente.", "success")
+                return redirect(url_for("caja_chica"))
+        tmpl = "_caja_chica_form.html" if es_modal else "caja_chica_form.html"
+        return render_template(tmpl, r=r, p=p, MESES=MESES, error=error)
+
     # ------------------------- TAREO / PLANILLA ---------------------------
     @app.route("/tareo")
     def tareo():
@@ -6146,7 +6224,10 @@ def registrar_rutas(app):
                                 for i in range(12)]
         sintesis = fe06_sintesis(mes, anio)
         meses_vis = meses_visibles(anio, mes)
-        incluir_anios = p.incluir_anios_anteriores
+        _num_ant = p.num_anios_anteriores if p.num_anios_anteriores is not None else 3
+        _num_ant = max(0, min(3, _num_ant))
+        anios_excel = [anio - i for i in range(_num_ant, 0, -1)]
+        incluir_anios = bool(anios_excel)
 
         # ── Colores fieles al print.css ──
         AZUL = "1E3A5F"
@@ -6205,7 +6286,7 @@ def registrar_rutas(app):
         ws.sheet_view.showGridLines = False
 
         # ── Columnas de la tabla (segun configuracion del proyecto) ──
-        col_pim = 4 + (3 if incluir_anios else 0)
+        col_pim = 4 + len(anios_excel)
         col_mes_ini = col_pim + 1
         col_ejec = col_mes_ini + len(meses_vis)
         col_pct = col_ejec + 1
@@ -6214,7 +6295,9 @@ def registrar_rutas(app):
 
         anchos = {1: 11, 2: 26, 3: 15}
         if incluir_anios:
-            anchos.update({4: 9, 5: 9, 6: 9, col_saldo + 1: 11, col_saldo + 2: 12})
+            for _k in range(4, 4 + len(anios_excel)):
+                anchos[_k] = 9
+            anchos.update({col_saldo + 1: 11, col_saldo + 2: 12})
         anchos[col_pim] = 11
         for k, _m in enumerate(meses_vis):
             anchos[col_mes_ini + k] = 9
@@ -6338,7 +6421,8 @@ def registrar_rutas(app):
         ws.freeze_panes = f"A{tabla_start + 1}"
         headers = ["Especif. de gasto", "Detalle", "Exp. Tecnico"]
         if incluir_anios:
-            headers += ["2023", "2024", "2025"]
+            headers += [str(yr) for yr in anios_excel]
+
         headers += [f"PIM {anio}"]
         headers += [MESES[m - 1][:3] for m in meses_vis]
         headers += [f"Ejec. {anio}", "%", f"Saldo {anio}"]
@@ -6356,7 +6440,7 @@ def registrar_rutas(app):
             """Valores numericos de una fila segun las columnas activas."""
             nums = [reg["et"]]
             if incluir_anios:
-                nums += [reg["e2023"], reg["e2024"], reg["e2025"]]
+                nums += [reg[f"e{yr}"] for yr in anios_excel]
             nums.append(reg["pim"])
             nums += [reg["mensual"][m - 1] for m in meses_vis]
             nums += [reg["total_anio"], fraccion, reg["saldo_pim"]]
@@ -6551,9 +6635,8 @@ def registrar_rutas(app):
 
         filas_exp = [("PRESUPUESTO TOTAL DE OBRA", sintesis["et"], True)]
         if incluir_anios:
-            filas_exp += [("GASTO EJECUTADO 2023", sintesis["e2023"], False),
-                          ("GASTO EJECUTADO 2024", sintesis["e2024"], False),
-                          ("GASTO EJECUTADO 2025", sintesis["e2025"], False)]
+            filas_exp += [(f"GASTO EJECUTADO {yr}", sintesis[f"e{yr}"], False)
+                          for yr in anios_excel]
             filas_exp.append((f"GASTO EJECUTADO AL MES DE {MESES[mes-1]} {anio}",
                               sintesis["ejec_anio"], False))
         else:
@@ -7491,6 +7574,7 @@ def registrar_rutas(app):
         return render_template("informe_final.html", p=p, I=I, MESES=MESES,
                                resumen=resumen, consolidado=formato_consolidado(),
                                almacen=almacen_consolidado(),
+                               caja_chica=caja_chica_filas(p),
                                sobrantes=sobrantes_items)
 
     @app.route("/informe_final/imprimir")
@@ -7550,6 +7634,7 @@ def registrar_rutas(app):
         return render_template("informe_final_imprimir.html", p=p, I=I, MESES=MESES,
                                resumen=resumen, consolidado=formato_consolidado(),
                                almacen=almacen_consolidado(),
+                               caja_chica=caja_chica_filas(p),
                                sobrantes=sobrantes_items,
                                compendio=compendio, fe06_rows=f06_rows,
                                fe06_resumen=f06_resumen,

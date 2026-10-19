@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Caja Chica (Rendiciones){% endblock %}
+{% block og_title %}Caja Chica (Rendiciones de Fondos){% endblock %}
+{% block meta_description %}Registro de rendiciones de fondos para pagos en efectivo (caja chica) del Informe Financiero Final de Obra.{% endblock %}
+{% block heading %}Caja Chica (Rendiciones de Fondos){% endblock %}
+{% block subheading %}Cuadro de utilización de rendiciones de fondos para pagos en efectivo{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head between">
+    <h2><i class="bi bi-wallet2"></i> Fondo de caja chica del proyecto</h2>
+    <a class="btn btn-primary" href="{{ url_for('caja_chica_nuevo') }}" onclick="return abrirModal(this.href)">
+      <i class="bi bi-plus-lg"></i> Nueva rendición
+    </a>
+  </div>
+  <form method="post" action="{{ url_for('caja_chica_fondo') }}" class="form-panel">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <div class="form-grid">
+      <div class="field">
+        <label for="cc-fondo">Monto del fondo asignado (S/)</label>
+        <input type="text" inputmode="decimal" class="monto" name="fondo_caja_chica" id="cc-fondo" value="{{ resumen.fondo or '' }}" autocomplete="off">
+        <div class="field-hint">Monto entregado al responsable para los pagos en efectivo. El saldo de cada rendición se calcula desde este fondo.</div>
+      </div>
+      <div class="field">
+        <label for="cc-resp">Responsable de caja chica</label>
+        <input type="text" name="responsable_caja_chica" id="cc-resp" value="{{ p.responsable_caja_chica or '' }}">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Guardar fondo</button>
+    </div>
+  </form>
+</div>
+
+<div class="card resumen-card">
+  <div class="resumen-title">
+    <span><i class="bi bi-graph-up"></i> RESUMEN DE CAJA CHICA</span>
+  </div>
+  <div class="resumen-grid">
+    <div class="resumen-item">
+      <span class="resumen-ico gold"><i class="bi bi-piggy-bank"></i></span>
+      <div class="resumen-val">S/ {{ "{:,.2f}".format(resumen.fondo) }}</div>
+      <div class="resumen-lbl">Fondo asignado</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico blue"><i class="bi bi-cash-stack"></i></span>
+      <div class="resumen-val">S/ {{ "{:,.2f}".format(resumen.total_importe) }}</div>
+      <div class="resumen-lbl">Total rendido</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico {{ 'sal' if resumen.saldo_final < 0 else 'ent' }}"><i class="bi bi-wallet2"></i></span>
+      <div class="resumen-val">S/ {{ "{:,.2f}".format(resumen.saldo_final) }}</div>
+      <div class="resumen-lbl">Saldo del fondo</div>
+    </div>
+    <div class="resumen-item">
+      <span class="resumen-ico"><i class="bi bi-receipt"></i></span>
+      <div class="resumen-val">{{ resumen.total_comprobantes }}</div>
+      <div class="resumen-lbl">Comprobantes</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head between">
+    <h2><i class="bi bi-journal-text"></i> Rendiciones registradas</h2>
+  </div>
+  <div class="table-scroll">
+    <table class="table table-compact">
+      <thead>
+        <tr>
+          <th class="num">N.°</th>
+          <th>Fecha</th>
+          <th>N.° de rendición</th>
+          <th>Concepto</th>
+          <th class="num">Importe (S/)</th>
+          <th class="num">N.° de comprobantes</th>
+          <th class="num">Saldo (S/)</th>
+          <th class="alm-acc">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in resumen.filas %}
+        <tr>
+          <td class="num">{{ loop.index }}</td>
+          <td class="num">{{ r.fecha.strftime("%d/%m/%Y") if r.fecha else '' }}</td>
+          <td>{{ r.n_rendicion }}</td>
+          <td class="wrap">{{ r.concepto }}</td>
+          <td class="num">{{ "{:,.2f}".format(r.importe) }}</td>
+          <td class="num">{{ r.n_comprobantes }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(r.saldo) }}</td>
+          <td class="row-actions alm-acc">
+            <a class="icon-btn" href="{{ url_for('caja_chica_editar', rendicion_id=r.id) }}" onclick="return abrirModal(this.href)" title="Editar" aria-label="Editar rendición"><i class="bi bi-pencil"></i></a>
+            <form method="post" action="{{ url_for('caja_chica_eliminar', rendicion_id=r.id) }}" class="inline"
+                  data-confirm="¿Eliminar esta rendición de caja chica?" data-confirm-title="Eliminar rendición" data-confirm-btn="Eliminar">
+              <button class="icon-btn danger" title="Eliminar" aria-label="Eliminar rendición"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="empty">Aún no hay rendiciones de caja chica registradas.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if resumen.filas %}
+      <tfoot>
+        <tr>
+          <td colspan="4" class="right strong">TOTAL</td>
+          <td class="num strong">{{ "{:,.2f}".format(resumen.total_importe) }}</td>
+          <td class="num strong">{{ resumen.total_comprobantes }}</td>
+          <td class="num strong">{{ "{:,.2f}".format(resumen.saldo_final) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+  <div class="note"><i class="bi bi-info-circle"></i> Los datos de este módulo alimentan el Cuadro N° 10 (caja chica) del Informe Financiero Final de Obra. El saldo de cada rendición es el fondo asignado menos el importe rendido acumulado.</div>
+</div>
+{% endblock %}

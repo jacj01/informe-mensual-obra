@@ -75,6 +75,8 @@ class Proyecto(db.Model):
     asistente = db.Column(db.String(300), default="")
     almacenero = db.Column(db.String(300), default="")
     responsable_almacen = db.Column(db.String(300), default="")
+    responsable_caja_chica = db.Column(db.String(300), default="")
+    fondo_caja_chica = db.Column(db.Float, default=0)  # fondo asignado para pagos en efectivo (caja chica)
     administrador_obra = db.Column(db.String(300), default="")
     anio = db.Column(db.Integer, default=2026)
     mes_actual = db.Column(db.Integer, default=6)
@@ -188,6 +190,23 @@ class AlmacenMovimiento(db.Model):
     @property
     def importe(self):
         return round((self.cantidad or 0) * (self.precio_unitario or 0), 2)
+
+
+class CajaChicaRendicion(db.Model):
+    """Rendicion de fondos para pagos en efectivo (caja chica) del proyecto.
+
+    Cada fila del Cuadro N° 10 del Informe Final: una rendicion con su fecha,
+    numero, concepto, importe y numero de comprobantes. El saldo de cada fila
+    se calcula en forma corrida desde el fondo asignado del proyecto
+    (Proyecto.fondo_caja_chica), no se almacena.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    fecha = db.Column(db.Date)
+    n_rendicion = db.Column(db.String(100), default="")
+    concepto = db.Column(db.String(500), default="")
+    importe = db.Column(db.Float, default=0)
+    n_comprobantes = db.Column(db.Integer, default=0)
+    orden = db.Column(db.Integer, default=1)
 
 
 class ActividadEjecutada(db.Model):
