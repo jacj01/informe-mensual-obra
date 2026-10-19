@@ -85,21 +85,20 @@
   tr.fila-orden td.dev-no { text-align: center; color: #B45309; font-weight: 800; font-size: 8.2pt; }
   tr.fila-orden td.np-mini { font-size: 6.2pt; font-weight: 600; color: var(--texto2); }
 
-  /* Detalle de bienes / servicios */
-  tr.fila-det > td { padding: 0 !important; background: #fff; }
-  table.det-materiales { margin: 0; width: 100%; border-collapse: collapse; }
-  table.det-materiales thead th {
-    background: var(--azul-claro); color: #fff; font-weight: 700;
-    font-size: 6.4pt; text-transform: uppercase; letter-spacing: .2px;
-    padding: 3.5px 5px; border: .6px solid var(--azul-claro);
+  /* Detalle de bienes / servicios (filas aplanadas, sin cabecera repetida) */
+  tr.fila-det-row td {
+    background: #fff; font-size: 7.1pt; padding: 2.5px 6px;
+    border-top: 1px solid var(--borde); color: var(--texto2); vertical-align: top;
   }
-  table.det-materiales td {
-    font-size: 7.3pt; padding: 3px 5px; border: .6px solid var(--borde); background: #fff;
+  tr.fila-orden + tr.fila-det-row td { border-top: 2px solid var(--azul-claro); }
+  tr.fila-det-row td:first-child { border-left: 3px solid var(--azul-claro); }
+  tr.fila-det-row td.det-txt { color: var(--texto); font-weight: 500; padding-left: 14px; }
+  tr.fila-det-row td.num { text-align: right; white-space: nowrap; }
+  tr.fila-det-row td.ctr { text-align: center; }
+  tr.fila-det-row td.det-empty {
+    text-align: center; font-style: italic; color: var(--texto2);
+    padding: 5px 6px; border-left: none;
   }
-  table.det-materiales td.num { text-align: right; }
-  table.det-materiales td.ctr { text-align: center; }
-  table.det-materiales td.det-txt { font-weight: 600; }
-  table.det-materiales tbody tr:nth-child(even) td { background: var(--bg); }
 
   /* Subtotal por tipo de documento */
   tr.fila-sub td {
@@ -192,40 +191,22 @@
         </td>
         <td class="num strong">S/ {{ "{:,.2f}".format(o.importe) }}</td>
       </tr>
-      <tr class="fila-det">
-        <td colspan="10">
-          <table class="det-materiales">
-            <thead>
-              <tr>
-                <th style="width:24px">#</th>
-                <th>Detalle del Bien / Servicio</th>
-                <th style="width:52px">Und</th>
-                <th class="num" style="width:60px">Cant</th>
-                <th class="num" style="width:70px">P.U.</th>
-                <th class="num" style="width:80px">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for d in o.detalles %}
-              <tr>
-                <td class="ctr">{{ loop.index }}</td>
-                <td class="det-txt">{{ d.detalle }}</td>
-                <td class="ctr">{{ d.und }}</td>
-                <td class="num">{{ "{:,.2f}".format(d.cantidad) }}</td>
-                <td class="num">{{ "{:,.2f}".format(d.precio_unitario) }}</td>
-                <td class="num strong">S/ {{ "{:,.2f}".format(d.importe) }}</td>
-              </tr>
-              {% else %}
-              <tr>
-                <td colspan="6" class="ctr">
-                  {{ 'Sin servicios registrados.' if o.g.tipo_doc == 'O/S' else ('Sin conceptos registrados.' if o.g.tipo_doc == 'PLLA' else 'Sin materiales registrados.') }}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+      {% for d in o.detalles %}
+      <tr class="fila-det-row">
+        <td class="ctr">{{ loop.index }}</td>
+        <td colspan="4" class="det-txt">{{ d.detalle }}</td>
+        <td class="ctr">{{ d.und }}</td>
+        <td class="num">{{ "{:,.2f}".format(d.cantidad) }}</td>
+        <td colspan="2" class="num">{{ "{:,.2f}".format(d.precio_unitario) }}</td>
+        <td class="num strong">S/ {{ "{:,.2f}".format(d.importe) }}</td>
+      </tr>
+      {% else %}
+      <tr class="fila-det-row">
+        <td colspan="10" class="det-empty">
+          {{ 'Sin servicios registrados.' if o.g.tipo_doc == 'O/S' else ('Sin conceptos registrados.' if o.g.tipo_doc == 'PLLA' else 'Sin materiales registrados.') }}
         </td>
       </tr>
+      {% endfor %}
       {% endfor %}
     </tbody>
     <tfoot>
