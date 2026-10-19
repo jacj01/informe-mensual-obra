@@ -603,6 +603,9 @@ def create_app():
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         resp.headers.setdefault("Referrer-Policy", "same-origin")
+        # Aplicación privada (requiere sesión): no exponer ninguna ruta a los
+        # buscadores. Cabecera fiable incluso para respuestas no HTML.
+        resp.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
         resp.headers.setdefault("Content-Security-Policy",
             "default-src 'self'; script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
@@ -2137,14 +2140,8 @@ def registrar_rutas(app):
     def robots():
         base = request.url_root.rstrip("/")
         txt = ("User-agent: *\n"
-               "Allow: /\n"
-               "Disallow: /login\n"
-               "Disallow: /usuarios\n"
-               "Disallow: /suscripcion\n"
-               "Disallow: /respaldo\n"
-               "Disallow: /licencia\n"
-               "Disallow: /api/\n"
-               "Disallow: /*_imprimir\n"
+               "Allow: /static/\n"
+               "Disallow: /\n"
                f"Sitemap: {base}/sitemap.xml\n")
         return txt, 200, {"Content-Type": "text/plain; charset=utf-8"}
 
@@ -2527,16 +2524,9 @@ def registrar_rutas(app):
     def sitemap():
         base = request.url_root.rstrip("/")
         urls = [
-            ("", "1.0", "daily"),
-            ("/dashboard", "0.9", "daily"),
-            ("/cabecera", "0.8", "weekly"),
-            ("/ordenes", "0.8", "weekly"),
-            ("/gastos", "0.8", "weekly"),
-            ("/almacen", "0.8", "weekly"),
-            ("/tareo", "0.8", "weekly"),
-            ("/inventario", "0.7", "monthly"),
-            ("/formatos", "0.7", "monthly"),
-            ("/configuracion", "0.5", "monthly"),
+            ("/login", "0.1", "monthly"),
+            ("/forzar-clave", "0.1", "monthly"),
+            ("/suscripcion/vencida", "0.1", "monthly"),
         ]
         today = date.today().isoformat()
         items = "".join(
@@ -2549,8 +2539,7 @@ def registrar_rutas(app):
             for u, p, cf in urls
         )
         xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
-               '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n'
-               '        xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'
+               '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
                f"{items}</urlset>\n")
         return Response(xml, mimetype="application/xml")
 
