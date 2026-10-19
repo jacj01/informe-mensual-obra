@@ -169,7 +169,7 @@
   <div class="table-scroll">
     <table class="table table-compact">
       <thead>
-        <tr><th>Componente</th><th class="num">Exp. Técnico</th><th class="num">{{ p.anio - 3 }}</th><th class="num">{{ p.anio - 2 }}</th><th class="num">{{ p.anio - 1 }}</th><th class="num">Ejec. {{ p.anio }}</th><th class="num">Acum. total</th></tr>
+        <tr><th>Componente</th><th class="num">Exp. Técnico</th>{% if p.incluir_anios_anteriores %}<th class="num">{{ p.anio - 3 }}</th><th class="num">{{ p.anio - 2 }}</th><th class="num">{{ p.anio - 1 }}</th>{% endif %}<th class="num">Ejec. {{ p.anio }}</th>{% if p.incluir_anios_anteriores %}<th class="num">Acum. total</th>{% endif %}</tr>
       </thead>
       <tbody>
         {% for comp in ['Costo Directo', 'Gastos Generales', 'Gastos de Supervisión', 'Elaboración de Expediente Técnico', 'Liquidación de Obra'] %}
@@ -177,22 +177,26 @@
         <tr>
           <td>{{ comp }}</td>
           <td class="num">{{ "{:,.2f}".format(r.et) }}</td>
+          {% if p.incluir_anios_anteriores %}
           <td class="num">{{ "{:,.2f}".format(r.e2023) }}</td>
           <td class="num">{{ "{:,.2f}".format(r.e2024) }}</td>
           <td class="num">{{ "{:,.2f}".format(r.e2025) }}</td>
+          {% endif %}
           <td class="num">{{ "{:,.2f}".format(r.total_anio) }}</td>
-          <td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td>
+          {% if p.incluir_anios_anteriores %}<td class="num">{{ "{:,.2f}".format(r.acum_total) }}</td>{% endif %}
         </tr>
         {% endfor %}
       </tbody>
       <tfoot><tr class="totales">
         <td><strong>TOTAL</strong></td>
         <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='et')) }}</td>
+        {% if p.incluir_anios_anteriores %}
         <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2023')) }}</td>
         <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2024')) }}</td>
         <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='e2025')) }}</td>
+        {% endif %}
         <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='total_anio')) }}</td>
-        <td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='acum_total')) }}</td>
+        {% if p.incluir_anios_anteriores %}<td class="num strong">{{ "{:,.2f}".format(consolidado.fe06.resumen.values()|sum(attribute='acum_total')) }}</td>{% endif %}
       </tr></tfoot>
     </table>
   </div>
