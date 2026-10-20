@@ -79,8 +79,8 @@
                         name="dias_{{ t.id }}" value="{{ d.dia }}" data-dia="{{ d.dia }}"
                         aria-label="{{ t.nombre }} — {{ d.nombre }} {{ d.dia }}"
                         {{ 'checked' if d.dia in t.dias_lista else '' }}
-                        {{ 'disabled' if devengado else '' }
-                        title="{{ 'La planilla ya está devengada. No se puede modificar el tareo.' if devengado else d.nombre + ' ' + d.dia|string }}">
+                        {% if devengado %}disabled{% endif %}
+                        title="{% if devengado %}La planilla ya está devengada. No se puede modificar el tareo.{% else %}{{ d.nombre }} {{ d.dia }}{% endif %}">
                 {% if d.es_domingo %}<span class="mk" aria-hidden="true">D</span>
                 {% elif d.es_feriado %}<span class="mk" aria-hidden="true">F</span>{% endif %}
               </label>

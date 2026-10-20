@@ -139,23 +139,43 @@ def _all_presupuestos():
 
 def _all_gastos_anio(anio):
     """Gasto + GastoDetalle de un año, cacheado por request.
-    Devuelve lista de tuplas (componente, clasificador, mes, importe)."""
+    Devuelve lista de tuplas (componente, clasificador, mes, importe).
+    Para PLLA, usa mes/año de fecha_devengado/fecha para reportes contables."""
     cache_key = f"_gastos_{anio}"
     cached = getattr(g, cache_key, None)
     if cached is not None:
         return cached
+    mes_expr = db.case(
+        (db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado != None),
+         db.extract('month', Gasto.fecha_devengado)),
+        (db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha != None),
+         db.extract('month', Gasto.fecha)),
+        else_=Gasto.mes
+    )
     rows = (db.session.query(
                 Gasto.componente,
                 Gasto.clasificador,
-                Gasto.mes,
+                mes_expr.label('mes_rep'),
                 db.func.sum(GastoDetalle.cantidad * GastoDetalle.precio_unitario))
             .join(GastoDetalle, GastoDetalle.gasto_id == Gasto.id)
-            .filter(Gasto.anio == anio, Gasto.devengado == True)
-            .group_by(Gasto.componente, Gasto.clasificador, Gasto.mes)
+            .filter(Gasto.devengado == True)
+            .filter(
+                db.or_(
+                    db.and_(Gasto.tipo_doc != 'PLLA', Gasto.anio == anio),
+                    db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado != None,
+                            db.extract('year', Gasto.fecha_devengado) == anio),
+                    db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha != None,
+                            db.extract('year', Gasto.fecha) == anio),
+                    db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha == None,
+                            Gasto.anio == anio),
+                )
+            )
+            .group_by(Gasto.componente, Gasto.clasificador, mes_expr)
             .all())
+    rows_out = [(comp, clasif, int(mes_rep) if mes_rep else mes_rep, total) for comp, clasif, mes_rep, total in rows]
     g._gastos_cache = getattr(g, "_gastos_cache", {})
-    g._gastos_cache[cache_key] = rows
-    return rows
+    g._gastos_cache[cache_key] = rows_out
+    return rows_out
 
 
 def get_suscripcion():
@@ -226,8 +246,34 @@ def fmt(n):
 
 
 def gastos_mes(mes, anio, devengado=None):
-    """Gastos de un periodo. Si devengado es True/False filtra por ese estado."""
-    q = Gasto.query.filter(Gasto.mes == mes, Gasto.anio == anio)
+    """Gastos de un periodo. Si devengado es True/False filtra por ese estado.
+    Para planillas PLLA devengadas, se usa la fecha de devengado para ubicar en el mes/año
+    correspondiente al reporte (según lo ingresado al devengar)."""
+    from datetime import date
+    # Build conditions more explicitly
+    q = Gasto.query
+    # We need custom filter
+    conds = []
+    # non-PLLA
+    conds.append(db.and_(Gasto.tipo_doc != "PLLA", Gasto.mes == mes, Gasto.anio == anio))
+    # PLLA with fecha_devengado
+    try:
+        conds.append(db.and_(Gasto.tipo_doc == "PLLA", Gasto.fecha_devengado != None,
+                             db.func.strftime('%m', Gasto.fecha_devengado).cast(db.Integer) == mes,
+                             db.func.strftime('%Y', Gasto.fecha_devengado).cast(db.Integer) == anio))
+    except Exception:
+        pass
+    # PLLA with fecha fallback
+    try:
+        conds.append(db.and_(Gasto.tipo_doc == "PLLA", Gasto.fecha_devengado == None, Gasto.fecha != None,
+                             db.func.strftime('%m', Gasto.fecha).cast(db.Integer) == mes,
+                             db.func.strftime('%Y', Gasto.fecha).cast(db.Integer) == anio))
+    except Exception:
+        pass
+    # PLLA fallback to original
+    conds.append(db.and_(Gasto.tipo_doc == "PLLA", Gasto.fecha_devengado == None, Gasto.fecha == None,
+                         Gasto.mes == mes, Gasto.anio == anio))
+    q = q.filter(db.or_(*conds))
     if devengado is not None:
         q = q.filter(Gasto.devengado == devengado)
     return q.order_by(Gasto.orden, Gasto.id).all()
@@ -239,33 +285,99 @@ def total_gastos_mes(mes, anio, devengado=None):
 
 def mes_inicio_manifiesto(anio):
     """Primer mes del anio con gastos devengados (mes en que se inicio el
-    ingreso de datos). Sirve de base para el correlativo del manifiesto."""
-    m = db.session.query(db.func.min(Gasto.mes)).filter(
-        Gasto.anio == anio, Gasto.devengado == True).scalar()
+    ingreso de datos). Sirve de base para el correlativo del manifiesto.
+    Para PLLA usa fecha_devengado/fecha."""
+    mes_expr = db.case(
+        (db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado != None),
+         db.extract('month', Gasto.fecha_devengado)),
+        (db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha != None),
+         db.extract('month', Gasto.fecha)),
+        else_=Gasto.mes
+    )
+    m = (db.session.query(db.func.min(mes_expr))
+         .join(GastoDetalle, GastoDetalle.gasto_id == Gasto.id)
+         .filter(Gasto.devengado == True)
+         .filter(
+             db.or_(
+                 db.and_(Gasto.tipo_doc != 'PLLA', Gasto.anio == anio),
+                 db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado != None,
+                         db.extract('year', Gasto.fecha_devengado) == anio),
+                 db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha != None,
+                         db.extract('year', Gasto.fecha) == anio),
+                 db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha == None,
+                         Gasto.anio == anio),
+             )
+         )
+         .scalar())
+    try:
+        m = int(m) if m else 1
+    except Exception:
+        m = 1
     return m if m else 1
 
 
 def ejecucion_por_mes(anio):
-    """Suma de importes devengados por mes (1-12) para el anio dado."""
+    """Suma de importes devengados por mes (1-12) para el anio dado.
+    Para PLLA usa fecha_devengado/fecha para ubicarlo en el mes correspondiente."""
     out = [0.0] * 12
-    rows = (db.session.query(Gasto.mes,
+    mes_expr = db.case(
+        (db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado != None),
+         db.extract('month', Gasto.fecha_devengado)),
+        (db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha != None),
+         db.extract('month', Gasto.fecha)),
+        else_=Gasto.mes
+    )
+    rows = (db.session.query(mes_expr,
                              db.func.sum(GastoDetalle.cantidad * GastoDetalle.precio_unitario))
             .join(GastoDetalle, GastoDetalle.gasto_id == Gasto.id)
-            .filter(Gasto.anio == anio, Gasto.devengado == True)
-            .group_by(Gasto.mes).all())
+            .filter(Gasto.devengado == True)
+            .filter(
+                db.or_(
+                    db.and_(Gasto.tipo_doc != 'PLLA', Gasto.anio == anio),
+                    db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado != None,
+                            db.extract('year', Gasto.fecha_devengado) == anio),
+                    db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha != None,
+                            db.extract('year', Gasto.fecha) == anio),
+                    db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha == None,
+                            Gasto.anio == anio),
+                )
+            )
+            .group_by(mes_expr).all())
     for mes, total in rows:
-        out[mes - 1] = round(total or 0, 2)
+        if mes:
+            m = int(mes)
+            if 1 <= m <= 12:
+                out[m - 1] = round(total or 0, 2)
     return out
 
 
 def meses_con_ejecucion(anio):
-    """Indices (1-12) de los meses con gastos devengados en el anio dado."""
-    rows = (db.session.query(Gasto.mes,
+    """Indices (1-12) de los meses con gastos devengados en el anio dado.
+    Para PLLA usa fecha_devengado/fecha."""
+    mes_expr = db.case(
+        (db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado != None),
+         db.extract('month', Gasto.fecha_devengado)),
+        (db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha != None),
+         db.extract('month', Gasto.fecha)),
+        else_=Gasto.mes
+    )
+    rows = (db.session.query(mes_expr,
                              db.func.sum(GastoDetalle.cantidad * GastoDetalle.precio_unitario))
             .join(GastoDetalle, GastoDetalle.gasto_id == Gasto.id)
-            .filter(Gasto.anio == anio, Gasto.devengado == True)
-            .group_by(Gasto.mes).all())
-    return sorted({mes for mes, total in rows if (total or 0) > 0})
+            .filter(Gasto.devengado == True)
+            .filter(
+                db.or_(
+                    db.and_(Gasto.tipo_doc != 'PLLA', Gasto.anio == anio),
+                    db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado != None,
+                            db.extract('year', Gasto.fecha_devengado) == anio),
+                    db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha != None,
+                            db.extract('year', Gasto.fecha) == anio),
+                    db.and_(Gasto.tipo_doc == 'PLLA', Gasto.fecha_devengado == None, Gasto.fecha == None,
+                            Gasto.anio == anio),
+                )
+            )
+            .group_by(mes_expr).all())
+    return sorted({int(mes) for mes, total in rows if mes and (total or 0) > 0 and 1 <= int(mes) <= 12})
 
 
 def mes_inicio_obra():
