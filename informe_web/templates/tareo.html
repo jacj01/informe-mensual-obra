@@ -6,7 +6,7 @@
 {% block subheading %}Control de personal obrero y técnico de obra{% endblock %}
 
 {% macro pan_tareo(titulo, icono, lista, resumen, total_dias, tipo, boton, devengado) %}
-<div class="card">
+<div class="card{% if devengado %} is-devengado{% endif %}" data-devengado="{{ '1' if devengado else '0' }}">
   <div class="card-head between">
     <h2><i class="bi {{ icono }}"></i> {{ titulo }} - {{ MESES[mes-1] }} {{ anio }}</h2>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -16,11 +16,11 @@
               onclick="return abrirModal('{{ url_for('tareo_devengar', mes=mes, anio=anio, tipo=tipo) }}')">
         <i class="bi {{ 'bi-check-circle-fill' if devengado else 'bi-circle' }}"></i> DEVENGADO
       </button>
-      <button type="button" class="btn btn-outline" onclick="alternarTodos(this.closest('.card'))" title="Marcar o desmarcar todos los días de todos los trabajadores">
+      <button type="button" class="btn btn-outline" {% if devengado %}disabled title="La planilla ya está devengada. No se puede modificar el tareo."{% else %}onclick="alternarTodos(this.closest('.card'))" title="Marcar o desmarcar todos los días de todos los trabajadores"{% endif %}>
         <i class="bi bi-check2-all"></i> Marcar todos
       </button>
       <a class="btn btn-primary" href="{{ url_for('tareo_imprimir', mes=mes, anio=anio, tipo=tipo) }}" target="_blank" title="Imprimir {{ titulo }}"><i class="bi bi-printer"></i> Imprimir</a>
-      <button type="button" class="btn btn-gold" onclick="return abrirModal('{{ url_for('trabajador_nuevo', tipo=tipo) }}')">
+      <button type="button" class="btn btn-gold" {% if devengado %}disabled title="La planilla ya está devengada. No se puede agregar trabajadores al tareo."{% else %}onclick="return abrirModal('{{ url_for('trabajador_nuevo', tipo=tipo) }}')"{% endif %}>
         <i class="bi bi-person-plus"></i> {{ boton }}
       </button>
     </div>
@@ -75,10 +75,12 @@
             {% if d.dia >= inicio_dia %}
             <td class="tareo-dia {{ 'es-domingo' if d.es_domingo else '' }} {{ 'es-feriado' if d.es_feriado else '' }}">
               <label class="dia-check" title="{{ d.nombre }} {{ d.dia }}">
-                <input type="checkbox" class="cb-dia {{ 'cb-domingo' if d.es_domingo else '' }} {{ 'cb-feriado' if d.es_feriado else '' }}"
-                       name="dias_{{ t.id }}" value="{{ d.dia }}" data-dia="{{ d.dia }}"
-                       aria-label="{{ t.nombre }} — {{ d.nombre }} {{ d.dia }}"
-                       {{ 'checked' if d.dia in t.dias_lista else '' }}>
+                 <input type="checkbox" class="cb-dia {{ 'cb-domingo' if d.es_domingo else '' }} {{ 'cb-feriado' if d.es_feriado else '' }}"
+                        name="dias_{{ t.id }}" value="{{ d.dia }}" data-dia="{{ d.dia }}"
+                        aria-label="{{ t.nombre }} — {{ d.nombre }} {{ d.dia }}"
+                        {{ 'checked' if d.dia in t.dias_lista else '' }}
+                        {{ 'disabled' if devengado else '' }
+                        title="{{ 'La planilla ya está devengada. No se puede modificar el tareo.' if devengado else d.nombre + ' ' + d.dia|string }}">
                 {% if d.es_domingo %}<span class="mk" aria-hidden="true">D</span>
                 {% elif d.es_feriado %}<span class="mk" aria-hidden="true">F</span>{% endif %}
               </label>
@@ -92,6 +94,12 @@
             <td class="tareo-sum td-feriados" data-role="feriados">0</td>
             <td class="tareo-sum td-total" data-role="total">0</td>
             <td class="row-actions">
+              {% if devengado %}
+              <button type="button" class="icon-btn" disabled title="La planilla ya está devengada. No se puede modificar el tareo." aria-label="Editar trabajador">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button type="button" class="icon-btn danger" disabled title="La planilla ya está devengada. No se puede modificar el tareo." aria-label="Eliminar trabajador"><i class="bi bi-trash"></i></button>
+              {% else %}
               <button type="button" class="icon-btn" title="Editar" aria-label="Editar trabajador"
                       onclick="return abrirModal('{{ url_for('trabajador_editar', tid=t.id) }}')">
                 <i class="bi bi-pencil"></i>
@@ -100,6 +108,7 @@
                     data-confirm="¿Eliminar del tareo a {{ t.nombre }}?" data-confirm-title="Eliminar registro" data-confirm-btn="Eliminar">
                 <button type="submit" class="icon-btn danger" title="Eliminar" aria-label="Eliminar trabajador"><i class="bi bi-trash"></i></button>
               </form>
+              {% endif %}
             </td>
           </tr>
           {% else %}
@@ -233,6 +242,9 @@
   var autosaveTimers = {};
 
   function guardarTareo(card) {
+    if (card && card.classList && card.classList.contains('is-devengado')) {
+      return;
+    }
     var fd = new FormData();
     var mes = card.querySelector('input[name=mes]');
     var anio = card.querySelector('input[name=anio]');
@@ -270,10 +282,14 @@
   }
 
   function alternarTodos(card) {
-    var cbs = card.querySelectorAll('.cb-dia:not(.cb-domingo)');
+    if (card && card.classList && card.classList.contains('is-devengado')) {
+      alert('La planilla ya está devengada. No se puede modificar el tareo.');
+      return;
+    }
+    var cbs = card.querySelectorAll('.cb-dia:not(.cb-domingo):not(:disabled)');
     var todos = cbs.length > 0 &&
       Array.prototype.every.call(cbs, function (c) { return c.checked; });
-    cbs.forEach(function (cb) { cb.checked = !todos; });
+    cbs.forEach(function (cb) { if (!cb.disabled) { cb.checked = !todos; } });
     card.querySelectorAll('.tareo-fila').forEach(syncSemanas);
     recalcularTabla(card);
     programarGuardado(card);
@@ -353,6 +369,11 @@
     form.addEventListener('change', function (e) {
       var t = e.target;
       if (t && t.classList && t.classList.contains('cb-dia')) {
+        var card = form.closest('.card');
+        if (card && (card.classList.contains('is-devengado') || t.disabled)) {
+          e.preventDefault();
+          return;
+        }
         var fila = t.closest('.tareo-fila');
         if (fila) syncSemanas(fila);
         recalcularTabla(form);
