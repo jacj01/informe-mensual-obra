@@ -4531,15 +4531,25 @@ def registrar_rutas(app):
                         and Trabajador.query
                             .filter(Trabajador.mes == mes_ant,
                                     Trabajador.anio == anio_ant).count() > 0)
+        dev_obreros = any(getattr(t, 'devengado', False) for t in obreros) or (gasto_planilla("Costo Directo", mes, anio) is not None)
+        dev_tecnicos = any(getattr(t, 'devengado', False) for t in tecnicos) or (gasto_planilla("Gastos Generales", mes, anio) is not None)
+        # Si el gasto quedó en otro mes/año, asegurarlo en el mes de la planilla
+        for comp, dev_flag in [("Costo Directo", dev_obreros), ("Gastos Generales", dev_tecnicos)]:
+            if dev_flag:
+                gpl = Gasto.query.filter(Gasto.tipo_doc=="PLLA", Gasto.componente==comp).filter(db.or_(db.and_(Gasto.mes==mes,Gasto.anio==anio), Gasto.devengado==True)).order_by(Gasto.id.desc()).first()
+                if gpl and (gpl.mes!=mes or gpl.anio!=anio):
+                    gpl.mes = mes; gpl.anio = anio
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         return render_template("tareo.html", p=p, mes=mes, anio=anio,
                                MESES=MESES, calendario=calendario,
                                obreros=obreros, tecnicos=tecnicos,
                                total_obreros=len(obreros),
                                total_tecnicos=len(tecnicos),
-                               dev_obreros=(gasto_planilla("Costo Directo", mes, anio)
-                                            is not None),
-                               dev_tecnicos=(gasto_planilla("Gastos Generales", mes, anio)
-                                             is not None),
+                               dev_obreros=dev_obreros,
+                               dev_tecnicos=dev_tecnicos,
                                resumen_obreros=resumen_obreros,
                                resumen_tecnicos=resumen_tecnicos,
                                total_dias_obreros=total_dias_obreros,
