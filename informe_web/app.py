@@ -4881,16 +4881,36 @@ def registrar_rutas(app):
 
     @app.route("/tareo/nuevo", methods=["GET", "POST"])
     def trabajador_nuevo():
+        p = get_proyecto()
+        tipo = (request.args.get("tipo") or request.form.get("tipo", "OBRERO") or "OBRERO").strip().upper()
+        if tipo not in ("OBRERO", "TECNICO"):
+            tipo = "OBRERO"
+        mes = param_int("mes", p.mes_actual, lo=1, hi=12)
+        anio = p.anio
+        comp = "Costo Directo" if tipo == "OBRERO" else "Gastos Generales"
+        if gasto_planilla(comp, mes, anio) and not es_super_actual():
+            flash("La planilla ya está devengada. No se puede agregar trabajadores al tareo.", "error")
+            return redirect(url_for("tareo", mes=mes, anio=anio))
         return trabajador_form(None)
 
     @app.route("/tareo/editar/<int:tid>", methods=["GET", "POST"])
     def trabajador_editar(tid):
+        t = db.session.get(Trabajador, tid)
+        if t:
+            comp = "Costo Directo" if t.tipo == "OBRERO" else "Gastos Generales"
+            if gasto_planilla(comp, t.mes, t.anio) and not es_super_actual():
+                flash("La planilla ya está devengada. No se puede modificar el tareo.", "error")
+                return redirect(url_for("tareo", mes=t.mes, anio=t.anio))
         return trabajador_form(tid)
 
     @app.route("/tareo/eliminar/<int:tid>", methods=["POST"])
     def trabajador_eliminar(tid):
         t = db.session.get(Trabajador, tid)
         if t:
+            comp = "Costo Directo" if t.tipo == "OBRERO" else "Gastos Generales"
+            if gasto_planilla(comp, t.mes, t.anio) and not es_super_actual():
+                flash("La planilla ya está devengada. No se puede eliminar trabajadores del tareo.", "error")
+                return redirect(url_for("tareo", mes=t.mes, anio=t.anio))
             mes, anio, tipo = t.mes, t.anio, t.tipo
             db.session.delete(t)
             db.session.commit()
@@ -4906,6 +4926,11 @@ def registrar_rutas(app):
                              mes=p.mes_actual, anio=p.anio))
         if tid and t is None:
             abort(404)
+        if t:
+            comp = "Costo Directo" if t.tipo == "OBRERO" else "Gastos Generales"
+            if gasto_planilla(comp, t.mes, t.anio) and not es_super_actual():
+                flash("La planilla ya está devengada. No se puede modificar el tareo.", "error")
+                return redirect(url_for("tareo", mes=t.mes, anio=t.anio))
         es_modal = bool(request.headers.get("X-Modal")) or request.args.get("modal")
         error = None
         if request.method == "POST":
