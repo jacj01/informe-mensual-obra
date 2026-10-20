@@ -4725,6 +4725,11 @@ def registrar_rutas(app):
                               componente=comp, mes=mes, anio=anio,
                               devengado=True, orden=n_orden)
                     db.session.add(g)
+                else:
+                    # Mantener el gasto en el mes de la planilla. Solo actualizar la fecha de devengado.
+                    if g.mes != mes or g.anio != anio:
+                        g.mes = mes
+                        g.anio = anio
                 g.fecha = fecha
                 if hasattr(g, "fecha_devengado"):
                     g.fecha_devengado = fecha
