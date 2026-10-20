@@ -4718,30 +4718,16 @@ def registrar_rutas(app):
             elif monto <= 0:
                 error = "Indique el Monto de Planilla (mayor a S/ 0.00)."
             if error is None:
-                mes_dev = fecha.month
-                anio_dev = fecha.year
-                if g is not None and (g.mes != mes_dev or g.anio != anio_dev):
-                    # Buscar gasto PLLA en el mes/año de la fecha de devengado
-                    g2 = (Gasto.query
-                          .filter(Gasto.tipo_doc == "PLLA", Gasto.componente == comp,
-                                  Gasto.mes == mes_dev, Gasto.anio == anio_dev)
-                          .first())
-                    if g2 is not None and g2.id != g.id:
-                        # Si ya existe uno en ese periodo, conservarlo
-                        g = g2
-                    else:
-                        g.mes = mes_dev
-                        g.anio = anio_dev
-                elif g is None:
-                    g = gasto_planilla(comp, mes_dev, anio_dev)
                 if g is None:
                     n_orden = (db.session.query(db.func.coalesce(
                         db.func.max(Gasto.orden), 0)).scalar()) + 1
                     g = Gasto(tipo_doc="PLLA", num_doc=num_doc, clasificador=clasif,
-                              componente=comp, mes=mes_dev, anio=anio_dev,
+                              componente=comp, mes=mes, anio=anio,
                               devengado=True, orden=n_orden)
                     db.session.add(g)
                 g.fecha = fecha
+                if hasattr(g, "fecha_devengado"):
+                    g.fecha_devengado = fecha
                 g.siaf = siaf
                 g.num_doc = num_doc
                 g.proveedor = proveedor
@@ -4750,7 +4736,7 @@ def registrar_rutas(app):
                     g.detalles.append(GastoDetalle(orden=1))
                 d = g.detalles[0]
                 d.detalle = (f"PLANILLA DE PAGO CORRESPONDIENTE AL MES DE "
-                             f"{MESES[mes_dev - 1]} {anio_dev}")
+                             f"{MESES[mes - 1]} {anio}")
                 d.und = "PLLA"
                 d.cantidad = 1
                 d.precio_unitario = monto
@@ -4760,7 +4746,7 @@ def registrar_rutas(app):
                 db.session.commit()
                 flash(f"Planilla de {tipo.capitalize()} devengada por "
                       f"S/ {monto:,.2f}.", "success")
-                return redirect(url_for("tareo", mes=mes, anio=anio_dev))
+                return redirect(url_for("tareo", mes=mes, anio=anio))
         tmpl = "_tareo_devengar_form.html" if es_modal else "tareo_devengar.html"
         if error:
             return render_template(tmpl, p=p, mes=mes, anio=anio, tipo=tipo,
