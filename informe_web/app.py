@@ -4568,6 +4568,14 @@ def registrar_rutas(app):
         tipo = (request.form.get("tipo", "") or "").strip().upper()
         if tipo not in ("OBRERO", "TECNICO"):
             tipo = None
+        if tipo:
+            comp = "Costo Directo" if tipo == "OBRERO" else "Gastos Generales"
+            if gasto_planilla(comp, mes, anio) and not es_super_actual():
+                msg = "La planilla ya está devengada. No se puede modificar el tareo."
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"ok": False, "msg": msg}), 403
+                flash(msg, "error")
+                return redirect(url_for("tareo", mes=mes, anio=anio))
         calendario = calendario_mes(anio, mes)
         n_dias = len(calendario)
         q = Trabajador.query.filter(Trabajador.mes == mes, Trabajador.anio == anio)
@@ -4647,6 +4655,12 @@ def registrar_rutas(app):
                 anio = fanio
         except (TypeError, ValueError):
             pass
+        if gasto_planilla("Costo Directo", mes, anio) and not es_super_actual():
+            flash("La planilla de obreros ya está devengada. No se puede copiar al tareo.", "error")
+            return redirect(url_for("tareo", mes=mes, anio=anio))
+        if gasto_planilla("Gastos Generales", mes, anio) and not es_super_actual():
+            flash("La planilla de técnicos ya está devengada. No se puede copiar al tareo.", "error")
+            return redirect(url_for("tareo", mes=mes, anio=anio))
         mes_ant, anio_ant = (12, anio - 1) if mes == 1 else (mes - 1, anio)
         if Trabajador.query.filter(Trabajador.mes == mes,
                                    Trabajador.anio == anio).count() > 0:
