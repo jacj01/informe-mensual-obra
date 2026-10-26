@@ -5,13 +5,20 @@
 
 <div class="sec-titulo">II. Cronograma actualizado de ejecución</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 24%;">
+    <col style="width: 18%;">
+    <col style="width: 18%;">
+    <col style="width: 20%;">
+    <col style="width: 20%;">
+  </colgroup>
   <thead>
     <tr>
-      <th>Mes</th>
-      <th class="num">% Programado acum.</th>
-      <th class="num">% Ejecutado acum.</th>
-      <th class="num">Ejecutado real (S/)</th>
-      <th class="num">Ejecutado acum. (S/)</th>
+      <th scope="col">Mes</th>
+      <th scope="col" class="num">% Programado acum.</th>
+      <th scope="col" class="num">% Ejecutado acum.</th>
+      <th scope="col" class="num">Ejecutado real (S/)</th>
+      <th scope="col" class="num">Ejecutado acum. (S/)</th>
     </tr>
   </thead>
   <tbody>
@@ -92,8 +99,12 @@
 </div>
 
 <table class="tabla">
+  <colgroup>
+    <col style="width: 70%;">
+    <col style="width: 30%;">
+  </colgroup>
   <thead>
-    <tr><th>Indicador</th><th class="num">Valor</th></tr>
+    <tr><th scope="col">Indicador</th><th scope="col" class="num">Valor</th></tr>
   </thead>
   <tbody>
     <tr><td>Monto del Expediente Técnico (S/)</td><td class="num">{{ "{:,.2f}".format(resumen.totales.et) }}</td></tr>

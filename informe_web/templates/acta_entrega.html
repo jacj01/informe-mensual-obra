@@ -160,7 +160,7 @@
             <td class="wrap strong">{{ item.descripcion }}</td>
             <td class="ctr">{{ item.und }}</td>
             <td class="num">{{ "{:,.2f}".format(item.cantidad) }}</td>
-            <td class="num">{{ "S/ {:,.2f}".format(item.pu) }}</td>
+            <td class="num">S/ {% if item.pu %}{% if ((item.pu * 1000000) % 1) != 0 %}{{ "{0:g}".format(item.pu) }}{% else %}{{ "{:,.2f}".format(item.pu) }}{% endif %}{% else %}{{ "{:,.2f}".format(0) }}{% endif %}</td>
             <td class="num strong">{{ "S/ {:,.2f}".format(item.valor) }}</td>
             <td class="ctr">
               <select class="estado-select" data-material="{{ item.descripcion }}">

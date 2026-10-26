@@ -5,24 +5,31 @@
 
 <div class="sec-titulo">II. Ampliaciones de plazo</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 8%;">
+    <col style="width: 34%;">
+    <col style="width: 18%;">
+    <col style="width: 20%;">
+    <col style="width: 20%;">
+  </colgroup>
   <thead>
     <tr>
-      <th>N°</th>
-      <th>Resolución / documento</th>
-      <th class="num">Días otorgados</th>
-      <th>Fecha de aprobación</th>
-      <th>Nueva fecha de término</th>
+      <th scope="col" class="ctr">N°</th>
+      <th scope="col">Resolución / documento</th>
+      <th scope="col" class="num">Días otorgados</th>
+      <th scope="col" class="ctr">Fecha de aprobación</th>
+      <th scope="col" class="ctr">Nueva fecha de término</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>1</td>
+      <td class="ctr">1</td>
       <td>{{ p.n_resolucion_adicional or '__________' }}</td>
       <td class="num">{{ p.dias_ampliacion or 0 }}</td>
-      <td>__________</td>
-      <td>{% if p.nuevo_final_obra %}{{ p.nuevo_final_obra.strftime('%d/%m/%Y') }}{% else %}__________{% endif %}</td>
+      <td class="ctr">__________</td>
+      <td class="ctr">{% if p.nuevo_final_obra %}{{ p.nuevo_final_obra.strftime('%d/%m/%Y') }}{% else %}__________{% endif %}</td>
     </tr>
-    <tr><td>2</td><td>__________</td><td class="num">____</td><td>__________</td><td>__________</td></tr>
+    <tr><td class="ctr">2</td><td>__________</td><td class="num">____</td><td class="ctr">__________</td><td class="ctr">__________</td></tr>
   </tbody>
 </table>
 <p class="sec-parrafo">Plazo de ejecución original:
@@ -31,8 +38,13 @@ al {% if p.fecha_fin %}{{ p.fecha_fin.strftime('%d/%m/%Y') }}{% else %}____{% en
 
 <div class="sec-titulo">III. Anotaciones en el cuaderno de obra</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 18%;">
+    <col style="width: 20%;">
+    <col style="width: 62%;">
+  </colgroup>
   <thead>
-    <tr><th>Asiento N°</th><th>Fecha</th><th>Descripción</th></tr>
+    <tr><th scope="col">Asiento N°</th><th scope="col">Fecha</th><th scope="col">Descripción</th></tr>
   </thead>
   <tbody>
     <tr><td>1</td><td>__________</td><td>{{ av.get('asiento1') or '__________' }}</td></tr>
@@ -45,8 +57,12 @@ al {% if p.fecha_fin %}{{ p.fecha_fin.strftime('%d/%m/%Y') }}{% else %}____{% en
 
 <div class="sec-titulo">V. Análisis y verificación</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 50%;">
+    <col style="width: 50%;">
+  </colgroup>
   <thead>
-    <tr><th>Aspecto</th><th>Sustento</th></tr>
+    <tr><th scope="col">Aspecto</th><th scope="col">Sustento</th></tr>
   </thead>
   <tbody>
     <tr><td>Causal de ampliación acreditada</td><td>Cuaderno de obra / informes</td></tr>

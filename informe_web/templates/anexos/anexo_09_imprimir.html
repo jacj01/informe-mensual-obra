@@ -12,13 +12,20 @@
 
 <div class="sec-titulo">III. Presupuesto de obra y previsión presupuestal</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 36%;">
+    <col style="width: 16%;">
+    <col style="width: 16%;">
+    <col style="width: 16%;">
+    <col style="width: 16%;">
+  </colgroup>
   <thead>
     <tr>
-      <th>Componente / Genérica</th>
-      <th class="num">Monto del Expediente Técnico (S/)</th>
-      <th class="num">PIM (S/)</th>
-      <th class="num">Ejecutado (S/)</th>
-      <th class="num">Saldo (S/)</th>
+      <th scope="col">Componente / Genérica</th>
+      <th scope="col" class="num">Monto del Expediente Técnico (S/)</th>
+      <th scope="col" class="num">PIM (S/)</th>
+      <th scope="col" class="num">Ejecutado (S/)</th>
+      <th scope="col" class="num">Saldo (S/)</th>
     </tr>
   </thead>
   <tbody>
@@ -45,8 +52,13 @@
 
 <div class="sec-titulo">IV. Certificaciones y notas de modificación</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 45%;">
+    <col style="width: 35%;">
+    <col style="width: 20%;">
+  </colgroup>
   <thead>
-    <tr><th>Tipo de documento</th><th>N° / fecha</th><th class="num">Monto (S/)</th></tr>
+    <tr><th scope="col">Tipo de documento</th><th scope="col">N° / fecha</th><th scope="col" class="num">Monto (S/)</th></tr>
   </thead>
   <tbody>
     <tr><td>Certificación de crédito presupuestario</td><td>{{ av.get('cert_credito') or '__________' }}</td><td class="num">{{ num(av.get('cert_monto')) }}</td></tr>

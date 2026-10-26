@@ -201,7 +201,7 @@
     <thead><tr><th>N.°</th><th>Descripción del insumo</th><th class="ctr">Und.</th><th class="num">Cantidad</th><th class="num">P.U. (S/)</th><th class="num">Valor (S/)</th></tr></thead>
     <tbody>
       {% for s in sobrantes %}
-      <tr><td class="ctr">{{ loop.index }}</td><td>{{ s.descripcion }}</td><td class="ctr">{{ s.und }}</td><td class="num">{{ "{:,.2f}".format(s.cantidad) }}</td><td class="num">{{ "{:,.2f}".format(s.pu) }}</td><td class="num">{{ "{:,.2f}".format(s.valor) }}</td></tr>
+      <tr><td class="ctr">{{ loop.index }}</td><td>{{ s.descripcion }}</td><td class="ctr">{{ s.und }}</td><td class="num">{{ "{:,.2f}".format(s.cantidad) }}</td><td class="num">{{ s.pu | pu }}</td><td class="num">{{ "{:,.2f}".format(s.valor) }}</td></tr>
       {% else %}
       <tr><td colspan="6" class="ctr">Sin saldos de materiales por transferir.</td></tr>
       {% endfor %}
@@ -246,7 +246,7 @@
         <td>{{ mv.descripcion }}</td>
         <td class="ctr">{{ mv.und }}</td>
         <td class="num">{{ "{:,.2f}".format(mv.f.cantidad) }}</td>
-        <td class="num">{{ "{:,.2f}".format(mv.f.pu) }}</td>
+        <td class="num">{{ mv.f.pu | pu }}</td>
         <td class="num">{{ "{:,.2f}".format(mv.f.valor) }}</td>
       </tr>
       {% else %}
@@ -268,7 +268,7 @@
         <td>{{ mv.descripcion }}</td>
         <td class="ctr">{{ mv.und }}</td>
         <td class="num">{{ "{:,.2f}".format(mv.f.cantidad) }}</td>
-        <td class="num">{{ "{:,.2f}".format(mv.f.pu) }}</td>
+        <td class="num">{{ mv.f.pu | pu }}</td>
         <td class="num">{{ "{:,.2f}".format(mv.f.valor) }}</td>
         <td>{{ mv.f.proveedor }}</td>
       </tr>

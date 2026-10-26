@@ -5,8 +5,14 @@
 
 <div class="sec-titulo">II. Flujo documentario del expediente técnico</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 26%;">
+    <col style="width: 36%;">
+    <col style="width: 16%;">
+    <col style="width: 22%;">
+  </colgroup>
   <thead>
-    <tr><th>Etapa</th><th>Documento / actuación</th><th>Fecha</th><th>Responsable</th></tr>
+    <tr><th scope="col">Etapa</th><th scope="col">Documento / actuación</th><th scope="col">Fecha</th><th scope="col">Responsable</th></tr>
   </thead>
   <tbody>
     <tr><td>Formulación / elaboración</td><td>{{ av.get('doc_elaboracion') or '__________' }}</td><td>__________</td><td>__________</td></tr>
@@ -19,8 +25,13 @@ S/ {{ "{:,.2f}".format(resumen.totales.et) }}.</p>
 
 <div class="sec-titulo">III. Verificación del contenido del expediente</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 8%;">
+    <col style="width: 76%;">
+    <col style="width: 16%;">
+  </colgroup>
   <thead>
-    <tr><th>N°</th><th>Aspecto a verificar</th><th>Cumple</th></tr>
+    <tr><th scope="col" class="ctr">N°</th><th scope="col">Aspecto a verificar</th><th scope="col" class="ctr">Cumple</th></tr>
   </thead>
   <tbody>
     <tr><td>1</td><td>Memoria descriptiva y especificaciones técnicas completas</td><td>____</td></tr>

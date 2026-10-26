@@ -6,7 +6,7 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="robots" content="{% block robots %}noindex, nofollow{% endblock %}">
   {% set _pag_desc = (self.meta_description() or '')|trim %}
-  <meta name="description" content="{{ _pag_desc or 'Sistema para el registro y control del informe financiero mensual de obra en administración directa de la Municipalidad Distrital de Toraya.' }}">
+  <meta name="description" content="{{ _pag_desc or ('Sistema para el registro y control del informe financiero mensual de obra en administración directa' ~ (' - ' ~ p.entidad if p and p.entidad else '.')) }}">
   <meta name="author" content="INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C.">
   <meta name="application-name" content="Informe Mensual de Obra">
   <meta name="theme-color" content="{{ tema_color or '#1b3a6b' }}">
@@ -850,18 +850,31 @@
       window.dispatchEvent(new Event('resize'));
     });
 
-    // Montos en soles (S/): símbolo decimal '.', 2 decimales, separador de miles ','
+    // Montos en soles (S/): símbolo decimal '.', separador de miles ','
     function _numMonto(valor) {
       var n = parseFloat(String(valor == null ? '' : valor).replace(/,/g, ''));
       return isNaN(n) ? 0 : n;
     }
 
-    function formatearMonto(valor) {
+    function _maxDecimalesInput(inp) {
+      if (!inp) return 2;
+      var d = inp.getAttribute('data-decimales');
+      if (d) return parseInt(d, 10) || 2;
+      var step = inp.getAttribute('step');
+      if (step && (step === '0.000001' || step === 'any')) return 6;
+      if (inp.name === 'precio_unitario' || inp.id === 'precio' || inp.id === 'precio-input') return 6;
+      return 2;
+    }
+
+    function formatearMonto(valor, maxDec, minDec) {
       if (valor === null || valor === undefined) return '';
       var t = String(valor).trim();
       if (t === '') return '';
-      return _numMonto(t).toLocaleString('en-US',
-        { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      var n = parseFloat(t.replace(/,/g, ''));
+      if (isNaN(n)) return '';
+      var max = (maxDec !== undefined) ? maxDec : 2;
+      var min = (minDec !== undefined) ? minDec : Math.min(2, max);
+      return n.toLocaleString('en-US', { minimumFractionDigits: min, maximumFractionDigits: max });
     }
 
     function normalizarMontos(form) {
@@ -871,8 +884,8 @@
     }
 
     function formatearMontos(contenedor) {
-      contenedor.querySelectorAll('.monto').forEach(function (inp) {
-        if (inp.value) inp.value = formatearMonto(inp.value);
+      (contenedor || document).querySelectorAll('.monto').forEach(function (inp) {
+        if (inp.value) inp.value = formatearMonto(inp.value, _maxDecimalesInput(inp));
       });
     }
 
@@ -886,7 +899,7 @@
     document.addEventListener('focusout', function (e) {
       var el = e.target;
       if (el && el.classList && el.classList.contains('monto') && el.value) {
-        el.value = formatearMonto(el.value);
+        el.value = formatearMonto(el.value, _maxDecimalesInput(el));
       }
     });
 

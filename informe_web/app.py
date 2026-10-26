@@ -44,6 +44,7 @@ from models import (db, Proyecto, Presupuesto, Gasto, GastoDetalle,
                     PLANES_SUSCRIPCION, sumar_meses, Anexo)
 import version as _app_version
 import temas as _temas
+from exportadores_excel import build_xl_header
 from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      suscripcion_vigente, suscripcion_usuario, gastos_mes,
                      total_gastos_mes, kpis,
@@ -2645,6 +2646,23 @@ def registrar_rutas(app):
             return f"{int(n):,}"
         return f"{n:,.2f}"
 
+    @app.template_filter("pu")
+    def format_pu(n):
+        """Formatea precios unitarios permitiendo hasta 6 decimales sin ceros superfluos."""
+        if n is None or n == "":
+            return "0.00"
+        try:
+            val = float(n)
+        except (ValueError, TypeError):
+            return str(n)
+        val_red = round(val, 6)
+        if round(val_red, 2) != val_red:
+            return f"{val_red:,.6f}".rstrip("0").rstrip(".")
+        return f"{val:,.2f}"
+
+    app.jinja_env.globals["pu"] = format_pu
+    app.jinja_env.globals["format_pu"] = format_pu
+
     # Exponer utilidades en plantillas (liquidación e informe final).
     app.jinja_env.globals["monto_letras"] = monto_letras
 
@@ -3804,8 +3822,10 @@ def registrar_rutas(app):
             d.detalle = request.form.get("detalle", "").upper()
             d.und = request.form.get("und", "UND").upper()
             try:
-                d.cantidad = float(request.form.get("cantidad", 1) or 1)
-                d.precio_unitario = float(request.form.get("precio_unitario", 0) or 0)
+                raw_cant = str(request.form.get("cantidad", 1) or 1).replace(",", "").strip()
+                raw_pu = str(request.form.get("precio_unitario", 0) or 0).replace(",", "").strip()
+                d.cantidad = float(raw_cant or 1)
+                d.precio_unitario = round(float(raw_pu or 0), 6)
             except ValueError:
                 pass
             if not detalle_id:
@@ -4168,8 +4188,10 @@ def registrar_rutas(app):
             d.detalle = request.form.get("detalle", "").upper()
             d.und = request.form.get("und", "UND").upper()
             try:
-                d.cantidad = float(request.form.get("cantidad", 1) or 1)
-                d.precio_unitario = float(request.form.get("precio_unitario", 0) or 0)
+                raw_cant = str(request.form.get("cantidad", 1) or 1).replace(",", "").strip()
+                raw_pu = str(request.form.get("precio_unitario", 0) or 0).replace(",", "").strip()
+                d.cantidad = float(raw_cant or 1)
+                d.precio_unitario = round(float(raw_pu or 0), 6)
             except ValueError:
                 pass
             if not detalle_id:
@@ -4260,8 +4282,10 @@ def registrar_rutas(app):
             m.fecha = parse_fecha(request.form.get("fecha")) or m.fecha
             m.tipo = request.form.get("tipo", "E")
             try:
-                m.cantidad = float(request.form.get("cantidad", 1) or 1)
-                m.precio_unitario = float(request.form.get("precio_unitario", 0) or 0)
+                raw_cant = str(request.form.get("cantidad", 1) or 1).replace(",", "").strip()
+                raw_pu = str(request.form.get("precio_unitario", 0) or 0).replace(",", "").strip()
+                m.cantidad = float(raw_cant or 1)
+                m.precio_unitario = round(float(raw_pu or 0), 6)
             except ValueError:
                 pass
             m.numero_doc = request.form.get("numero_doc", "").upper()
@@ -4281,7 +4305,7 @@ def registrar_rutas(app):
                 except ValueError:
                     cantidad_salida = 1
                 stock = saldo_insumo(m.descripcion, excluir_id=m.id if mov_id else None)
-                if stock < 0:
+                if stock < -1e-9:
                     alerta = ("ALERTA: el material \"{}\" tiene saldo NEGATIVO "
                               "({:,.2f} {}). No se puede registrar la salida. "
                               "Revise los movimientos de entrada de este material.".format(
@@ -5095,7 +5119,7 @@ def registrar_rutas(app):
             "meta": p.meta,
             "fuente": p.fuente,
             "ubicacion": ubicacion,
-            "modalidad": "ADMINISTRACION DIRECTA",
+            "modalidad": "ADMINISTRACIÓN DIRECTA",
             "residente": p.residente,
             "supervisor": p.supervisor,
             "asistente": p.asistente,
@@ -5169,229 +5193,14 @@ def registrar_rutas(app):
                          info_pairs, responsables, extra_right=None,
                          title_font_size=16, logo_w=60, logo_h=60,
                          header_heights=None, info_cols=None):
-        """Encabezado Excel limpio en 2 secciones (como hoja de impresión).
-
-        header_heights: dict opcional {row_key: height} para sobreescribir alturas.
-            Keys: 'entity'=row1, 'sub'=row2, 'title'=row3, 'subtitle'=row4,
-                  'project'=row6 info, 'pair'=rows7-8, 'resp'=rows responsables.
-        """
-        import math, os as _os
-        from openpyxl.drawing.image import Image as XlImage
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from openpyxl.utils import get_column_letter
-
-        FN = "Calibri"
-        PE = _temas.paleta_excel(get_proyecto().tema or "")
-        AZUL = PE["AZUL"]; AZUL_OSC = PE["AZUL_OSC"]; BG = PE["BG"]; TEXTO2 = PE["TEXTO2"]
-        BLANCO = "FFFFFF"; BORDE = PE["BORDE"]
-
-        thin_o = Side(style="thin", color=AZUL_OSC)
-        border_all = Border(left=thin_o, right=thin_o, top=thin_o, bottom=thin_o)
-        thin_g = Side(style="thin", color=BORDE)
-        border_grid = Border(left=thin_g, right=thin_g, top=thin_g, bottom=thin_g)
-
-        fill_azul = PatternFill("solid", fgColor=AZUL)
-        fill_bg = PatternFill("solid", fgColor=BG)
-        fill_resp = PatternFill("solid", fgColor=PE["TINTE"])
-
-        font_entity = Font(name=FN, size=11, bold=True, color=AZUL_OSC)
-        font_sub = Font(name=FN, size=9, color=TEXTO2)
-        font_title = Font(name=FN, size=title_font_size, bold=True, color=AZUL)
-        font_label = Font(name=FN, size=8, bold=True, color=AZUL_OSC)
-        font_val = Font(name=FN, size=9)
-        font_resp_lab = Font(name=FN, size=7, bold=True, color=BLANCO)
-        font_resp_val = Font(name=FN, size=9)
-        font_extra = Font(name=FN, size=9, bold=True, color=AZUL)
-
-        align_c = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        align_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
-        align_nw = Alignment(horizontal="left", vertical="center", wrap_text=False)
-        align_r = Alignment(horizontal="right", vertical="center", wrap_text=True)
-
-        # ── Logo ──
-        if logosrc and _os.path.isfile(logosrc):
-            try:
-                img = XlImage(logosrc)
-                img.width = logo_w; img.height = logo_h
-                ws.add_image(img, "A1")
-            except Exception:
-                pass
-
-        pcol = get_column_letter(ncols - 1)
-        lcol = get_column_letter(ncols)
-
-        # ── SECCIÓN 1: Encabezado limpio sin bordes alrededor del logo ──
-        ws.merge_cells(f"B1:{pcol}1")
-        c = ws["B1"]; c.value = data.get("entidad", "")
-        c.font = font_entity
-        c.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
-
-        ws.merge_cells(f"B2:{pcol}2")
-        c = ws["B2"]; c.value = data.get("unidad", "")
-        c.font = font_sub; c.alignment = align_c
-
-        ws.merge_cells(f"B3:{pcol}3")
-        c = ws["B3"]; c.value = title.upper()
-        c.font = font_title; c.alignment = Alignment(horizontal="center", vertical="top")
-
-        ws.merge_cells(f"B4:{pcol}4")
-        c = ws["B4"]; c.value = subtitle.upper()
-        c.font = font_sub; c.alignment = align_c
-
-        # Periodo / extra a la derecha — sin borde en encabezado
-        if extra_right:
-            for rn, (val, fnt) in extra_right.items():
-                c = ws.cell(row=rn, column=ncols)
-                c.value = val; c.font = fnt or font_extra
-                c.alignment = align_r
-        elif data.get("periodo"):
-            ws.merge_cells(f"{lcol}2:{lcol}3")
-            c = ws[f"{lcol}2"]; c.value = data["periodo"]
-            c.font = Font(name=FN, size=9, bold=True, color=AZUL)
-            c.alignment = align_r
-
-        # Alturas de encabezado (configurables)
-        hh = header_heights or {}
-        ws.row_dimensions[1].height = hh.get('entity', 28)
-        ws.row_dimensions[2].height = hh.get('sub', 18)
-        ws.row_dimensions[3].height = hh.get('title', 32)
-        ws.row_dimensions[4].height = hh.get('subtitle', 18)
-
-        # ── SECCIÓN 2: Info-grid con cards bordeadas ──
-        info_start = 6
-        mid = ncols // 2
-        mid_col = get_column_letter(mid)
-
-        for i, row_items in enumerate(info_pairs):
-            r = info_start + i
-            n = len(row_items)
-            if info_cols == "left":
-                # Labels A:C, values D+ (no wrap) — FE-05
-                if n == 1:
-                    lbl, val = row_items[0]
-                    ws.merge_cells(f"A{r}:C{r}")
-                    c_l = ws.cell(row=r, column=1, value=lbl)
-                    c_l.font = font_label; c_l.alignment = align_nw
-                    c_l.fill = fill_bg; c_l.border = border_grid
-                    for cc in [2, 3]:
-                        ws.cell(row=r, column=cc).fill = fill_bg
-                        ws.cell(row=r, column=cc).border = border_grid
-                    ws.merge_cells(f"D{r}:{lcol}{r}")
-                    c_v = ws.cell(row=r, column=4, value=val)
-                    c_v.font = font_val; c_v.alignment = align_nw; c_v.border = border_grid
-                    for cc in range(5, ncols + 1):
-                        ws.cell(row=r, column=cc).border = border_grid
-                else:
-                    # Dos mitades: A:C label, D:mid val | mid+1:mid+3 label, mid+4:lastcol val
-                    mid = (ncols + 1) // 2
-                    for idx, (lbl, val) in enumerate(row_items):
-                        if idx == 0:
-                            lbl_s, lbl_e = 1, 3
-                            val_s, val_e = 4, mid
-                        else:
-                            lbl_s, lbl_e = mid + 1, mid + 3
-                            val_s, val_e = mid + 4, ncols
-                        cl1, cl2 = get_column_letter(lbl_s), get_column_letter(lbl_e)
-                        cv1, cv2 = get_column_letter(val_s), get_column_letter(val_e)
-                        ws.merge_cells(f"{cl1}{r}:{cl2}{r}")
-                        c_l = ws.cell(row=r, column=lbl_s, value=lbl)
-                        c_l.font = font_label; c_l.alignment = align_nw
-                        c_l.fill = fill_bg; c_l.border = border_grid
-                        for cc in range(lbl_s + 1, lbl_e + 1):
-                            ws.cell(row=r, column=cc).fill = fill_bg
-                            ws.cell(row=r, column=cc).border = border_grid
-                        ws.merge_cells(f"{cv1}{r}:{cv2}{r}")
-                        c_v = ws.cell(row=r, column=val_s, value=val)
-                        c_v.font = font_val; c_v.alignment = align_nw; c_v.border = border_grid
-                        for cc in range(val_s + 1, val_e + 1):
-                            ws.cell(row=r, column=cc).border = border_grid
-                ws.row_dimensions[r].height = hh.get('pair', 17)
-            elif n == 1:
-                # Ancho completo: label A:B, valor C:lastcol
-                lbl, val = row_items[0]
-                ws.merge_cells(f"A{r}:B{r}")
-                c_l = ws.cell(row=r, column=1, value=lbl)
-                c_l.font = font_label; c_l.alignment = align_l
-                c_l.fill = fill_bg; c_l.border = border_grid
-                ws.cell(row=r, column=2).fill = fill_bg
-                ws.cell(row=r, column=2).border = border_grid
-                ws.merge_cells(f"C{r}:{lcol}{r}")
-                c_v = ws.cell(row=r, column=3, value=val)
-                c_v.font = font_val; c_v.alignment = align_l; c_v.border = border_grid
-                for cc in range(4, ncols + 1):
-                    ws.cell(row=r, column=cc).border = border_grid
-                v_len = len(str(val or ""))
-                nlines = max(1, math.ceil(v_len / 50))
-                ws.row_dimensions[r].height = hh.get('project', max(17, nlines * 14))
-            else:
-                # Dos mitades: par de cards lado a lado
-                # Izq: label A:B, valor C:mid   |   Der: label (mid+1):(mid+2), valor (mid+3):lastcol
-                mid = (ncols + 1) // 2  # split justo (ej: 6 para 11 cols, 10 para 19)
-                for idx, (lbl, val) in enumerate(row_items):
-                    if idx == 0:
-                        col_lbl_s, col_lbl_e = 1, 2
-                        col_val_s, col_val_e = 3, mid
-                    else:
-                        col_lbl_s, col_lbl_e = mid + 1, mid + 2
-                        col_val_s, col_val_e = mid + 3, ncols
-                    cl1 = get_column_letter(col_lbl_s)
-                    cl2 = get_column_letter(col_lbl_e)
-                    cv1 = get_column_letter(col_val_s)
-                    cv2 = get_column_letter(col_val_e)
-                    ws.merge_cells(f"{cl1}{r}:{cl2}{r}")
-                    c_l = ws.cell(row=r, column=col_lbl_s, value=lbl)
-                    c_l.font = font_label; c_l.alignment = align_l
-                    c_l.fill = fill_bg; c_l.border = border_grid
-                    ws.cell(row=r, column=col_lbl_e).fill = fill_bg
-                    ws.cell(row=r, column=col_lbl_e).border = border_grid
-                    ws.merge_cells(f"{cv1}{r}:{cv2}{r}")
-                    c_v = ws.cell(row=r, column=col_val_s, value=val)
-                    c_v.font = font_val; c_v.alignment = align_l; c_v.border = border_grid
-                    for cc in range(col_val_s + 1, col_val_e + 1):
-                        ws.cell(row=r, column=cc).border = border_grid
-                ws.row_dimensions[r].height = hh.get('pair', 17)
-
-        # ── Responsables ──
-        resp_start = info_start + len(info_pairs)
-        resp_col_end = min(5, ncols)
-        resp_merge_end = get_column_letter(resp_col_end)
-        for i, (lab, val) in enumerate(responsables):
-            r = resp_start + i
-            if info_cols == "left":
-                # Labels A:C, values D:lastcol (sin salto) — FE-05
-                ws.merge_cells(f"A{r}:C{r}")
-                c_l = ws.cell(row=r, column=1, value=lab)
-                c_l.font = font_resp_lab; c_l.alignment = align_nw
-                c_l.fill = fill_azul; c_l.border = border_all
-                for cc in [2, 3]:
-                    ws.cell(row=r, column=cc).fill = fill_azul
-                    ws.cell(row=r, column=cc).border = border_all
-                ws.merge_cells(f"D{r}:{lcol}{r}")
-                c_v = ws.cell(row=r, column=4, value=val)
-                c_v.font = font_resp_val; c_v.alignment = align_nw
-                c_v.fill = fill_resp; c_v.border = border_all
-                for cc in range(5, ncols + 1):
-                    ws.cell(row=r, column=cc).fill = fill_resp
-                    ws.cell(row=r, column=cc).border = border_all
-            else:
-                ws.merge_cells(f"A{r}:B{r}")
-                c_l = ws.cell(row=r, column=1, value=lab)
-                c_l.font = font_resp_lab; c_l.alignment = align_l
-                c_l.fill = fill_azul; c_l.border = border_all
-                ws.cell(row=r, column=2).fill = fill_azul
-                ws.cell(row=r, column=2).border = border_all
-                ws.merge_cells(f"C{r}:{resp_merge_end}{r}")
-                c_v = ws.cell(row=r, column=3, value=val)
-                c_v.font = font_resp_val; c_v.alignment = align_l
-                c_v.fill = fill_resp; c_v.border = border_all
-            for cc in range(4, resp_col_end + 1):
-                ws.cell(row=r, column=cc).fill = fill_resp
-                ws.cell(row=r, column=cc).border = border_all
-            for cc in range(resp_col_end + 1, ncols + 1):
-                ws.cell(row=r, column=cc).border = border_grid
-            ws.row_dimensions[r].height = hh.get('resp', 19)
-
-        return resp_start + len(responsables) + 1
+        """Encabezado Excel limpio en 2 secciones (delegado a exportadores_excel)."""
+        return build_xl_header(
+            ws, ncols, title, subtitle, data, logosrc,
+            info_pairs, responsables, extra_right=extra_right,
+            title_font_size=title_font_size, logo_w=logo_w, logo_h=logo_h,
+            header_heights=header_heights, info_cols=info_cols,
+            tema=get_proyecto().tema or ""
+        )
 
     @app.route("/formatos/manifiesto/excel")
     def manifiesto_excel():
@@ -5417,7 +5226,7 @@ def registrar_rutas(app):
             "meta": p.meta or "",
             "fuente": p.fuente or "",
             "ubicacion": ubicacion,
-            "modalidad": "ADMINISTRACION DIRECTA",
+            "modalidad": "ADMINISTRACIÓN DIRECTA",
             "residente": p.residente or "",
             "supervisor": p.supervisor or "",
             "asistente": p.asistente or "",
@@ -5534,11 +5343,13 @@ def registrar_rutas(app):
         ws.print_title_rows = "17:17"
 
         # Columnas ampliadas para ocupar todo el ancho de la hoja A4
-        # (1" margen izq/der => ancho util ~9.7in) sin verse comprimidas
+        # Priorizar Nombre/Proveedor y Detalle del Gasto
         col_widths = {"A": 4, "B": 9, "C": 8, "D": 7, "E": 6,
-                      "F": 22, "G": 34, "H": 5, "I": 7, "J": 11, "K": 14}
+                      "F": 28, "G": 42, "H": 5, "I": 7, "J": 11, "K": 14}
         for letter, w in col_widths.items():
             ws.column_dimensions[letter].width = w
+        for c in ['I','J','K']:
+            ws.column_dimensions[c].number_format = '#,##0.00'
 
         # ── ENCABEZADO (fiel al print.css) ──
         logo_file = os.path.join(app.root_path, "static", hdr["logo_path"]) if hdr["logo_path"] else None
@@ -5613,15 +5424,22 @@ def registrar_rutas(app):
                           align_center_nw, align_left, align_left, align_center_nw,
                           align_right_num, align_right_num, align_right_num]
 
-                for j, (v, al) in enumerate(zip(vals, aligns), 1):
-                    c = ws.cell(row=r, column=j, value=v)
-                    c.font = font_td
-                    c.alignment = al
-                    # Solo aplicar borde si la celda tiene contenido
-                    if v is not None and v != "":
-                        c.border = border_grid
-                    if j in (9, 10, 11) and v:
+        for j, (v, al) in enumerate(zip(vals, aligns), 1):
+            c = ws.cell(row=r, column=j, value=v)
+            c.font = font_td
+            c.alignment = al
+            # Solo aplicar borde si la celda tiene contenido
+            if v is not None and v != "":
+                c.border = border_grid
+            if j in (9, 10, 11) and v:
+                try:
+                    fv = float(v)
+                    if abs(fv * 1000000 - round(fv * 1000000)) > 1e-9:
+                        c.number_format = '#,##0.000000'
+                    else:
                         c.number_format = '#,##0.00'
+                except Exception:
+                    c.number_format = '#,##0.00'
                 # Height: líneas según ancho de col (G=34, F=22) × 14pt
                 v_texto = str(f["detalle"] or "")
                 v_prov = str(proveedor or "")
@@ -6045,7 +5863,7 @@ def registrar_rutas(app):
         info_pairs = [
             [("Proyecto", p.nombre or "")],
             [("Código Único", p.cui or ""), ("Correlativo Meta", p.meta or "")],
-            [("Fuente Financ.", p.fuente or ""), ("Modalidad", "ADMINISTRACION DIRECTA")],
+            [("Fuente Financ.", p.fuente or ""), ("Modalidad", "ADMINISTRACIÓN DIRECTA")],
         ]
         responsables = [
             ("Supervisor de Obra", p.supervisor or ""),
@@ -6055,9 +5873,9 @@ def registrar_rutas(app):
         tabla_start = _build_xl_header(
             ws, ncols,
             "Ejecución Presupuestal Mensual",
-            "Total Costo de Construccion por Adm. Directa",
+            "Total Costo de Construcción por Adm. Directa",
             {"entidad": p.entidad or "", "unidad": p.unidad_ejecutora or "",
-             "periodo": f"PERIODO: {MESES[mes-1]} - {anio}"},
+             "periodo": f"PERÍODO: {MESES[mes-1]} - {anio}"},
             logo_file, info_pairs, responsables,
             header_heights={'resp': 22}, info_cols="left")
 
@@ -6264,7 +6082,7 @@ def registrar_rutas(app):
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        filename = f"FE05_Ejecución_{MESES[mes-1]}_{anio}.xlsx"
+        filename = f"FE05_Ejecucion_{MESES[mes-1]}_{anio}.xlsx"
         return send_file(buf, as_attachment=True, download_name=filename,
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -6396,7 +6214,7 @@ def registrar_rutas(app):
         info_pairs = [
             [("Proyecto", p.nombre or "")],
             [("Código Único", p.cui or ""), ("Correlativo Meta", p.meta or "")],
-            [("Fuente Financ.", p.fuente or ""), ("Modalidad", "ADMINISTRACION DIRECTA")],
+            [("Fuente Financ.", p.fuente or ""), ("Modalidad", "ADMINISTRACIÓN DIRECTA")],
         ]
         responsables = [
             ("Supervisor de Obra", p.supervisor or ""),
@@ -6405,10 +6223,10 @@ def registrar_rutas(app):
         ]
         tabla_start = _build_xl_header(
             ws, ncols,
-            "Cuadro Comparativo Presupuesto Analitico Aprobado y Ejecutado",
-            f"Periodo: {MESES[mes-1]} - {anio}",
+            "Cuadro Comparativo Presupuesto Analítico Aprobado y Ejecutado",
+            f"Período: {MESES[mes-1]} - {anio}",
             {"entidad": p.entidad or "", "unidad": p.unidad_ejecutora or "",
-             "periodo": f"PERIODO: {MESES[mes-1]} - {anio}"},
+             "periodo": f"PERÍODO: {MESES[mes-1]} - {anio}"},
             logo_file, info_pairs, responsables,
             title_font_size=13,
             header_heights={'entity': 22, 'sub': 16, 'title': 24, 'subtitle': 16,
@@ -6800,8 +6618,22 @@ def registrar_rutas(app):
             return redirect(url_for("formatos"))
         mes = param_int("mes", p.mes_actual, lo=1, hi=12)
         anio = p.anio
-        datos = panel_datos(mes, anio)
-        return render_template("panel_imprimir.html", p=p, MESES=MESES, d=datos)
+        d = panel_datos(mes, anio)
+        try:
+            mi = 1
+            if getattr(p, 'fecha_inicio') and p.fecha_inicio:
+                if p.fecha_inicio.year <= anio:
+                    mi = p.fecha_inicio.month
+            if not mi or mi < 1: mi = 1
+            if mi > mes:
+                mc = [mi]
+            else:
+                mc = list(range(mi, mes + 1))
+            if not mc: mc = [mes]
+            d['meses_col'] = mc
+        except Exception:
+            pass
+        return render_template("panel_imprimir.html", p=p, MESES=MESES, d=d)
 
     @app.route("/formatos/panel/excel")
     def panel_excel():
@@ -6816,6 +6648,18 @@ def registrar_rutas(app):
         mes = param_int("mes", p.mes_actual, lo=1, hi=12)
         anio = p.anio
         d = panel_datos(mes, anio)
+        try:
+            from . import helpers as _h
+            mi = _h.mes_inicio_obra()
+            mc = list(range(mi, mes + 1)) if mi and mes >= mi else (d.get('meses_col') or list(range(1, mes + 1)))
+            d['meses_col'] = mc
+        except Exception:
+            try:
+                mi = mes_inicio_obra()
+                mc = list(range(mi, mes + 1)) if mi and mes >= mi else d.get('meses_col')
+                if mc: d['meses_col'] = mc
+            except Exception:
+                pass
 
         PE = _temas.paleta_excel(p.tema or "")
         AZUL = PE["AZUL"]; AZUL_OSC = PE["AZUL_OSC"]; AZUL_CLARO = PE["AZUL_CLARO"]
@@ -6853,8 +6697,15 @@ def registrar_rutas(app):
         align_r_w = Alignment(horizontal="right", vertical="center", wrap_text=True)
 
         num_fmt = '#,##0.00'
-        meses_col = d["meses_col"]
+        try:
+            mi = p.fecha_inicio.month if getattr(p, 'fecha_inicio') else 1
+            if not mi or mi < 1:
+                mi = __import__('informe_web.helpers', fromlist=['mes_inicio_obra']).mes_inicio_obra()
+            meses_col = list(range(mi, mes + 1)) if mi and mes >= mi else d.get("meses_col") or list(range(1, mes + 1))
+        except Exception:
+            meses_col = d.get("meses_col") or list(range(1, mes + 1))
         ncols = max(7, 2 + len(meses_col))
+        d["meses_col"] = meses_col
 
         wb = Workbook()
         ws = wb.active
@@ -6870,15 +6721,13 @@ def registrar_rutas(app):
         ws.page_margins.top = 0.4
         ws.page_margins.bottom = 0.5
 
-        anchos = {1: 15, 2: 46}
+        anchos = {1: 14, 2: 52}
         for j in range(3, ncols + 1):
-            anchos[j] = 12
-        for j in range(3, 3 + len(meses_col)):
-            anchos[j] = 10
+            anchos[j] = 11
         for j in range(1, ncols + 1):
-            ws.column_dimensions[get_column_letter(j)].width = anchos.get(j, 12)
+            ws.column_dimensions[get_column_letter(j)].width = anchos.get(j, 11)
         last_col = get_column_letter(ncols)
-        total_w = sum(anchos.get(j, 12) for j in range(1, ncols + 1))
+        total_w = sum(anchos.get(j, 11) for j in range(1, ncols + 1))
 
         def _h(texto, size=9, min_h=15):
             if not texto:
@@ -6964,7 +6813,7 @@ def registrar_rutas(app):
             [("Entidad Ejecutora", p.entidad or ""),
              ("Unidad Ejecutora", p.unidad_ejecutora or "")],
             [("Ubicación", d["ubicacion"])],
-            [("Presupuesto segun Expediente Tecnico",
+            [("Presupuesto según Expediente Técnico",
               f"S/ {d['presupuesto_et']:,.2f}"),
              ("Costo Directo", f"S/ {d['costo_directo']:,.2f}")],
             [("Rubro", p.rubro or ""),
@@ -6978,9 +6827,9 @@ def registrar_rutas(app):
         r = _build_xl_header(
             ws, ncols,
             "Resumen Financiero",
-            f"Periodo: {d['mes_nombre']} - {anio}",
+            f"Período: {d['mes_nombre']} - {anio}",
             {"entidad": p.entidad or "", "unidad": p.unidad_ejecutora or "",
-             "periodo": f"PERIODO: {d['mes_nombre']} - {anio}"},
+             "periodo": f"PERÍODO: {d['mes_nombre']} - {anio}"},
             logo_file, info_pairs, responsables,
             title_font_size=14,
             header_heights={'entity': 22, 'sub': 15, 'title': 24, 'subtitle': 15,
@@ -7018,8 +6867,9 @@ def registrar_rutas(app):
         r += 1
 
         # ── III. Devengado Mensual ──
+        mes_ini = meses_col[0] if meses_col else 1
         r = band(r, "III. DEVENGADO MENSUAL", 1)
-        r = th_row(r, [(f"Gasto devengado {MESES[0]} a {MESES[mes-1]} (S/)",
+        r = th_row(r, [(f"Gasto devengado {MESES[mes_ini-1]} a {MESES[mes-1]} (S/)",
                         ncols, align_c)])
         r = th_row(r, [("Clasificador", 1, align_c),
                        ("Descripción del Gasto", 1, align_l_nw)]
@@ -7032,18 +6882,32 @@ def registrar_rutas(app):
             for f in filas_act:
                 celdas = [(f["clas"], 1, align_l_nw, None),
                           (f["detalle"], 1, align_l, None)]
-                celdas += [(v, 1, align_r, num_fmt) for v in f["valores"]]
+                vals = f.get("valores") or []
+                celdas += [(vals[i] if i < len(vals) else 0.0, 1, align_r, num_fmt) for i in range(len(meses_col))]
                 r = td_row(r, celdas)
         tot3 = [("TOTAL", 2, align_r, None)]
-        tot3 += [(v, 1, align_r, num_fmt) for v in d["dev_mensual_total"]]
+        tvals = d.get("dev_mensual_total") or []
+        # recompute totals for meses_col
+        if len(tvals) != len(meses_col):
+            tvals_new = []
+            for i in range(len(meses_col)):
+                s = 0.0
+                for grupo in d["dev_mensual"]:
+                    for f in grupo["filas"]:
+                        v = f.get("valores") or []
+                        if i < len(v): s += v[i]
+                tvals_new.append(round(s, 2))
+            tvals = tvals_new
+        tot3 += [(tvals[i] if i < len(tvals) else 0.0, 1, align_r, num_fmt) for i in range(len(meses_col))]
         r = td_row(r, tot3, kind="total")
         r += 1
 
         # ── IV. Devengado hasta el mes ──
+        mes_ini = meses_col[0] if meses_col else 1
         r = band(r, f"IV. DEVENGADO HASTA EL MES DE {d['mes_nombre']} {anio}", 1)
         r = th_row(r, [("Clasificador", 1, align_c),
                        ("Descripción del Gasto", 1, align_l_nw),
-                       (f"Gasto devengado {MESES[0]} a {MESES[mes-1]} (S/.)",
+                       (f"Gasto devengado {MESES[mes_ini-1]} a {MESES[mes-1]} (S/.)",
                         ncols - 2, align_r)])
         for grupo in d["dev_acum"]:
             filas_act = [f for f in grupo["filas"] if f["acum"] > 0]
@@ -7063,7 +6927,7 @@ def registrar_rutas(app):
         r = th_row(r, [("Clasificador", 1, align_c),
                        ("Descripción del Gasto", 1, align_l_nw),
                        (f"Presupuesto Anual (PIN {anio}) (S/.)", 1, align_r_w),
-                       (f"Gasto devengado {MESES[0]} a {MESES[mes-1]} (S/.)", 1, align_r_w),
+                       (f"Gasto devengado {MESES[mes_ini-1]} a {MESES[mes-1]} (S/.)", 1, align_r_w),
                        ("% Ejecución Presupuestal Anual (Gasto/PIN)",
                         ncols - 4, align_r_w)])
         for f in d["resumen_dev"]:
@@ -7274,13 +7138,20 @@ def registrar_rutas(app):
             sal = sum(r["mov"].cantidad or 0 for r in rows if r["mov"].tipo == "S")
             val_ent = sum(r["importe"] for r in rows if r["mov"].tipo == "E")
             val_sal = sum((r["mov"].cantidad or 0) * (r["mov"].precio_unitario or 0) for r in rows if r["mov"].tipo == "S")
+            saldo_k = round(info["balance"], 2)
+            valor_saldo_k = round(val_ent - val_sal, 2)
+            if saldo_k <= 0.0001:
+                saldo_k = 0.0
+                valor_saldo_k = 0.0
+            else:
+                valor_saldo_k = max(0.0, valor_saldo_k)
             items.append({
                 "descripcion": key[0], "und": key[1], "movs": len(rows),
                 "cant_in": round(ent, 2), "cant_out": round(sal, 2),
-                "saldo": round(info["balance"], 2),
+                "saldo": saldo_k,
                 "valor_in": round(val_ent, 2),
                 "valor_out": round(val_sal, 2),
-                "valor_saldo": round(val_ent - val_sal, 2),
+                "valor_saldo": valor_saldo_k,
                 "rows": rows,
             })
         return render_template("kardex.html", p=p, mes=mes, anio=anio,
@@ -7323,6 +7194,11 @@ def registrar_rutas(app):
             info = inv[key]
             saldo = round(info["cant_in"] - info["cant_out"], 2)
             valor_saldo = round(info["valor_in"] - info["valor_out"], 2)
+            if saldo <= 0.0001:
+                saldo = 0.0
+                valor_saldo = 0.0
+            else:
+                valor_saldo = max(0.0, valor_saldo)
             items.append({
                 "descripcion": key,
                 "und": info["und"],
@@ -7330,7 +7206,7 @@ def registrar_rutas(app):
                 "cant_in": round(info["cant_in"], 2),
                 "cant_out": round(info["cant_out"], 2),
                 "saldo": saldo,
-                "pu": round(info["ult_precio"], 2) if saldo > 0 else 0.0,
+                "pu": round(info["ult_precio"], 6) if saldo > 0 else 0.0,
                 "valor_in": round(info["valor_in"], 2),
                 "valor_out": round(info["valor_out"], 2),
                 "valor_saldo": valor_saldo,
@@ -7427,6 +7303,11 @@ def registrar_rutas(app):
             info = inv[key]
             saldo = round(info["cant_in"] - info["cant_out"], 2)
             valor_saldo = round(info["valor_in"] - info["valor_out"], 2)
+            if saldo <= 0.0001:
+                saldo = 0.0
+                valor_saldo = 0.0
+            else:
+                valor_saldo = max(0.0, valor_saldo)
             items.append({
                 "descripcion": key,
                 "und": info["und"],
@@ -7434,7 +7315,7 @@ def registrar_rutas(app):
                 "cant_in": round(info["cant_in"], 2),
                 "cant_out": round(info["cant_out"], 2),
                 "saldo": saldo,
-                "pu": round(info["ult_precio"], 2) if saldo > 0 else 0.0,
+                "pu": round(info["ult_precio"], 6) if saldo > 0 else 0.0,
                 "valor_in": round(info["valor_in"], 2),
                 "valor_out": round(info["valor_out"], 2),
                 "valor_saldo": valor_saldo,

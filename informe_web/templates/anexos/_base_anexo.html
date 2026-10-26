@@ -22,7 +22,7 @@
       margin: 5px 0 2px;
     }
     .sec-sub { font-size: 9.6pt; font-weight: 700; color: var(--azul-osc); margin: 6px 0 3px; }
-    .sec-parrafo { font-size: 9.4pt; line-height: 1.3; color: var(--texto); text-align: justify; margin: 1px 0; white-space: pre-wrap; }
+    .sec-parrafo { font-size: 9.4pt; line-height: 1.35; color: var(--texto); text-align: justify; text-justify: inter-word; margin: 2px 0; white-space: normal; }
     .hint { font-size: 8pt; font-style: italic; color: var(--texto2); }
     .campo {
       display: inline-block; border-bottom: 1px dotted #6b7280;
@@ -37,7 +37,23 @@
     .opciones span { margin-right: 20px; }
     .lista-num { margin: 3px 0; padding-left: 0; list-style: none; font-size: 9.5pt; line-height: 1.4; }
     .lista-num li { margin: 2px 0; padding-left: 22px; text-indent: -22px; }
-    table.tabla td, table.tabla th { font-size: 7.9pt; padding: 1.5px 4px; line-height: 1.25; }
+    table.tabla {
+      table-layout: fixed;
+      width: 100%;
+      box-sizing: border-box;
+      border-collapse: collapse;
+    }
+    table.tabla td, table.tabla th {
+      box-sizing: border-box;
+      font-size: 7.9pt;
+      padding: 1.5px 4px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    table.tabla td.num, table.tabla th.num {
+      white-space: nowrap;
+      text-align: right;
+    }
     table.tabla td.cto { width: 34%; }
     .info-grid { gap: 3px 9px; margin: 4px 0 3px; }
     .info-label { font-size: 7pt; padding: 2.5px 7px; }
@@ -59,7 +75,7 @@
     <h2>Anexo N° {{ ax.codigo }} &middot; {{ ax.corto }}</h2>
     <div class="spacer"></div>
     <button type="button" onclick="window.print()">Imprimir</button>
-    <a class="volver" href="{{ url_for('anexos') }}">Volver</a>
+    <a class="volver" href="{{ url_for('anexos', mes=mes, anio=anio) }}" onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;">Volver</a>
   </div>
 
   <div class="hoja">

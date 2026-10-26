@@ -7,7 +7,18 @@
 {%- endmacro %}
 
 {% macro parrafo(v, hint='') -%}
-<p class="sec-parrafo">{% if v and v|string|trim %}{{ v }}{% elif hint %}<span class="hint">{{ hint }}</span>{% else %}&nbsp;{% endif %}</p>
+{% if v and v|string|trim -%}
+  {% for bloque in (v|string).replace('\r\n', '\n').split('\n\n') -%}
+    {% set b = bloque|trim -%}
+    {% if b -%}
+<p class="sec-parrafo">{{ b }}</p>
+    {%- endif %}
+  {%- endfor %}
+{%- elif hint -%}
+<p class="sec-parrafo"><span class="hint">{{ hint }}</span></p>
+{%- else -%}
+<p class="sec-parrafo">&nbsp;</p>
+{%- endif %}
 {%- endmacro %}
 
 {% macro check(v) -%}

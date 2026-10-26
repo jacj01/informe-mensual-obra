@@ -1,8 +1,8 @@
   <!-- ===================== TABLA FINANCIERA ===================== -->
   <table class="tabla">
     <colgroup>
-      <col style="min-width:20px"><col style="min-width:55px"><col style="min-width:48px"><col style="min-width:40px"><col style="min-width:38px">
-      <col style="min-width:130px"><col style="min-width:200px"><col style="min-width:28px"><col style="min-width:42px"><col style="min-width:55px"><col style="min-width:60px">
+      <col style="width:4%"><col style="width:7%"><col style="width:6%"><col style="width:5%"><col style="width:5%">
+      <col style="width:18%"><col style="width:32%"><col style="width:4%"><col style="width:6%"><col style="width:7%"><col style="width:8%">
     </colgroup>
     <thead>
       <tr>
@@ -27,8 +27,8 @@
         <td>{{ f.detalle }}</td>
         <td class="ctr">{{ f.und }}</td>
         <td class="num">{{ "{:,.2f}".format(f.cantidad) if f.cantidad else '' }}</td>
-        <td class="num">{{ "{:,.2f}".format(f.pu) if f.pu else '' }}</td>
-        <td class="num">{{ "{:,.2f}".format(f.importe) }}</td>
+        <td class="num">{% if f.pu %}{% if ((f.pu * 1000000) % 1) != 0 %}{{ "{0:g}".format(f.pu) }}{% else %}{{ "{:,.2f}".format(f.pu) }}{% endif %}{% endif %}</td>
+        <td class="num">{% if ((f.importe * 1000000) % 1) != 0 %}{{ "{0:g}".format(f.importe) }}{% else %}{{ "{:,.2f}".format(f.importe) }}{% endif %}</td>
       </tr>
       {% endfor %}
       <tr class="fila-sub">

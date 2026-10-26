@@ -9,12 +9,18 @@ cumplimiento del expediente técnico, la calidad de los trabajos y la valorizaci
 
 <div class="sec-titulo">III. Evaluación del avance por componente</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 46%;">
+    <col style="width: 20%;">
+    <col style="width: 20%;">
+    <col style="width: 14%;">
+  </colgroup>
   <thead>
     <tr>
-      <th>Componente</th>
-      <th class="num">Exp. Técnico (S/)</th>
-      <th class="num">Ejecutado acumulado (S/)</th>
-      <th class="num">Avance (%)</th>
+      <th scope="col">Componente</th>
+      <th scope="col" class="num">Exp. Técnico (S/)</th>
+      <th scope="col" class="num">Ejecutado acumulado (S/)</th>
+      <th scope="col" class="num">Avance (%)</th>
     </tr>
   </thead>
   <tbody>
@@ -49,8 +55,13 @@ cumplimiento del expediente técnico, la calidad de los trabajos y la valorizaci
 {% set mani_n = manifiesto|length %}
 {% set mani_total = "{:,.2f}".format(manifiesto|sum(attribute='importe')) %}
 <table class="tabla">
+  <colgroup>
+    <col style="width: 28%;">
+    <col style="width: 32%;">
+    <col style="width: 40%;">
+  </colgroup>
   <thead>
-    <tr><th>Aspecto verificado</th><th>Fuente de verificación</th><th>Observación</th></tr>
+    <tr><th scope="col">Aspecto verificado</th><th scope="col">Fuente de verificación</th><th scope="col">Observación</th></tr>
   </thead>
   <tbody>
     <tr><td>Materiales adquiridos</td><td>Órdenes de compra / guías de remisión</td>

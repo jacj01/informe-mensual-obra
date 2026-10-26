@@ -197,7 +197,7 @@
         <td colspan="4" class="det-txt">{{ d.detalle }}</td>
         <td class="ctr">{{ d.und }}</td>
         <td class="num">{{ "{:,.2f}".format(d.cantidad) }}</td>
-        <td colspan="2" class="num">{{ "{:,.2f}".format(d.precio_unitario) }}</td>
+        <td colspan="2" class="num">{{ d.precio_unitario | pu }}</td>
         <td class="num strong">S/ {{ "{:,.2f}".format(d.importe) }}</td>
       </tr>
       {% else %}

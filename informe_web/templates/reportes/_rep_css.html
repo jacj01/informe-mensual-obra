@@ -34,6 +34,14 @@
 .r-manifiesto table.tabla th, .r-manifiesto table.tabla td { padding: 2.5px 3px; }
 .r-manifiesto .firmas { margin-top: 56px; }
 .r-manifiesto table.tabla tr.fila-mes td { background: var(--azul-claro); color: #fff; font-weight: 800; font-size: 8.2pt; text-transform: uppercase; letter-spacing: .5px; padding: 4px 6px; }
+/* Priorizar ancho de Nombre/Proveedor y Detalle del Gasto */
+.r-manifiesto table.tabla th:nth-child(6),
+.r-manifiesto table.tabla td:nth-child(6) { min-width: 160px; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+.r-manifiesto table.tabla th:nth-child(7),
+.r-manifiesto table.tabla td:nth-child(7) { min-width: 260px; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+.r-manifiesto table.tabla td.num, .r-manifiesto table.tabla th.num { white-space: nowrap; }
+.r-manifiesto table.tabla td { white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+.r-manifiesto table.tabla th { white-space: normal; }
 
 /* ---------- FE-05 Ejecución Presupuestal Mensual ---------- */
 .r-fe05 table.tabla { margin-top: 3px; table-layout: auto; }

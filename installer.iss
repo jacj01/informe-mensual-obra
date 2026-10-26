@@ -4,7 +4,7 @@
 
 #define MyAppName "Informe Mensual de Obra"
 #ifndef MyAppVersion
-#define MyAppVersion "1.3.1"
+#define MyAppVersion "1.4.2"
 #endif
 #define MyAppPublisher "INGENIERIA DE LA CONSTRUCCION PROYECTOS Y ASESORIA S.A.C."
 #define MyAppURL "https://github.com/jacj01/informe-mensual-obra"

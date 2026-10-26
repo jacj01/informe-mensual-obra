@@ -24,6 +24,7 @@ from urllib.request import urlopen
 BASE = Path(__file__).resolve().parent
 if str(BASE) not in sys.path:
     sys.path.insert(0, str(BASE))
+os.chdir(str(BASE))
 LOG = BASE / "servidor.log"
 PID = BASE / "servidor.pid"
 
@@ -127,8 +128,33 @@ def abrir_cliente():
             return 3
 
 
+def liberar_puerto(puerto):
+    """Localiza y detiene cualquier proceso que este ocupando el puerto TCP."""
+    try:
+        cmd = f"netstat -ano -p tcp | findstr :{puerto}"
+        salida = subprocess.check_output(cmd, shell=True, text=True, creationflags=0x08000000)
+        pids_detenidos = set()
+        for linea in salida.strip().splitlines():
+            partes = linea.split()
+            if len(partes) >= 5 and "LISTENING" in partes:
+                try:
+                    pid = int(partes[-1])
+                    if pid != os.getpid() and pid > 0 and pid not in pids_detenidos:
+                        subprocess.run(["taskkill", "/PID", str(pid), "/F"],
+                                       capture_output=True, check=False,
+                                       creationflags=0x08000000)
+                        pids_detenidos.add(pid)
+                        log.info("Proceso en puerto %s detenido (PID %s)", puerto, pid)
+                except ValueError:
+                    continue
+        if pids_detenidos:
+            time.sleep(0.3)
+    except Exception:
+        pass
+
+
 def detener_anterior():
-    """Detiene una instancia previa del servidor si sigue activa."""
+    """Detiene una instancia previa del servidor si sigue activa y libera el puerto."""
     if PID.exists():
         try:
             old = int(PID.read_text().strip())
@@ -139,9 +165,17 @@ def detener_anterior():
                 subprocess.run(["taskkill", "/PID", str(old), "/F"],
                                capture_output=True, check=False,
                                creationflags=0x08000000)
-                log.info("Instancia anterior detenida (PID %s)", old)
+                log.info("Instancia anterior detenida por PID (%s)", old)
             except Exception:
                 pass
+        try:
+            PID.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    # Asegura liberar el puerto si un proceso sigue ocupandolo
+    if puerto_en_uso(host, port):
+        liberar_puerto(port)
 
 
 def puerto_en_uso(host_, port_):
@@ -173,18 +207,25 @@ def main():
     if es_cliente():
         sys.exit(abrir_cliente())
 
-    # Ya hay un servidor sano: solo abre el navegador (inicio casi instantaneo).
-    if servidor_sano():
+    # Por defecto reinicia para garantizar que los cambios en plantillas/codigo
+    # se reflejen de inmediato, evitando servidores con memoria obsoleta.
+    reiniciar = "--no-reiniciar" not in sys.argv
+
+    if reiniciar:
+        log.info("Reinicio automatico solicitado; cerrando instancia anterior...")
+        detener_anterior()
+    elif servidor_sano():
         log.info("Servidor ya activo; abriendo navegador.")
         abrir_navegador(URL)
         return
-
-    detener_anterior()
+    else:
+        detener_anterior()
 
     if puerto_en_uso(host, port):
-        if servidor_sano():
-            abrir_navegador(URL)
-            return
+        liberar_puerto(port)
+        time.sleep(0.3)
+
+    if puerto_en_uso(host, port):
         log.error("El puerto %s ya esta en uso (algun servidor previo lo ocupa). "
                   "Cierre los navegadores y ejecute detener_servidor.bat.", port)
         sys.exit(2)

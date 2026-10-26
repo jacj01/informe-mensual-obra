@@ -10,8 +10,12 @@ al artículo 34 de la Ley N° 30225, acreditado con la documentación sustentato
 
 <div class="sec-titulo">III. Cálculo de los mayores gastos generales</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 72%;">
+    <col style="width: 28%;">
+  </colgroup>
   <thead>
-    <tr><th>Concepto</th><th class="num">Monto / valor</th></tr>
+    <tr><th scope="col">Concepto</th><th scope="col" class="num">Monto / valor</th></tr>
   </thead>
   <tbody>
     <tr><td>Gastos generales del presupuesto de obra (S/)</td><td class="num">{{ "{:,.2f}".format(p.gastos_generales or 0) }}</td></tr>

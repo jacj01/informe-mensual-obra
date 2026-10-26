@@ -998,9 +998,25 @@ def panel_datos(mes, anio=None):
     incluir = num_anios > 0
     rows = fe06_rows()
     resumen = fe06_resumen(rows)
-    meses_col = list(range(1, mes + 1))
+    mes_inicio = 1
+    try:
+        if getattr(p, 'fecha_inicio') and p.fecha_inicio:
+            if p.fecha_inicio.year == anio or p.fecha_inicio.year < anio:
+                mes_inicio = p.fecha_inicio.month
+            elif p.fecha_inicio.year == anio:
+                mes_inicio = p.fecha_inicio.month
+    except Exception:
+        pass
+    if not mes_inicio or mes_inicio < 1:
+        mes_inicio = 1
+    if mes_inicio > mes:
+        meses_col = [mes_inicio] if mes_inicio <= 12 else [mes]
+    else:
+        meses_col = list(range(mes_inicio, mes + 1))
+    if not meses_col or len(meses_col) == 0:
+        meses_col = [mes] if mes >= 1 else [1]
     meses_prev = [m for m in meses_col if m < mes]
-    prev = MESES[mes - 2] if mes > 1 else ""
+    prev = MESES[meses_prev[-1] - 1] if meses_prev else (MESES[mes_inicio - 1] if meses_col else "")
 
     def get(comp, clas):
         for r in rows:
@@ -1089,19 +1105,28 @@ def panel_datos(mes, anio=None):
         out = []
         for comp, clas, det in grupos:
             r = get(comp, clas) or {}
+            vals = []
+            for m in meses_col:
+                if r and "mensual" in r and len(r["mensual"]) >= m:
+                    vals.append(round(r["mensual"][m - 1], 2))
+                else:
+                    vals.append(0.0)
             out.append({
                 "clas": r.get("clasificador", clas),
                 "detalle": det,
-                "valores": [round(r["mensual"][m - 1], 2) if r else 0.0 for m in meses_col],
-                "acum": round(sum(r["mensual"][m - 1] for m in meses_col), 2) if r else 0.0,
+                "valores": vals,
+                "acum": round(sum(vals), 2),
             })
         return out
 
     dev_mensual = [{"grupo": comp,
                     "filas": filas_dev([g for g in grupos3 if g[0] == comp])}
                    for comp in COMPONENTES_FE06]
-    dev_mensual_total = [round(sum(r["mensual"][m - 1] for r in rows), 2) for m in meses_col]
-    dev_acum_total = round(sum(r["mensual"][m - 1] for r in rows for m in meses_col), 2)
+    dev_mensual_total = []
+    for i, m in enumerate(meses_col):
+        dev_mensual_total.append(round(sum(f["valores"][i] if i < len(f["valores"]) else 0.0
+                                            for g in dev_mensual for f in g["filas"]), 2))
+    dev_acum_total = round(sum(dev_mensual_total), 2)
 
     # ---------------- V. RESUMEN GASTO DEVENGADO ----------------
     resumen_dev = []
@@ -1438,8 +1463,13 @@ def saldo_insumo(descripcion, excluir_id=None):
         q = q.filter(AlmacenMovimiento.id != excluir_id)
     saldo = 0.0
     for mv in q.all():
-        saldo += (mv.cantidad or 0) if mv.tipo == "E" else -(mv.cantidad or 0)
-    return round(saldo, 2)
+        try:
+            c = float(mv.cantidad or 0)
+        except Exception:
+            c = 0.0
+        saldo += c if mv.tipo == "E" else -c
+    # No redondear prematuramente para evitar errores en comparaciones al 100%
+    return saldo
 
 
 def oc_para_material(descripcion):
@@ -1515,12 +1545,18 @@ def almacen_valorizado(mes, anio):
         saldo = round(cant_in - cant_out, 2)
         valor_in = round(it["valor_in"], 2)
         valor_out = round(it["valor_out"], 2)
-        pu = round(valor_in / cant_in, 2) if cant_in else 0
+        pu = round(valor_in / cant_in, 6) if cant_in else 0
+        if saldo <= 0.0001:
+            saldo = 0.0
+            valor_saldo = 0.0
+            valor_out = valor_in
+        else:
+            valor_saldo = round(max(0.0, valor_in - valor_out), 2)
         result.append({
             "descripcion": it["descripcion"], "und": it["und"], "oc": it["oc"],
             "cant_in": cant_in, "cant_out": cant_out, "saldo": saldo,
             "pu": pu, "valor_in": valor_in, "valor_out": valor_out,
-            "valor_saldo": round(valor_in - valor_out, 2),
+            "valor_saldo": valor_saldo,
             "filas": it["filas"],
         })
     return result
@@ -1550,19 +1586,28 @@ def almacen_items(mes, anio):
                              for m in item["entradas"]), 2)
         valor_out = round(sum((m.cantidad or 0) * (m.precio_unitario or 0)
                               for m in item["salidas"]), 2)
-        pu = round(valor_in / q_in, 2) if q_in else 0
+        cant_in = round(q_in, 2)
+        cant_out = round(q_out, 2)
+        saldo = round(cant_in - cant_out, 2)
+        pu = round(valor_in / cant_in, 6) if cant_in else 0
+        if saldo <= 0.0001:
+            saldo = 0.0
+            valor_saldo = 0.0
+            valor_out = valor_in
+        else:
+            valor_saldo = round(max(0.0, valor_in - valor_out), 2)
         result.append({
             "descripcion": item["descripcion"],
             "und": item["und"],
             "entradas": item["entradas"],
             "salidas": item["salidas"],
-            "cant_in": q_in,
-            "cant_out": q_out,
-            "saldo": round(q_in - q_out, 2),
+            "cant_in": cant_in,
+            "cant_out": cant_out,
+            "saldo": saldo,
             "pu": pu,
             "valor_in": valor_in,
             "valor_out": valor_out,
-            "valor_saldo": round(valor_in - valor_out, 2),
+            "valor_saldo": valor_saldo,
         })
     return result
 
@@ -1613,13 +1658,20 @@ def almacen_consolidado():
         cant_out = round(it["cant_out"], 2)
         valor_in = round(it["valor_in"], 2)
         valor_out = round(it["valor_out"], 2)
-        pu = round(valor_in / cant_in, 2) if cant_in else 0
+        saldo = round(cant_in - cant_out, 2)
+        pu = round(valor_in / cant_in, 6) if cant_in else 0
+        if saldo <= 0.0001:
+            saldo = 0.0
+            valor_saldo = 0.0
+            valor_out = valor_in
+        else:
+            valor_saldo = round(max(0.0, valor_in - valor_out), 2)
         result.append({
             "descripcion": it["descripcion"], "und": it["und"], "oc": it["oc"],
             "cant_in": cant_in, "cant_out": cant_out,
-            "saldo": round(cant_in - cant_out, 2),
+            "saldo": saldo,
             "pu": pu, "valor_in": valor_in, "valor_out": valor_out,
-            "valor_saldo": round(valor_in - valor_out, 2),
+            "valor_saldo": valor_saldo,
             "filas": it["filas"],
         })
     return result

@@ -33,7 +33,7 @@
       </div>
       <div class="field">
         <label for="precio">Precio unitario (S/)</label>
-        <input type="text" inputmode="decimal" class="monto" name="precio_unitario" id="precio" value="{{ d.precio_unitario }}" min="0" autocomplete="off">
+        <input type="text" inputmode="decimal" class="monto" data-decimales="6" name="precio_unitario" id="precio" value="{{ d.precio_unitario if (d.precio_unitario is not none and d.precio_unitario != 0) else '' }}" min="0" autocomplete="off" step="0.000001" placeholder="0.00">
       </div>
       <div class="field">
         <label for="importe">Importe (S/)</label>
@@ -53,8 +53,9 @@
     const precio = document.getElementById('precio');
     const importe = document.getElementById('importe');
     function calc() {
-      const v = (parseFloat(String(cant.value).replace(/,/g, '')) || 0) *
-                (parseFloat(String(precio.value).replace(/,/g, '')) || 0);
+      const c = parseFloat(String(cant.value).replace(/,/g, '')) || 0;
+      const p = parseFloat(String(precio.value).replace(/,/g, '')) || 0;
+      const v = Math.round((c * p + Number.EPSILON) * 100) / 100;
       importe.value = 'S/ ' + v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
     cant.addEventListener('input', calc);

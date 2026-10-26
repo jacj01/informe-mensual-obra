@@ -13,13 +13,20 @@ de obra y en las anotaciones del cuaderno de obra.</p>
 {% if av.get('met1_monto') is not none and av.get('met1_monto')|string != '' %}{% set total_mm.v = total_mm.v + av.get('met1_monto') %}{% endif %}
 {% if av.get('met2_monto') is not none and av.get('met2_monto')|string != '' %}{% set total_mm.v = total_mm.v + av.get('met2_monto') %}{% endif %}
 <table class="tabla">
+  <colgroup>
+    <col style="width: 8%;">
+    <col style="width: 46%;">
+    <col style="width: 14%;">
+    <col style="width: 14%;">
+    <col style="width: 18%;">
+  </colgroup>
   <thead>
     <tr>
-      <th>N°</th>
-      <th>Partida / descripción</th>
-      <th class="num">Unidad</th>
-      <th class="num">Mayor metrado</th>
-      <th class="num">Monto (S/)</th>
+      <th scope="col" class="ctr">N°</th>
+      <th scope="col">Partida / descripción</th>
+      <th scope="col" class="num">Unidad</th>
+      <th scope="col" class="num">Mayor metrado</th>
+      <th scope="col" class="num">Monto (S/)</th>
     </tr>
   </thead>
   <tbody>

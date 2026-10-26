@@ -68,7 +68,7 @@
             <td class="wrap">{{ f.d.detalle }}</td>
             <td>{{ f.d.und }}</td>
             <td class="num">{{ f.d.cantidad }}</td>
-            <td class="num">{{ "{:,.2f}".format(f.d.precio_unitario) }}</td>
+            <td class="num">{{ f.d.precio_unitario | pu }}</td>
             <td class="num">{{ "{:,.2f}".format(f.d.importe) }}</td>
             {% for c in clasif_cols %}<td class="num">{{ "{:,.2f}".format(f.clasif[c]) if f.clasif[c] else '-' }}</td>{% endfor %}
             <td class="num">{{ "{:,.2f}".format(f.directos) if f.directos else '-' }}</td>

@@ -7,12 +7,18 @@
 
 <div class="sec-titulo">II. Control de avance físico</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 46%;">
+    <col style="width: 18%;">
+    <col style="width: 18%;">
+    <col style="width: 18%;">
+  </colgroup>
   <thead>
     <tr>
-      <th>Componente</th>
-      <th class="num">% Programado</th>
-      <th class="num">% Ejecutado real</th>
-      <th class="num">Desviación</th>
+      <th scope="col">Componente</th>
+      <th scope="col" class="num">% Programado</th>
+      <th scope="col" class="num">% Ejecutado real</th>
+      <th scope="col" class="num">Desviación</th>
     </tr>
   </thead>
   <tbody>
@@ -38,10 +44,14 @@
 
 <div class="sec-titulo">III. Control del monto valorizado</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 72%;">
+    <col style="width: 28%;">
+  </colgroup>
   <thead>
     <tr>
-      <th>Concepto</th>
-      <th class="num">Monto (S/)</th>
+      <th scope="col">Concepto</th>
+      <th scope="col" class="num">Monto (S/)</th>
     </tr>
   </thead>
   <tbody>
@@ -66,8 +76,16 @@ por S/ {{ "{:,.2f}".format(alm.vin) }} y S/ {{ "{:,.2f}".format(alm.vout) }}, re
 
 <div class="sec-titulo">IV. Control del personal en obra</div>
 <table class="tabla">
+  <colgroup>
+    <col style="width: 6%;">
+    <col style="width: 36%;">
+    <col style="width: 14%;">
+    <col style="width: 24%;">
+    <col style="width: 12%;">
+    <col style="width: 8%;">
+  </colgroup>
   <thead>
-    <tr><th>N°</th><th>Nombre completo</th><th>DNI</th><th>Cargo / ocupación</th><th>Tipo</th><th>Días</th></tr>
+    <tr><th scope="col" class="ctr">N°</th><th scope="col">Nombre completo</th><th scope="col">DNI</th><th scope="col">Cargo / ocupación</th><th scope="col">Tipo</th><th scope="col" class="num">Días</th></tr>
   </thead>
   <tbody>
     {% for t in trabajadores %}

@@ -72,7 +72,7 @@
         <td class="ctr und-col">{{ item.und }}</td>
         <td>{{ item.oc }}</td>
         <td class="num">{{ item.cant_in }}</td>
-        <td class="num">{{ "{:,.2f}".format(item.pu) }}</td>
+        <td class="num">{{ item.pu | pu }}</td>
         <td class="num">{{ "{:,.2f}".format(item.valor_in) }}</td>
         <td class="num">{{ item.cant_out }}</td>
         <td class="num">{{ "{:,.2f}".format(item.valor_out) }}</td>
