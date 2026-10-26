@@ -811,6 +811,66 @@ def get_informe_final():
     return I
 
 
+DOCUMENTOS_INFORME_FINAL = [
+    "Declaratoria de viabilidad del Proyecto de Inversión.",
+    "Copias del expediente técnico inicial, adicionales, deductivos y ampliaciones de plazo, aprobados por documento resolutivo.",
+    "Informe de compatibilidad del proyecto, realizado por el residente y el supervisor o inspector de obra.",
+    "Memoria descriptiva valorizada del Proyecto de Inversión.",
+    "Informe financiero del Proyecto de Inversión: resumen de gastos efectuados por divisionaria —Personal, Bienes, Servicios y Adquisición de Activos No Financieros, para costos directos; y costos indirectos (gastos generales, supervisión, seguimiento y evaluación, etc.), según corresponda.",
+    "Informe físico (metrados realmente ejecutados, mayores metrados, metrados deductivos, valorización final de la obra, valorización de mayores metas y valorización de obras nuevas).",
+    "Certificados de control de calidad y protocolos de pruebas de campo (presión hidráulica, hermeticidad, resistividad, etc.), de acuerdo con el tipo de proyecto.",
+    "Inventario final de materiales en cancha adquiridos con cargo al Proyecto de Inversión, y saldos patrimoniales transferidos con documento resolutivo.",
+    "Inventario de equipos, herramientas y otros bienes de activo fijo adquiridos con cargo al presupuesto del Proyecto de Inversión ejecutado.",
+    "Movimiento de almacén en obra según los Anexos A y B del Cuadro N.° 1; adjuntar Bincard, vales de consumo de combustible, Notas de Entrada de Almacenes (NEA) y saldo de materiales en cancha.",
+    "Resumen de maquinaria y equipos utilizados, adjuntando partes diarios.",
+    "Panel fotográfico de la ejecución del Proyecto (antes, durante y después).",
+    "Planos de replanteo finales del proyecto, visados por el residente y el supervisor o inspector.",
+    "Cuaderno de obra, en original.",
+    "Documentos que sustenten los gastos efectuados en la ejecución del Proyecto de Inversión Pública (C/P, O/C, O/S, Pecosas, Planillas).",
+    "Resoluciones de aprobación y convenios.",
+    "Actas de: entrega de terreno (adjuntar título de propiedad según corresponda), inicio de los trabajos, culminación de los trabajos, recepción del proyecto (según corresponda), internamiento de insumos nuevos y de insumos usados (materiales, herramientas) al almacén central de la Entidad.",
+    "Licencia de construcción y conformidad de obra.",
+    "Formato N.° 9 - Cierre de inversiones.",
+    "Otros que el ejecutor considere necesarios para demostrar la ejecución de la obra.",
+]
+
+
+def obtener_indices_documentos(informe):
+    """Devuelve la lista ordenada de índices (0..len-1) de documentos seleccionados.
+
+    Si informe.documentos es None o cadena vacía, por defecto devuelve todos los
+    índices (retrocompatibilidad e inicialización). Si se guardó una lista vacía
+    explícita ('[]'), devuelve lista vacía.
+    """
+    if informe is None:
+        return list(range(len(DOCUMENTOS_INFORME_FINAL)))
+    raw = getattr(informe, "documentos", None)
+    if raw is None or raw == "":
+        return list(range(len(DOCUMENTOS_INFORME_FINAL)))
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            indices = []
+            for item in data:
+                try:
+                    idx = int(item)
+                    if 0 <= idx < len(DOCUMENTOS_INFORME_FINAL):
+                        indices.append(idx)
+                except (ValueError, TypeError):
+                    if item in DOCUMENTOS_INFORME_FINAL:
+                        indices.append(DOCUMENTOS_INFORME_FINAL.index(item))
+            return sorted(list(set(indices)))
+    except Exception:
+        pass
+    return list(range(len(DOCUMENTOS_INFORME_FINAL)))
+
+
+def obtener_documentos_seleccionados(informe):
+    """Devuelve los textos de los documentos seleccionados para adjuntar."""
+    indices = obtener_indices_documentos(informe)
+    return [DOCUMENTOS_INFORME_FINAL[i] for i in indices]
+
+
 def liquidacion_resumen():
     """Cuadros de la liquidación financiera: comparativo por componente y por
     clasificador (Exp. Técnico, ejecutado acumulado, % y saldo) más totales.

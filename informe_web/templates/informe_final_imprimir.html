@@ -390,26 +390,11 @@
 
   <div class="sec-titulo">Documentación Técnica Financiera y Administrativa de la Obra</div>
   <ul class="lista">
-    <li>Declaratoria de viabilidad del Proyecto de Inversión.</li>
-    <li>Copias del expediente técnico inicial, adicionales, deductivos y ampliaciones de plazo, aprobados por documento resolutivo.</li>
-    <li>Informe de compatibilidad del proyecto, realizado por el residente y el supervisor o inspector de obra.</li>
-    <li>Memoria descriptiva valorizada del Proyecto de Inversión.</li>
-    <li>Informe financiero del Proyecto de Inversión: resumen de gastos efectuados por divisionaria —Personal, Bienes, Servicios y Adquisición de Activos No Financieros, para costos directos; y costos indirectos (gastos generales, supervisión, seguimiento y evaluación, etc.), según corresponda.</li>
-    <li>Informe físico (metrados realmente ejecutados, mayores metrados, metrados deductivos, valorización final de la obra, valorización de mayores metas y valorización de obras nuevas).</li>
-    <li>Certificados de control de calidad y protocolos de pruebas de campo (presión hidráulica, hermeticidad, resistividad, etc.), de acuerdo con el tipo de proyecto.</li>
-    <li>Inventario final de materiales en cancha adquiridos con cargo al Proyecto de Inversión, y saldos patrimoniales transferidos con documento resolutivo.</li>
-    <li>Inventario de equipos, herramientas y otros bienes de activo fijo adquiridos con cargo al presupuesto del Proyecto de Inversión ejecutado.</li>
-    <li>Movimiento de almacén en obra según los Anexos A y B del Cuadro N.° 1; adjuntar Bincard, vales de consumo de combustible, Notas de Entrada de Almacenes (NEA) y saldo de materiales en cancha.</li>
-    <li>Resumen de maquinaria y equipos utilizados, adjuntando partes diarios.</li>
-    <li>Panel fotográfico de la ejecución del Proyecto (antes, durante y después).</li>
-    <li>Planos de replanteo finales del proyecto, visados por el residente y el supervisor o inspector.</li>
-    <li>Cuaderno de obra, en original.</li>
-    <li>Documentos que sustenten los gastos efectuados en la ejecución del Proyecto de Inversión Pública (C/P, O/C, O/S, Pecosas, Planillas).</li>
-    <li>Resoluciones de aprobación y convenios.</li>
-    <li>Actas de: entrega de terreno (adjuntar título de propiedad según corresponda), inicio de los trabajos, culminación de los trabajos, recepción del proyecto (según corresponda), internamiento de insumos nuevos y de insumos usados (materiales, herramientas) al almacén central de la Entidad.</li>
-    <li>Licencia de construcción y conformidad de obra.</li>
-    <li>Formato N.° 9 - Cierre de inversiones.</li>
-    <li>Otros que el ejecutor considere necesarios para demostrar la ejecución de la obra.</li>
+    {% for doc in docs_seleccionados %}
+    <li>{{ doc }}</li>
+    {% else %}
+    <li style="list-style: none; color: #64748b; font-style: italic;">(No se seleccionaron documentos para adjuntar al informe final.)</li>
+    {% endfor %}
   </ul>
   <p class="nota">Los documentos se presentan conforme al tipo de proyecto; el plazo para remitir toda esta información es de siete (7) días hábiles contados a partir de la culminación del proyecto.</p>
 

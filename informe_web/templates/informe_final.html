@@ -17,12 +17,21 @@
 .sec-texto{font-size:13.5px;line-height:1.6;color:var(--texto);white-space:pre-wrap;margin:2px 0 6px;text-align:justify}
 .doc-lista{margin:4px 0 6px 18px;padding:0}
 .doc-lista li{font-size:13px;line-height:1.5;color:var(--texto);margin-bottom:2px;text-align:justify}
+.doc-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 14px;padding:10px 14px;background:var(--bg);border:1px solid var(--borde);border-radius:var(--radio-md,8px)}
+.doc-badge{font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;background:#e0f2fe;color:#0369a1;display:inline-flex;align-items:center;gap:6px;border:1px solid #bae6fd}
+.doc-grid{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.doc-check-label{display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:var(--card-bg,#fff);border:1.2px solid var(--borde);border-radius:var(--radio-md,8px);cursor:pointer;transition:all .18s ease;user-select:none}
+.doc-check-label:hover{background:#f8fafc;border-color:#94a3b8;transform:translateX(3px)}
+.doc-check-label.is-checked{background:#f0fdf4;border-color:#86efac}
+.doc-check-input{width:18px;height:18px;margin-top:2px;cursor:pointer;accent-color:#0284c7;flex-shrink:0}
+.doc-num{font-weight:700;color:var(--texto2);min-width:24px;font-size:13px;flex-shrink:0}
+.doc-texto{font-size:13px;line-height:1.5;color:var(--texto);text-align:justify}
 </style>
 
 <div class="card">
   <div class="card-head between">
     <h2><i class="bi bi-file-earmark-text"></i> Anexo N° 02 - Esquema: Informe Final de la Obra</h2>
-    <a class="btn btn-primary" href="{{ url_for('informe_final_imprimir') }}" target="_blank">
+    <a class="btn btn-primary btn-imprimir-informe" href="{{ url_for('informe_final_imprimir') }}" target="_blank">
       <i class="bi bi-printer"></i> Imprimir Informe Final</a>
   </div>
   <div class="total-bar">
@@ -64,8 +73,9 @@
   </div>
 </div>
 
-<form method="post">
+<form method="post" id="form-informe" novalidate data-no-validar>
   <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="docs_presente" value="1">
   <div class="card">
     <div class="card-head"><h2><i class="bi bi-journal-text"></i> Datos del informe</h2></div>
     <div class="form-grid">
@@ -112,11 +122,12 @@
       <i class="bi bi-info-circle"></i>
       Los cuadros técnicos de la ejecución real (metrados, valorización, recursos, almacén, Cuadro N.° 01 y
       Anexos A-B) y la documentación técnica-financiera y administrativa se muestran a continuación y se
-      generan automáticamente al imprimir el Anexo N.° 02.
+      generan automáticamente al imprimir el Anexo N.° 02. Puede guardar en cualquier momento sin necesidad
+      de completar todos los campos.
     </div>
     <div class="form-actions" style="margin-top:12px">
       <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle"></i> Guardar Informe Final</button>
-      <a class="btn btn-outline" href="{{ url_for('informe_final_imprimir') }}" target="_blank"><i class="bi bi-printer"></i> Ver/imprimir Anexo N.° 02</a>
+      <a class="btn btn-outline btn-imprimir-informe" href="{{ url_for('informe_final_imprimir') }}" target="_blank"><i class="bi bi-printer"></i> Ver/imprimir Anexo N.° 02</a>
     </div>
   </div>
 </form>
@@ -378,30 +389,50 @@
 
 {# ===================== DOCUMENTACIÓN ===================== #}
 <div class="card">
-  <div class="card-head"><h2><i class="bi bi-folder2-open"></i> Documentación Técnica Financiera y Administrativa de la Obra</h2></div>
-  <ul class="doc-lista">
-    <li>Declaratoria de viabilidad del Proyecto de Inversión.</li>
-    <li>Copias del expediente técnico inicial, adicionales, deductivos y ampliaciones de plazo, aprobados por documento resolutivo.</li>
-    <li>Informe de compatibilidad del proyecto, realizado por el residente y el supervisor o inspector de obra.</li>
-    <li>Memoria descriptiva valorizada del Proyecto de Inversión.</li>
-    <li>Informe financiero del Proyecto de Inversión: resumen de gastos efectuados por divisionaria —Personal, Bienes, Servicios y Adquisición de Activos No Financieros, para costos directos; y costos indirectos (gastos generales, supervisión, seguimiento y evaluación, etc.), según corresponda.</li>
-    <li>Informe físico (metrados realmente ejecutados, mayores metrados, metrados deductivos, valorización final de la obra, valorización de mayores metas y valorización de obras nuevas).</li>
-    <li>Certificados de control de calidad y protocolos de pruebas de campo (presión hidráulica, hermeticidad, resistividad, etc.), de acuerdo con el tipo de proyecto.</li>
-    <li>Inventario final de materiales en cancha adquiridos con cargo al Proyecto de Inversión, y saldos patrimoniales transferidos con documento resolutivo.</li>
-    <li>Inventario de equipos, herramientas y otros bienes de activo fijo adquiridos con cargo al presupuesto del Proyecto de Inversión ejecutado.</li>
-    <li>Movimiento de almacén en obra según los Anexos A y B del Cuadro N.° 1; adjuntar Bincard, vales de consumo de combustible, Notas de Entrada de Almacenes (NEA) y saldo de materiales en cancha.</li>
-    <li>Resumen de maquinaria y equipos utilizados, adjuntando partes diarios.</li>
-    <li>Panel fotográfico de la ejecución del Proyecto (antes, durante y después).</li>
-    <li>Planos de replanteo finales del proyecto, visados por el residente y el supervisor o inspector.</li>
-    <li>Cuaderno de obra, en original.</li>
-    <li>Documentos que sustenten los gastos efectuados en la ejecución del Proyecto de Inversión Pública (C/P, O/C, O/S, Pecosas, Planillas).</li>
-    <li>Resoluciones de aprobación y convenios.</li>
-    <li>Actas de: entrega de terreno (adjuntar título de propiedad según corresponda), inicio de los trabajos, culminación de los trabajos, recepción del proyecto (según corresponda), internamiento de insumos nuevos y de insumos usados (materiales, herramientas) al almacén central de la Entidad.</li>
-    <li>Licencia de construcción y conformidad de obra.</li>
-    <li>Formato N.° 9 - Cierre de inversiones.</li>
-    <li>Otros que el ejecutor considere necesarios para demostrar la ejecución de la obra.</li>
-  </ul>
-  <div class="note"><i class="bi bi-info-circle"></i> Los documentos se presentan conforme al tipo de proyecto; el plazo para remitir toda esta información es de siete (7) días hábiles contados a partir de la culminación del proyecto.</div>
+  <div class="card-head between">
+    <h2><i class="bi bi-folder2-open"></i> Documentación Técnica Financiera y Administrativa de la Obra</h2>
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <span id="docs-auto-status" style="font-size:12px; font-weight:600; color:#16a34a; transition:opacity .3s ease;"></span>
+      <span class="doc-badge" id="docs-counter">
+        <i class="bi bi-check2-circle"></i> <span id="docs-count-num">{{ indices_sel|length }}</span> de {{ DOCUMENTOS|length }} adjuntados
+      </span>
+    </div>
+  </div>
+
+  <div class="doc-toolbar">
+    <button type="button" class="btn btn-sm btn-outline" id="btn-docs-todos">
+      <i class="bi bi-check-all"></i> Marcar todos
+    </button>
+    <button type="button" class="btn btn-sm btn-outline" id="btn-docs-ninguno">
+      <i class="bi bi-dash-circle"></i> Desmarcar todos
+    </button>
+    <div style="flex:1"></div>
+    <button type="submit" form="form-informe" class="btn btn-sm btn-primary">
+      <i class="bi bi-check2-circle"></i> Guardar selección de documentos
+    </button>
+  </div>
+
+  <div class="doc-grid">
+    {% for doc in DOCUMENTOS %}
+    {% set activo = loop.index0 in indices_sel %}
+    <label class="doc-check-label {% if activo %}is-checked{% endif %}" for="doc-chk-{{ loop.index0 }}">
+      <input type="checkbox"
+             class="doc-check-input"
+             id="doc-chk-{{ loop.index0 }}"
+             name="documentos"
+             value="{{ loop.index0 }}"
+             form="form-informe"
+             {% if activo %}checked{% endif %}>
+      <span class="doc-num">{{ loop.index }}.</span>
+      <span class="doc-texto">{{ doc }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="note">
+    <i class="bi bi-info-circle"></i>
+    Los documentos seleccionados se guardan de forma automática e inmediata al marcar o desmarcar cada casilla, y solo ellos se incluirán en la hoja de impresión del Anexo N° 02. El plazo para remitir toda esta información es de siete (7) días hábiles contados a partir de la culminación del proyecto.
+  </div>
 </div>
 
 {# ===================== OBSERVACIONES, CONCLUSIONES Y RECOMENDACIONES ===================== #}
@@ -416,4 +447,116 @@
   <div class="note"><i class="bi bi-info-circle"></i> El Informe Final de la Obra deberá estar visada en todos los folios por el residente y el supervisor o inspector de la obra.</div>
 </div>
 
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const chks = document.querySelectorAll(".doc-check-input");
+  const countSpan = document.getElementById("docs-count-num");
+  const btnTodos = document.getElementById("btn-docs-todos");
+  const btnNinguno = document.getElementById("btn-docs-ninguno");
+  const statusSpan = document.getElementById("docs-auto-status");
+  let timerGuardar = null;
+
+  function actualizarConteoVisual() {
+    let cant = 0;
+    chks.forEach(function(c) {
+      const lbl = c.closest(".doc-check-label");
+      if (c.checked) {
+        cant++;
+        if (lbl) lbl.classList.add("is-checked");
+      } else {
+        if (lbl) lbl.classList.remove("is-checked");
+      }
+    });
+    if (countSpan) countSpan.textContent = cant;
+    return cant;
+  }
+
+  function recolectarSeleccionados() {
+    const indices = [];
+    chks.forEach(function(c) {
+      if (c.checked) {
+        indices.push(parseInt(c.value, 10));
+      }
+    });
+    return indices;
+  }
+
+  function guardarDocumentosServidor(callback) {
+    if (statusSpan) {
+      statusSpan.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Guardando...';
+      statusSpan.style.opacity = "1";
+    }
+    const token = document.querySelector('input[name="_csrf"]')?.value || "";
+    const fd = new FormData();
+    fd.append("_csrf", token);
+    const indices = recolectarSeleccionados();
+    indices.forEach(function(idx) {
+      fd.append("documentos", idx);
+    });
+
+    fetch("{{ url_for('informe_final_guardar_documentos') }}", {
+      method: "POST",
+      body: fd,
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (statusSpan) {
+        statusSpan.innerHTML = '<i class="bi bi-check-circle-fill" style="color:#16a34a"></i> Guardado automático';
+        setTimeout(function() {
+          if (statusSpan) statusSpan.style.opacity = "0.7";
+        }, 1800);
+      }
+      if (callback) callback();
+    })
+    .catch(function(err) {
+      if (statusSpan) {
+        statusSpan.innerHTML = '<i class="bi bi-exclamation-circle" style="color:#dc2626"></i> Error al guardar';
+      }
+      if (callback) callback();
+    });
+  }
+
+  function dispararAutoGuardado() {
+    actualizarConteoVisual();
+    clearTimeout(timerGuardar);
+    timerGuardar = setTimeout(function() {
+      guardarDocumentosServidor();
+    }, 200);
+  }
+
+  chks.forEach(function(c) {
+    c.addEventListener("change", dispararAutoGuardado);
+  });
+
+  if (btnTodos) {
+    btnTodos.addEventListener("click", function() {
+      chks.forEach(function(c) { c.checked = true; });
+      actualizarConteoVisual();
+      guardarDocumentosServidor();
+    });
+  }
+
+  if (btnNinguno) {
+    btnNinguno.addEventListener("click", function() {
+      chks.forEach(function(c) { c.checked = false; });
+      actualizarConteoVisual();
+      guardarDocumentosServidor();
+    });
+  }
+
+  // Interceptar todos los enlaces a la hoja de impresión para sincronizar antes de abrir
+  document.querySelectorAll('a.btn-imprimir-informe').forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.preventDefault();
+      const targetUrl = this.href;
+      guardarDocumentosServidor(function() {
+        window.open(targetUrl, "_blank");
+      });
+    });
+  });
+
+  actualizarConteoVisual();
+});
+</script>
 {% endblock %}

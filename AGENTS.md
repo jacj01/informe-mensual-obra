@@ -27,7 +27,14 @@
 * **Tablas en hojas de impresión (`table.tabla`):** Deben usar `table-layout: fixed; width: 100%; box-sizing: border-box;`, celdas de números con `white-space: nowrap;`, y anchos de columnas en porcentajes (`<colgroup>`) sumando exactamente el 100% para jamás desbordar los márgenes de la hoja A4 (174.4 mm útiles).
 * **Botón «Volver» en hojas de impresión:** Debe incluir siempre `onclick="window.close(); if (!window.closed) window.location.href = this.href; return false;"` para cerrar la pestaña generada y regresar a la pestaña de origen.
 
-## 5. Instrucción para Futuras Conversaciones
+## 5. Reglas Técnicas y Mejoras Recientes Asimiladas
+* **CI/CD Automatizado de Releases:** `.github/workflows/release.yml` se dispara automáticamente en cada `push` a `master` cuando cambia `informe_web/version.py`, el propio workflow o se sube un tag `v*`. Compila el instalador Inno Setup (`.exe`) y el paquete de actualización (`.zip` con checksum SHA-256) directamente en GitHub Releases sin intervención manual.
+* **Precisión Numérica en Precios y Almacén:** Soporte de P.U hasta con 6 decimales (`data-decimales="6"`, `round(..., 6)` y filtro Jinja `| pu`). El saldo físico y valorizado en almacén se ajusta a `0.00` cuando la cantidad remanente es $\le 0.0001$ para evitar diferencias o céntimos negativos residuales.
+* **Auto-reinicio del Servidor Silencioso:** `iniciar_sin_consola.vbs` y `servidor_silencioso.py --reiniciar` liberan automáticamente el puerto 5000 y levantan una instancia limpia en menos de un segundo tras cambios en el código.
+* **Formularios Flexibles:** La validación global en `base.html` respeta los atributos `novalidate` y `data-no-validar`, permitiendo guardar formularios (como el Informe Final de Obra) con campos vacíos o progresivos sin bloqueos en el navegador.
+* **Documentación del Informe Final (Anexo N° 02):** La relación de los 20 documentos por adjuntar cuenta con casillas interactivas, auto-guardado en tiempo real por AJAX (`/informe_final/guardar_documentos`) y sincronización automática antes de imprimir, reflejando únicamente los documentos efectivamente adjuntados en la hoja de impresión.
+
+## 6. Instrucción para Futuras Conversaciones
 * **No volver a escanear todo el código ni el repositorio desde cero** a menos que el usuario lo solicite expresamente.
-* El contexto, arquitectura, herramientas y estándares ya están asimilados en este archivo.
+* El contexto, arquitectura, herramientas, reglas y estándares ya están asimilados en este archivo.
 * Proceder directamente a atender la tarea o requerimiento específico del usuario.

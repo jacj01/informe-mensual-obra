@@ -1,4 +1,4 @@
-﻿"""Aplicativo web: Informe Financiero Mensual - Administracion Directa."""
+"""Aplicativo web: Informe Financiero Mensual - Administracion Directa."""
 import base64
 import gzip
 import hashlib
@@ -59,7 +59,9 @@ from helpers import (MESES, COMPONENTES_FE06, get_proyecto, get_suscripcion,
                      actividades_mes,
                      presupuesto_filas, PRESUPUESTO_DETALLE, detalle_clasificador,
                      get_liquidacion, get_informe_final, liquidacion_resumen,
-                     liquidacion_pendientes, formato_consolidado, monto_letras)
+                     liquidacion_pendientes, formato_consolidado, monto_letras,
+                     DOCUMENTOS_INFORME_FINAL, obtener_indices_documentos,
+                     obtener_documentos_seleccionados)
 from planilla import (tabla_civil, calcular_obrero, calcular_tecnico,
                       TABLA_CIVIL_POR_ANIO)
 from seed import seed
@@ -7531,16 +7533,50 @@ def registrar_rutas(app):
             I.conclusiones = request.form.get("conclusiones", "") or ""
             I.recomendaciones = request.form.get("recomendaciones", "") or ""
             I.anexos = request.form.get("anexos", "") or ""
+            if "docs_presente" in request.form:
+                docs_raw = request.form.getlist("documentos")
+                docs_idx = []
+                for d in docs_raw:
+                    try:
+                        idx = int(d)
+                        if 0 <= idx < len(DOCUMENTOS_INFORME_FINAL):
+                            docs_idx.append(idx)
+                    except (ValueError, TypeError):
+                        pass
+                I.documentos = json.dumps(sorted(list(set(docs_idx))))
             db.session.commit()
             flash("Informe financiero final guardado correctamente.", "success")
             return redirect(url_for("informe_final"))
         resumen = liquidacion_resumen()
         sobrantes_items, _, _ = materiales_sobrantes_acta()
+        indices_sel = obtener_indices_documentos(I)
         return render_template("informe_final.html", p=p, I=I, MESES=MESES,
                                resumen=resumen, consolidado=formato_consolidado(),
                                almacen=almacen_consolidado(),
                                caja_chica=caja_chica_filas(p),
-                               sobrantes=sobrantes_items)
+                               sobrantes=sobrantes_items,
+                               DOCUMENTOS=DOCUMENTOS_INFORME_FINAL,
+                               indices_sel=indices_sel)
+
+    @app.route("/informe_final/guardar_documentos", methods=["POST"])
+    def informe_final_guardar_documentos():
+        """Guarda de forma asíncrona la selección de documentos del informe final."""
+        I = get_informe_final()
+        docs_raw = request.form.getlist("documentos")
+        if not docs_raw and request.is_json:
+            data = request.get_json(silent=True) or {}
+            docs_raw = data.get("documentos", [])
+        docs_idx = []
+        for d in docs_raw:
+            try:
+                idx = int(d)
+                if 0 <= idx < len(DOCUMENTOS_INFORME_FINAL):
+                    docs_idx.append(idx)
+            except (ValueError, TypeError):
+                pass
+        I.documentos = json.dumps(sorted(list(set(docs_idx))))
+        db.session.commit()
+        return jsonify({"ok": True, "count": len(docs_idx), "indices": docs_idx})
 
     @app.route("/informe_final/imprimir")
     def informe_final_imprimir():
@@ -7596,6 +7632,7 @@ def registrar_rutas(app):
             "fe06_sintesis": fe06_sintesis(ult, p.anio),
             "fe06_meses_vis": meses_visibles(p.anio, ult),
         }
+        docs_seleccionados = obtener_documentos_seleccionados(I)
         return render_template("informe_final_imprimir.html", p=p, I=I, MESES=MESES,
                                resumen=resumen, consolidado=formato_consolidado(),
                                almacen=almacen_consolidado(),
@@ -7603,7 +7640,8 @@ def registrar_rutas(app):
                                sobrantes=sobrantes_items,
                                compendio=compendio, fe06_rows=f06_rows,
                                fe06_resumen=f06_resumen,
-                               fe06_totales_mensual=f06_totales_mensual)
+                               fe06_totales_mensual=f06_totales_mensual,
+                               docs_seleccionados=docs_seleccionados)
 
     # ------- ANEXOS DE LA DIRECTIVA N° 017-2023-CG/GMPL (imprimibles) --------
     # Plantillas SOLO IMPRIMIBLES (sin persistencia) para los anexos que la

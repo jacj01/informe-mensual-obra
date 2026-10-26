@@ -948,7 +948,7 @@
     }
 
     function validarFormulario(form) {
-      if (form.hasAttribute('data-no-validar')) return true;
+      if (form.hasAttribute('data-no-validar') || form.hasAttribute('novalidate')) return true;
       limpiarErrorValidacion(form);
       var invalidos = [];
       var primero = null;

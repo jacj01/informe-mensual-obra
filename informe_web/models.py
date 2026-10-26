@@ -397,6 +397,7 @@ class InformeFinal(db.Model):
     conclusiones = db.Column(db.Text, default="")
     recomendaciones = db.Column(db.Text, default="")
     anexos = db.Column(db.Text, default="")
+    documentos = db.Column(db.Text, default="")
 
 
 class Anexo(db.Model):
